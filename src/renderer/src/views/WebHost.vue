@@ -20,6 +20,8 @@ import type { WebviewEl } from './useWebviews'
  */
 let defaultEngine: SearchEngineId = 'bing'
 let pollTimer: number | null = null
+/** 轮询上限用尽仍未拿到 dsh URL：必须给出可见的失败态，不能留一个永远转圈的占位。 */
+const waitTimedOut = ref(false)
 
 let offUrl: (() => void) | null = null
 let offNewTab: (() => void) | null = null
@@ -117,6 +119,7 @@ function stopPolling(): void {
 
 function startPolling(): void {
     if (pollTimer !== null) return
+    waitTimedOut.value = false
     let tries = 0
     pollTimer = window.setInterval(async () => {
         if (activeTab()?.url) {
@@ -124,7 +127,9 @@ function startPolling(): void {
             return
         }
         if (++tries > 120) {
+            // 约 2 分钟仍无 URL：停表并显示失败态（含重试入口），而不是静默留住转圈图标
             stopPolling()
+            waitTimedOut.value = true
             return
         }
         try {
@@ -165,7 +170,10 @@ onMounted(async () => {
 
     // dsh:url 只定向发给“核心窗口”，但这里始终订阅：若本窗口稍后被提升为新的核心窗口，
     // 主进程会在提升后补发 dsh:url，让 dsh UI 固定站能及时拿到地址。
-    offUrl = window.api.onDshUrl((u) => setHomeUrl(u))
+    offUrl = window.api.onDshUrl((u) => {
+        waitTimedOut.value = false // 地址已就绪，清掉可能残留的超时失败态
+        setHomeUrl(u)
+    })
     offNewTab = window.api.onNewTab((url) => { openTarget(url) })
     offReload = window.api.onReloadDsh(() => wvApi.reloadActive())
     offSettings = window.api.onSettingsChanged((s) => {
@@ -230,7 +238,12 @@ onBeforeUnmount(() => {
                 <template v-else>
                     <div class="whost__holder" :ref="(el) => setHolder(tab.id, el as HTMLDivElement | null)"></div>
                     <div v-if="!tab.url" class="whost__wait">
-                        <el-icon class="spin" :size="36"><LoadingOutlined /></el-icon>
+                        <!-- 等待超时：给出原因与重试，不再无限转圈 -->
+                        <div v-if="waitTimedOut" class="whost__timeout">
+                            <div class="whost__timeout-txt">{{ $t('whost.timeout') }}</div>
+                            <el-button size="small" :icon="ReloadOutlined" @click="startPolling">{{ $t('whost.retry') }}</el-button>
+                        </div>
+                        <el-icon v-else class="spin" :size="36"><LoadingOutlined /></el-icon>
                     </div>
                 </template>
             </div>
@@ -308,6 +321,26 @@ onBeforeUnmount(() => {
   justify-content: center;
   color: var(--el-color-primary);
   pointer-events: none;
+}
+/* 等待超时的失败态：必须重新开启 pointer-events，否则里面的「重试」按钮点不动 */
+.whost__timeout {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 420px;
+  padding: 16px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color-overlay);
+  box-shadow: var(--el-box-shadow-light);
+}
+.whost__timeout-txt {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+  text-align: center;
 }
 .spin {
   animation: rot 1s linear infinite;

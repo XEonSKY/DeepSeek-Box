@@ -44,7 +44,7 @@ export function tt(key: string, named?: Record<string, unknown>): string {
 }
 
 // ---------------------------------------------------------------------------
-// 扩展翻译：变体目录由 shared/locales/{zh,en}/rules.ts + ext.ts 提供并构建，
+// 扩展翻译：变体目录由 shared/locales/ext.ts 汇总（各变体文本在 zh/、en/ 下的同名文件中），
 // 这里只负责把构建结果覆盖到 vue-i18n 对应语言并触发刷新。不改 dsh 设置。
 // ---------------------------------------------------------------------------
 
@@ -71,7 +71,14 @@ export function applyExtTranslation(style: ExtStyle): void {
     if (i18n.global.locale.value === loc) pingRefresh()
 }
 
-/** 旧名兼容。 */
-export function applyFunToZh(style: ExtStyle): void {
-    applyExtTranslation(style)
+/**
+ * 切换界面语言并重建两套文案目录。
+ *
+ * 扩展风格只对它所属的语言有意义（anime/wenyan/hant→zh、pirate/shakespeare→en），
+ * 因此先把两套复位到基座再按需套用，避免上一次的覆盖残留在另一种语言上。
+ */
+export function applyLocaleChange(locale: ResolvedLocale, style: ExtStyle): void {
+    applyExtTranslation('off')
+    setLocale(locale)
+    if (style !== 'off' && styleLocaleOf(style) === locale) applyExtTranslation(style)
 }

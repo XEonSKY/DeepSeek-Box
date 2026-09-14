@@ -36,7 +36,7 @@ Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus 
 
 ## 窗口与标签模型
 
-- 核心窗口承载三个固定站（dsh Web UI / 网页对话 / 用量充值）；核心窗口登记与接管逻辑见 `app/windowreg.ts` 与渲染层 `lib/tabs.ts`。
+- 核心窗口承载三个固定站（dsh Web UI / 网页对话 / 用量充值）；核心窗口登记与接管逻辑见 `app/windowreg.ts` 与渲染层 `shell/tabs.ts`。
 - 副窗口由「在新窗口打开」创建，可把标签拖入 / 拖出；核心窗口关闭后由最早的副窗口接管。
 - 内嵌页面用 `<webview>`；地址栏只在动态标签显示，协议 / 搜索分流见渲染层。
 

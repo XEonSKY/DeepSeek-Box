@@ -17,7 +17,7 @@ The wizard has four steps in total; on each one click “Run and Next”:
 
 | Step | What you see | Not sure how to choose? |
 |---|---|---|
-| 1. Mirror | Official source / npmmirror mirror | In China choose **npmmirror**, it is faster |
+| 1. Mirror / config directory | Official source / npmmirror mirror; the config directory can be “Choose…” or “Restore Default” | In China choose **npmmirror**, it is faster; keep the default config directory |
 | 2. Node environment | Electron bundled / System bundled / Locally deployed | No Node installed on this machine: choose **Locally deployed**; don't want extra downloads: choose **Electron bundled** |
 | 3. npm environment | Bundled with the program / System bundled / Bundled with local Node | **Bundled with the program** is the most hassle-free |
 | 4. Install DeepSeek Harness | Version dropdown + install button | Just use the default version and click “Install DeepSeek Harness” |
@@ -35,7 +35,7 @@ Once installation completes, the app starts dsh automatically; the Web UI appear
 
 After launch, the interface consists of three parts:
 
-1. **Top title bar**: the app name on the left; in the middle is a browser-style tab bar—the highlighted **DeepSeek UI** (dsh Web UI), Web Chat, and Usage & Top-up as three fixed tabs, with a `＋` on the right to open a new tab; on the far right are refresh, settings, and minimize / maximize / close.
+1. **Top title bar**: the app name and **three pinned-site icon buttons** (DeepSeek UI / Web Chat / Usage & Top-up) on the left; next to them is the browser-style tab strip, carrying dynamic tabs and the `＋` on the right to open a new tab; on the far right are refresh, settings, and minimize / maximize / close.
 2. **Main area**: the left vertical column has the DeepSeek Harness logo, “New Session”, and the “Workspaces” list; in the middle are the welcome message, workspace / mode selection, the input box, and the model selector.
 3. **“Settings” in the lower-left corner**: opens the settings page (an overlay that does not interrupt the current page).
 

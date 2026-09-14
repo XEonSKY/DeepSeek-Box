@@ -7,6 +7,7 @@ import { isDshRunning, pushLog, rememberChild } from './dsh'
 import { findSystemNode, localNodeExecPath, nodeVersionOf } from './tools'
 import { compareVersions, stripV } from './semver'
 import { downloadFile } from './downloader'
+import { httpFetch } from './http'
 import { beginCancelable, CANCELED_MESSAGE } from './cancel'
 import { activeVersion, installRoot, listInstalled, prepareVersionDir, removeVersion, resolveActive, setActiveVersion, versionDir } from './installs'
 
@@ -53,7 +54,7 @@ async function nodeDistIndex(): Promise<NodeRelease[] | null> {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 20000)
     try {
-        const res = await fetch(`${NODE_DIST}/index.json`, { signal: ctrl.signal })
+        const res = await httpFetch('node', `${NODE_DIST}/index.json`, { signal: ctrl.signal })
         if (!res.ok) return null
         const arr = (await res.json()) as Array<{ version?: unknown; lts?: unknown }>
         const list: NodeRelease[] = []
@@ -212,6 +213,8 @@ export async function deployLocalNode(
             tmpDir: tempDownloadDir(),
             threads: loadSettings().downloadThreads,
             signal: token.signal,
+            // Node 发行包属于「Node 下载部署」这一档代理范围
+            proxyScope: 'node',
             onProgress: (p) => onProgress?.({ phase: 'download', ...p })
         })
         if (dl.canceled) return { ok: false, canceled: true, message: CANCELED_MESSAGE, version: ver }

@@ -30,7 +30,7 @@
 | `nodeenv.ts` | Node 下载部署 | `deployLocalNode` / `listNodeVersions` / `nodeStatus` / 版本管理 |
 | `npmRunner.ts` | npm 探测 / 执行 / 缓存 | `ensureBundledNpmReady` / `runNpm` / `listNpmVersions` / `npmCacheEnv` |
 | `downloader.ts` | 多线程下载器 | `downloadFile`（HTTP Range 分段、去重、取消） |
-| `cancel.ts` | 取消令牌 | `beginCancelable` / `cancelActive` / `isAbortError` |
+| `cancel.ts` | 取消令牌 | `beginCancelable` / `cancelActive` / `CANCELED_MESSAGE` |
 | `installs.ts` | 版本化目录 | `installRoot` / `versionDir` / `activeVersion` / `setActiveVersion` / `resolveActive` / `isVersionComplete` / `listInstalled` / `removeVersion` / `migrateLegacyInstalls`；`InstallKind` 取 `node` / `npm` / `dsh` |
 | `tools.ts` | 路径解析 | `localNodeExecPath` / `nodeRuntimeFor` / `resolveDshModule` / `findSystemNode` |
 | `semver.ts` | 版本工具 | `sortVersionsDesc` / `filterByPrerelease` / `compareVersions` / `pickLatest` |

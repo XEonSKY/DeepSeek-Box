@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { BgColorsOutlined, BulbOutlined } from '@antdv-next/icons'
-import { tt, setLocale, applyFunToZh, currentLocale } from '../../lib/locales'
+import { tt, applyExtTranslation, applyLocaleChange, currentLocale } from '../../lib/locales'
 import { COLOR_SCHEMES, isDark, schemeBackgrounds } from '../../lib/theme'
 import { useSettingsStore } from './useSettingsStore'
 import type { FunLocale, ResolvedLocale } from '@shared/types'
@@ -45,9 +45,8 @@ function onLangCascader(path: (string | number)[]): void {
 async function chooseLang(l: ResolvedLocale): Promise<void> {
     if (lang.value === l) return
     lang.value = l
-    setLocale(l)
-    // 娱乐翻译只对 zh 生效：语言变了按当前娱乐风格重建 zh 文案。
-    applyFunToZh(state.funLocale)
+    // 语言与扩展风格一起应用：风格只对它所属的语言生效（anime/wenyan/hant→zh、pirate/shakespeare→en）
+    applyLocaleChange(l, state.funLocale)
     try {
         await window.api.setUiLocale(l)
     } catch {
@@ -55,8 +54,8 @@ async function chooseLang(l: ResolvedLocale): Promise<void> {
     }
 }
 
-// 娱乐翻译风格变化即时应用到 zh 文案。
-watch(() => state.funLocale, (v) => applyFunToZh(v))
+// 扩展风格变化即时应用（不切语言时只重铺对应语言的文案目录）。
+watch(() => state.funLocale, (v) => applyExtTranslation(v))
 
 // 禁用系统缩放需重启生效：确认→保存并重启；取消→不做任何修改（回退）。
 async function onSysScale(v: boolean): Promise<void> {

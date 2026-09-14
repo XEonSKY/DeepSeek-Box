@@ -8,6 +8,7 @@ import { loadSettings, mt, localDshDir } from '../app/settings'
 import { rememberChild, isDshRunning, stopAllDsh, restart } from './dsh'
 import { isPrerelease, compareVersions, filterByPrerelease, pickLatest, sortVersionsDesc } from './semver'
 import { registryBase, runNpm, runNpmInstallGlobal, runLocalNpmInstall } from './npmRunner'
+import { httpFetch } from './http'
 import { beginCancelable, CANCELED_MESSAGE } from './cancel'
 import { activeVersion, listInstalled, removeVersion, setActiveVersion, versionDir } from './installs'
 
@@ -36,7 +37,8 @@ async function fetchPublishedVersions(registry: 'npmjs' | 'npmmirror'): Promise<
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 15000)
     try {
-        const res = await fetch(`${registryBase(registry)}/@deepseek-ai%2Fdsh`, { signal: ctrl.signal })
+        // 注册表查询：同时服务于「npm 安装/下载」与「DeepSeek Harness 更新检查」两个代理范围
+        const res = await httpFetch('registry', `${registryBase(registry)}/@deepseek-ai%2Fdsh`, { signal: ctrl.signal })
         if (!res.ok) return null
         const data = (await res.json()) as { versions?: Record<string, unknown> }
         if (!data.versions) return null
@@ -60,8 +62,7 @@ export async function performUpdateCheck(
             status: 'missing',
             current: null,
             latest: null,
-            message: mt('m.dsh.missingMsg'),
-            command: ''
+            message: mt('m.dsh.missingMsg')
         }
     }
     if (!info.version) {
@@ -89,8 +90,7 @@ export async function performUpdateCheck(
         status: 'update',
         current: info.version,
         latest,
-        message: mt('m.dsh.newKind', { kind, current: info.version, latest }),
-        command: ''
+        message: mt('m.dsh.newKind', { kind, current: info.version, latest })
     }
 }
 

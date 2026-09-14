@@ -28,6 +28,7 @@ export default {
             dup: '复制标签页',
             openWindow: '在新窗口打开',
             moveWindow: '移动到其它窗口',
+            moveWindowNoTarget: '没有其它窗口可以接收该标签页。',
             promptPlaceholder: 'https://…'
         }
     },
@@ -110,6 +111,8 @@ export default {
         npmVersionDefault: '选择要下载的版本（默认最新）',
         cancel: '取消',
         canceling: '正在取消…',
+        probeFailed: '环境探测失败：{err}',
+        retry: '重试',
         extractingNode: '正在解压 Node…',
         extractingNpm: '正在解压内置 npm…'
     },
@@ -147,7 +150,11 @@ export default {
         clear: '清空显示',
         empty: '（暂无输出。DeepSeek Box 启动后，实时日志会出现在这里。）'
     },
-    /** 内嵌外部站点页（网页版 Chat / DeepSeek 平台）加载状态 */
+    /** web 宿主：等待 dsh UI 地址时的占位与超时失败态 */
+    whost: {
+        timeout: '等待 DeepSeek Harness 启动超时。可在「设置 → 终端」查看日志后重试。',
+        retry: '重试'
+    },
     /** 设置页（sv = Settings View） */
     sv: {
         cap: '设置',
@@ -455,6 +462,7 @@ export default {
             devModeDesc: '开启后 F12 可开关 DevTools。',
             checkTitle: '自动更新',
             checkBtn: '检查更新',
+            checkFailed: '检查更新失败：{err}',
             downloading: '正在后台下载 {version}…',
             staging: '新版本 {version} 已下载完成，正在后台压缩备份当前版本…',
             downloadedTitle: '新版本已就绪（后台安装）',

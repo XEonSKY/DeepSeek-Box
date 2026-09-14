@@ -44,6 +44,7 @@ A change is **not moved immediately**; instead you are prompted that it will “
 |---|---|
 | **npm registry mirror** | Official `registry.npmjs.org` or `npmmirror`. |
 | **Proxy** | Enable + protocol (HTTP / SOCKS5) + host + port + proxy scope (npm install / download, Node download and deployment, DeepSeek Harness update check). |
+| **Public GitHub mirror prefix** | App-update installer downloads go through this prefix (e.g. `https://ghproxy.com`); **leave it blank to use GitHub directly**. Release metadata still uses GitHub, so a mirror that does not proxy the GitHub API cannot break update checks. |
 | **Download concurrency** | The number of concurrent connections for multi-threaded segmented downloads: 1 = single-threaded, default 4, maximum 16. |
 
 For download progress, temporary directories, de-duplication, and similar behavior, see [Environment Management](/en/user/environment).
@@ -54,7 +55,7 @@ The Node and npm sources used to run DeepSeek Harness; see [Environment Manageme
 
 ## DeepSeek Harness
 
-Source, updates, version switching, and uninstalling; see [DeepSeek Harness management](/en/user/dsh).
+Source, updates, version switching, and uninstalling; see [DeepSeek Harness management](/en/user/dsh). The page also has a whole **Startup** section: the **timeout** (`timeoutMs`, default 90000 ms), a running-state tag with the **Start / Stop / Restart** button group, and the **Apply now** button on the right.
 
 ## Models
 
@@ -65,14 +66,14 @@ The model list, providers and balances; see [Models & balances](/en/user/models)
 - dsh's real-time output (stdout / stderr) with ANSI colors; you can toggle **auto-scroll** and **clear display**;
 - The terminal is **read-only** (it does not accept keyboard input); a placeholder is shown before dsh has produced any output;
 - Switching away and back re-fetches the most recent output (a server-side ring buffer, capped at 5000 lines);
-- Press `Ctrl` / `Cmd` + `T` to switch between DeepSeek UI and the terminal.
+- Press `Ctrl` / `Cmd` + `T` to switch between the web view and “Settings · Terminal”.
 
 ## Shortcuts
 
 | Shortcut | Default | Scope |
 |---|---|---|
 | Return to main window | `Ctrl` / `Cmd` + `Alt` + `H` | **System-wide**; brings the main window to the foreground from any program |
-| Toggle terminal view | `Ctrl` / `Cmd` + `T` | In-app: DeepSeek UI ↔ Settings · Terminal |
+| Toggle terminal view | `Ctrl` / `Cmd` + `T` | In-app: web view ↔ Settings · Terminal |
 | DevTools console | `F12` | In-app: effective only when “About → Developer Mode” is enabled |
 
 - Click “Change” and then press the key combination (`Esc` cancels); “Clear” = disable, “Restore Default” = return to the default value;
@@ -92,7 +93,9 @@ The rendering mode and browser identity of embedded pages (dsh Web UI, web chat,
 - Shows the app version and running architecture;
 - **Auto-update**: checks for a new app version at startup and downloads it in the background; see [App Update & Rollback](/en/user/update); when the download finishes a small red dot appears on the status-bar version item, and clicking it lets you “Restart and install”;
 - **Check for pre-releases**: whether to include pre-release versions;
-- **Developer Mode**: by default `F12` toggles DevTools (the shortcut can be changed on the “Shortcuts” page).
+- **Developer Mode**: **hidden by default**; click the **app version number** 5 times (within 1.5 seconds) under “Settings → About” to unlock the switch, after which `F12` toggles DevTools (the shortcut can be changed on the “Shortcuts” page).
+
+> **Easter eggs**: on the “About” page, click the **app version number** 5 times to unlock the “Developer Mode” switch above; click the **system architecture** badge 5 times to open a tic-tac-toe mini-game.
 
 ## Status bar
 

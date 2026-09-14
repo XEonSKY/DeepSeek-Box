@@ -7,7 +7,7 @@ import TitleBar from './components/TitleBar.vue'
 import StatusBar from './components/StatusBar.vue'
 import { applyAppUpdateEvent, checkAndNotify } from './lib/update'
 import { applyTheme, applyColorScheme } from './lib/theme'
-import { applyFunToZh, tt } from './lib/locales'
+import { applyExtTranslation, applyLocaleChange, currentLocale, tt } from './lib/locales'
 import { useView, useGoView, useToggleTerminal } from './shell/viewnav'
 import { webTabs, activeTab, activateTab, openTarget, setCoreRole, tabLabel } from './shell/tabs'
 import WebHost from './views/WebHost.vue'
@@ -88,6 +88,7 @@ let offMissing: (() => void) | null = null
 let offCore: (() => void) | null = null
 let offAppUpdate: (() => void) | null = null
 let offMigration: (() => void) | null = null
+let offLocale: (() => void) | null = null
 
 /**
  * 主进程后台更新事件：**检测到新版本只更新右下角徽标**（VS Code 式静默提示），
@@ -162,7 +163,7 @@ async function boot(): Promise<void> {
     applyTheme(s.theme)
     applyColorScheme(s.colorScheme)
     void window.api.setWindowZoom(s.zoomPercent ?? 100)
-    applyFunToZh(s.funLocale ?? 'off')
+    applyExtTranslation(s.funLocale ?? 'off')
     const ok = await window.api.isDshInstalled()
     if (!ok) {
         showMissing.value = true // main does not start dsh when it is absent
@@ -201,6 +202,19 @@ onMounted(() => {
     })
     offAppUpdate = window.api.onAppUpdateEvent(onAppUpdateEvent)
     offMigration = window.api.onConfigMigrationProgress(onMigrationProgress)
+    // dsh UI 内切换语言 → 外壳跟随（与主题同步同一套机制：语言存在 dsh 的 settings.yaml）
+    offLocale = window.api.onLocaleChanged((l) => {
+        void (async () => {
+            if (l === currentLocale()) return
+            try {
+                const cur = await window.api.getSettings()
+                applyLocaleChange(l, cur.funLocale ?? 'off')
+            } catch {
+                // 设置读不到也不能让界面停在旧语言上
+                applyLocaleChange(l, 'off')
+            }
+        })()
+    })
     void boot()
 })
 onBeforeUnmount(() => {
@@ -210,6 +224,7 @@ onBeforeUnmount(() => {
     offCore?.()
     offAppUpdate?.()
     offMigration?.()
+    offLocale?.()
 })
 </script>
 

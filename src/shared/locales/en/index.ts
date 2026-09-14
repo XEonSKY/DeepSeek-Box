@@ -27,6 +27,7 @@ export default {
             dup: 'Duplicate tab',
             openWindow: 'Open in new window',
             moveWindow: 'Move to another window',
+            moveWindowNoTarget: 'There is no other window to move this tab to.',
             promptPlaceholder: 'https://…'
         }
     },
@@ -107,6 +108,8 @@ export default {
         npmVersionDefault: 'Choose a version to download (latest by default)',
         cancel: 'Cancel',
         canceling: 'Cancelling…',
+        probeFailed: 'Environment probe failed: {err}',
+        retry: 'Retry',
         extractingNode: 'Extracting Node…',
         extractingNpm: 'Extracting bundled npm…'
     },
@@ -139,6 +142,11 @@ export default {
         autoScroll: 'Auto-scroll',
         clear: 'Clear',
         empty: '(No output yet. Live logs will appear here once DeepSeek Box starts.)'
+    },
+    /** Web host: placeholder while waiting for the dsh UI URL, plus the timeout state */
+    whost: {
+        timeout: 'Timed out waiting for DeepSeek Harness to start. Check Settings → Terminal for logs, then retry.',
+        retry: 'Retry'
     },
     sv: {
         cap: 'Settings',
@@ -446,6 +454,7 @@ export default {
             devModeDesc: 'When on, F12 opens/closes DevTools.',
             checkTitle: 'Automatic updates',
             checkBtn: 'Check for updates',
+            checkFailed: 'Update check failed: {err}',
             downloading: 'Downloading {version} in the background…',
             staging: 'Version {version} downloaded; archiving the current version in the background…',
             downloadedTitle: 'New version ready (background install)',

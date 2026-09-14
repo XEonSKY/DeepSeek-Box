@@ -19,7 +19,7 @@ hero:
 features:
   - icon: 🧩
     title: Browser-style tabs
-    details: The three fixed sites (dsh Web UI / web chat / usage & top-up) live in the tab strip; links opened from a page become dynamic tabs you can star to keep alive and drag to reorder.
+    details: The three pinned sites (dsh Web UI / web chat / usage & top-up) sit as icon buttons in the title bar; links opened from a page become dynamic tabs you can star to keep alive and drag to reorder.
   - icon: 🪟
     title: Multiple windows
     details: Right-click "Open in new window" to tear off a secondary window; tabs can be dragged between windows, and the earliest secondary window takes over once the core window closes.

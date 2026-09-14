@@ -30,7 +30,7 @@ The main process has two halves: `app/` handles the app itself (windows, config,
 | `nodeenv.ts` | Node download & deployment | `deployLocalNode` / `listNodeVersions` / `nodeStatus` / version management |
 | `npmRunner.ts` | npm detection / execution / cache | `ensureBundledNpmReady` / `runNpm` / `listNpmVersions` / `npmCacheEnv` |
 | `downloader.ts` | Multi-threaded downloader | `downloadFile` (HTTP Range segmentation, deduplication, cancellation) |
-| `cancel.ts` | Cancellation tokens | `beginCancelable` / `cancelActive` / `isAbortError` |
+| `cancel.ts` | Cancellation tokens | `beginCancelable` / `cancelActive` / `CANCELED_MESSAGE` |
 | `installs.ts` | Versioned directories | `installRoot` / `versionDir` / `activeVersion` / `setActiveVersion` / `resolveActive` / `isVersionComplete` / `listInstalled` / `removeVersion` / `migrateLegacyInstalls`; `InstallKind` is `node` / `npm` / `dsh` |
 | `tools.ts` | Path resolution | `localNodeExecPath` / `nodeRuntimeFor` / `resolveDshModule` / `findSystemNode` |
 | `semver.ts` | Version utilities | `sortVersionsDesc` / `filterByPrerelease` / `compareVersions` / `pickLatest` |

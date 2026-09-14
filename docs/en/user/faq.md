@@ -35,7 +35,7 @@ This means the current setting is **Locally deployed** Node, but no usable Node 
 
 ## Pressing F12 does nothing in the console
 
-You need to enable **Developer Mode** first: “Settings → About → Developer Mode”. It is off by default to avoid accidental opening.
+**Developer Mode is hidden by default**, so unlock it first: open “Settings → About” and click the **app version number** 5 times (within 1.5 seconds); only then does the “Developer Mode” switch appear on that page. Turn it on and `F12` takes effect. It is off by default to avoid accidental opening.
 
 ## Why do upgrades / uninstalls “stop dsh first”
 

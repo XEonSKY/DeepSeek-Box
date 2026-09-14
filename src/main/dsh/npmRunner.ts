@@ -11,6 +11,7 @@ import { localNodeDir } from './nodeenv'
 import { compareVersions, stripV, sortVersionsDesc } from './semver'
 import { pushLog, rememberChild } from './dsh'
 import { downloadFile } from './downloader'
+import { httpFetch } from './http'
 import { proxyEnv, npmProxyArgs } from './net'
 import { beginCancelable, CANCELED_MESSAGE } from './cancel'
 import { activeVersion, installRoot, listInstalled, prepareVersionDir, removeVersion, setActiveVersion, versionDir } from './installs'
@@ -209,7 +210,7 @@ export async function npmLatestVersion(cfg: Settings): Promise<string | null> {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 20000)
     try {
-        const res = await fetch(`${registryBase(key)}/npm/latest`, { signal: ctrl.signal })
+        const res = await httpFetch('npm', `${registryBase(key)}/npm/latest`, { signal: ctrl.signal })
         if (!res.ok) return null
         const meta = (await res.json()) as { version?: unknown }
         if (typeof meta.version !== 'string' || !meta.version) return null
@@ -236,7 +237,7 @@ export async function listNpmVersions(cfg: Settings, prerelease: boolean): Promi
         const ctrl = new AbortController()
         const timer = setTimeout(() => ctrl.abort(), 30000)
         try {
-            const res = await fetch(`${registryBase(key)}/npm`, {
+            const res = await httpFetch('npm', `${registryBase(key)}/npm`, {
                 signal: ctrl.signal,
                 headers: { accept: 'application/vnd.npm.install-v1+json' }
             })
@@ -366,6 +367,8 @@ async function ensureBundledNpm(
         tmpDir: tempDownloadDir(),
         threads: cfg.downloadThreads,
         signal,
+        // 内置 npm 的安装包属于「npm 安装 / 下载」这一档代理范围
+        proxyScope: 'npm',
         onProgress: (p) => onProgress?.({ phase: 'download', ...p })
     })
     if (dl.canceled) {

@@ -110,6 +110,35 @@ function openWebWindow(url: string, frameName: string, features: string, owner?:
     }
 }
 
+/**
+ * 给「真弹窗」（webview 里 window.open 打开的独立窗口）补上壳窗口本来就有的两项：
+ *  - 右键菜单：Electron 没有内建右键菜单，不挂这一项右键就完全没有反应；
+ *  - 应用内快捷键：切换终端视图 / DevTools。
+ * 弹窗不属于壳窗口，所以「切换终端视图」转交给核心窗口处理。
+ */
+function attachPopupBehaviors(win: BrowserWindow): void {
+    const wc = win.webContents
+    attachContextMenu(wc, win)
+    const isMac = process.platform === 'darwin'
+    wc.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown') return
+        const s = loadSettings()
+        const ev = { key: input.key, control: input.control, meta: input.meta, alt: input.alt, shift: input.shift }
+        if (matchesAccelerator(s.hotkeyToggleTerminal, ev, isMac)) {
+            event.preventDefault()
+            sendCore('ui:toggle-view')
+            return
+        }
+        // DevTools 快捷键：只在「开发模式」开启时生效（与壳窗口语义一致）。
+        if (matchesAccelerator(s.hotkeyDevTools, ev, isMac)) {
+            event.preventDefault()
+            if (!s.devMode) return
+            if (wc.isDevToolsOpened()) wc.closeDevTools()
+            else wc.openDevTools({ mode: 'detach' })
+        }
+    })
+}
+
 /** 建一个独立的网页窗口（真弹窗用）。不属于壳窗口，不入册、不参与核心接管。 */
 function createPopupWindow(url: string, features: string): void {
     const { width, height } = parsePopupSize(features)
@@ -126,6 +155,7 @@ function createPopupWindow(url: string, features: string): void {
             webviewTag: false
         }
     })
+    attachPopupBehaviors(win)
     win.webContents.setWindowOpenHandler(({ url: u, frameName, features: f }) => {
     // 弹窗内再要新开：普通链接交给核心窗口（无明确发起壳窗口）；真弹窗继续开弹窗。
         openWebWindow(u, frameName, f)
@@ -191,7 +221,7 @@ function buildShellWindow(core: boolean, initialUrl?: string): BrowserWindow {
         height: CONTENT_HEIGHT + TITLEBAR_HEIGHT + STATUSBAR_HEIGHT,
         minWidth: 900,
         minHeight: 600,
-        title: 'DeepSeek Box',
+        title: APP_TITLE,
         icon: fs.existsSync(iconPath) ? iconPath : undefined,
         frame: false, // frameless: the renderer draws its own title bar (drag + controls)
         autoHideMenuBar: true,
@@ -445,7 +475,7 @@ export function createTray(): void {
             const w = getMainWindow()
             return w && !w.isDestroyed() ? w : null
         }
-        t.setToolTip('DeepSeek Box')
+        t.setToolTip(APP_TITLE)
         t.setContextMenu(
             Menu.buildFromTemplate([
                 {

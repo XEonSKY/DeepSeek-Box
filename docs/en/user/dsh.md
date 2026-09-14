@@ -11,6 +11,14 @@ DeepSeek Harness is the program that actually drives the dsh Web UI; its npm pac
 
 When “Global” is selected, you need to specify the **launcher path** (pick it with the file chooser).
 
+## Startup settings
+
+The “Settings → DeepSeek Harness” page also has a whole **Startup** section:
+
+- **Timeout** (`timeoutMs`): the number of milliseconds to wait for dsh to start and print its address, default 90000 ms;
+- **Running state and button group**: shows whether dsh is “Running” or “Stopped”, with **Start / Stop / Restart**;
+- **Apply now**: saves the current settings and applies them immediately (restarting dsh so they take effect).
+
 ## First-time installation
 
 When DeepSeek Harness is not detected, the app pops up the **installation wizard**: choose the mirror, whether to include test builds, and the version to install, then click “Install DeepSeek Harness”. The app starts dsh automatically once installation completes.

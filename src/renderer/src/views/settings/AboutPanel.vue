@@ -302,9 +302,17 @@ function onEvent(e: AppUpdateEvent): void {
 async function check(): Promise<void> {
     errMsg.value = ''
     phase.value = 'checking'
-    const r = await window.api.triggerAppUpdate({ prerelease: state.appCheckPrerelease })
-    if (!r.ok) {
-        errMsg.value = r.message
+    try {
+        const r = await window.api.triggerAppUpdate({ prerelease: state.appCheckPrerelease })
+        if (!r.ok) {
+            errMsg.value = r.message
+            phase.value = 'error'
+        }
+        // r.ok 为真时由主进程的 appupdate 事件推进 phase（checking → available / not-available / error）
+    } catch (err) {
+        // IPC 自己抛错（处理器异常等）时也要落到 error，
+        // 否则 phase 会永远停在 checking：按钮一直转圈且一直禁用。
+        errMsg.value = tt('sv.about.checkFailed', { err: err instanceof Error ? err.message : String(err) })
         phase.value = 'error'
     }
 }
@@ -387,7 +395,7 @@ onBeforeUnmount(() => {
                         </div>
                         <el-switch v-model="state.appCheckPrerelease" />
                     </div>
-                    <!-- 开发模式默认隐藏：在 dsh 页连点「dsh 版本」5 次解锁；开启后才显示，关闭即再隐藏 -->
+                    <!-- 开发模式默认隐藏：在本页连点「应用版本号」5 次解锁；开启后才显示，关闭即再隐藏 -->
                     <div v-if="state.devMode" class="au">
                         <div class="au__txt">
                             <div class="au__t">{{ $t('sv.about.devMode') }}</div>

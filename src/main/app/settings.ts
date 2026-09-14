@@ -131,10 +131,12 @@ export function setConfigDir(dir: string | null): ConfigDirInfo {
     if (to === from) {
         setMigrationPlan(null)
         writeConfigOverride(override ? to : null)
+        settleMigrationWaiters()
     } else if (!fs.existsSync(from)) {
         setMigrationPlan(null)
         writeConfigOverride(override ? to : null)
         rewatchConfig()
+        settleMigrationWaiters()
     } else {
         setMigrationPlan({ from, to, override })
     }
@@ -148,6 +150,9 @@ export function revertConfigDir(): ConfigDirInfo {
         setMigrationPlan(null)
         writeConfigOverride(plan.from)
         rewatchConfig()
+        // 计划已撤销 = 引导阶段无需再等迁移。必须在目录指针落盘之后才放行，
+        // 否则等待方会读到尚未更新的旧目录。
+        settleMigrationWaiters()
     }
     return configDirInfo()
 }
@@ -266,12 +271,20 @@ export async function runConfigMigration(): Promise<void> {
 /**
  * 引导阶段等待迁移完成：无待迁移计划时立即返回；有则由渲染层触发执行，最长等待
  * timeoutMs 后自行兜底执行，避免无人触发时卡住启动。
+ *
+ * 三条放行路径缺一不可，否则启动会永久挂起：
+ *  1. 迁移正常结束 —— `runConfigMigration()` 的 `finish()` 里 settle；
+ *  2. 计划在执行前被撤销（`revertConfigDir()` / `setConfigDir()` 清空计划）—— 由那两处 settle；
+ *  3. 兜底超时到点时已经没有计划可迁 —— 这里必须主动 settle（曾经漏掉，导致 dsh 永不启动）。
  */
 export function waitForConfigMigration(timeoutMs = 30_000): Promise<void> {
     if (!configMigrationPlan()) return Promise.resolve()
     return new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
-            if (!migrationRunning && configMigrationPlan()) void runConfigMigration()
+            // 正在迁移：不要抢先放行，交给 finish() 统一 settle，避免读到半成品目录
+            if (migrationRunning) return
+            if (configMigrationPlan()) void runConfigMigration()
+            else settleMigrationWaiters()
         }, timeoutMs)
         migrationWaiters.push(() => {
             clearTimeout(timer)

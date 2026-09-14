@@ -133,9 +133,6 @@ function buildBody(r: UpdateResult): string | VNode {
         )
     }
 
-    if (r.command) {
-        kids.push(h('div', { class: 'update-cmd' }, r.command))
-    }
     kids.push(h('div', { class: 'update-note' }, r.message))
 
     return h('div', { class: 'update-body' }, kids)

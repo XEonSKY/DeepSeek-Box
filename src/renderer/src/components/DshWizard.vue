@@ -46,6 +46,8 @@ const logFullscreen = ref(false)
 const step = ref(0)
 const envProbe = ref<EnvProbe | null>(null)
 const probingEnv = ref(false)
+/** 环境探测 / 初始化失败的原因（原文，展示时套 i18n 前缀）；非空说明选项不可用是「探测失败」而非「真的没有」。 */
+const envError = ref<string | null>(null)
 
 /** 系统 Node 是否可用（存在且主版本 ≥ dsh 要求，阈值见 shared/version.ts）。 */
 const systemNodeOk = computed(() => {
@@ -232,6 +234,7 @@ async function probeEnv(): Promise<void> {
     probingEnv.value = true
     try {
         envProbe.value = await window.api.probeEnv()
+        envError.value = null
         // 所选 npm 在不可用时回退到内置 npm。
         if (envProbe.value) {
             if (installNpm.value === 'system' && !envProbe.value.npm) installNpm.value = 'bundled'
@@ -241,6 +244,10 @@ async function probeEnv(): Promise<void> {
         if (envProbe.value && nodeRuntimeChoice.value === 'system' && !systemNodeOk.value) {
             nodeRuntimeChoice.value = 'electron'
         }
+    } catch (err) {
+        // 探测失败不能静默：否则界面表现为「系统 Node / 系统 npm 全部灰掉」却给不出任何原因。
+        envProbe.value = null
+        envError.value = err instanceof Error ? err.message : String(err)
     } finally {
         probingEnv.value = false
     }
@@ -432,15 +439,20 @@ onMounted(() => {
         npmSpeed.value = p.speed
     })
     void (async () => {
-        const s = await window.api.getSettings()
-        installReg.value = s.npmRegistry
-        installPrerelease.value = s.checkPrerelease === true
-        installSource.value = s.dshSource ?? 'local'
-        installNpm.value = s.npmSource ?? 'system'
-        nodeRuntimeChoice.value = s.nodeRuntime ?? 'electron'
-        await loadConfigDir()
-        await loadInstalledNode()
-        await probeEnv()
+        try {
+            const s = await window.api.getSettings()
+            installReg.value = s.npmRegistry
+            installPrerelease.value = s.checkPrerelease === true
+            installSource.value = s.dshSource ?? 'local'
+            installNpm.value = s.npmSource ?? 'system'
+            nodeRuntimeChoice.value = s.nodeRuntime ?? 'electron'
+            await loadConfigDir()
+            await loadInstalledNode()
+            await probeEnv()
+        } catch (err) {
+            // 初始化失败必须让用户看见原因，否则只剩一个「选项全都不可用」的死界面
+            envError.value = err instanceof Error ? err.message : String(err)
+        }
     })()
 })
 
@@ -466,6 +478,11 @@ onBeforeUnmount(() => {
             </el-steps>
 
             <div class="wiz-body">
+                <!-- 探测/初始化失败：明确告知原因并提供重试，避免「选项全都不可用」的无解释界面 -->
+                <div v-if="envError" class="wiz-err">
+                    <span>{{ $t('dshMissing.probeFailed', { err: envError }) }}</span>
+                    <el-button size="small" :loading="probingEnv" @click="probeEnv">{{ $t('dshMissing.retry') }}</el-button>
+                </div>
                 <div v-if="step === 0" class="wiz-pane">
                     <div class="wiz-field">
                         <label class="wiz-label">{{ $t('dshMissing.registry') }}</label>
@@ -812,6 +829,21 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+/* 探测/初始化失败提示：与字段同宽，左对齐，重试按钮跟在文字后面 */
+.wiz-err {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--el-color-danger-light-5);
+  background: var(--el-color-danger-light-9);
+  color: var(--el-color-danger);
+  font-size: 12px;
+  line-height: 1.6;
 }
 .wiz-field {
   display: flex;

@@ -37,7 +37,7 @@ Node、npm 与 DeepSeek Harness 都按版本分开存放，多版本并存：
 
 ## 取消安装
 
-`main/dsh/cancel.ts` 提供单活动令牌：`beginCancelable()` / `cancelActive()` / `isAbortError()` / `CANCELED_MESSAGE`。
+`main/dsh/cancel.ts` 提供单活动令牌：`beginCancelable()` / `cancelActive()` / `CANCELED_MESSAGE`。
 
 下载与解压都挂到该令牌上；IPC `install:cancel` 触发。取消后清理临时文件并返回 `{ ok:false, canceled:true }`，渲染层不把它当错误。
 

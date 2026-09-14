@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppUpdateEvent, ConfigMigrationProgress, HotkeyState, LogEntry, NodeDeployProgress, RendererApi, Settings, Theme } from '@shared/types'
+import type { AppUpdateEvent, ConfigMigrationProgress, HotkeyState, LocaleCode, LogEntry, NodeDeployProgress, RendererApi, Settings, Theme } from '@shared/types'
 
 /**
  * 订阅一个 main → renderer 频道，返回退订函数。
@@ -65,6 +65,7 @@ const api: RendererApi = {
     onLog: (cb) => subscribe<LogEntry>('dsh:log', cb),
     onSettingsChanged: (cb) => subscribe<Settings>('settings:changed', cb),
     onThemeChanged: (cb) => subscribe<Theme>('settings:theme', cb),
+    onLocaleChanged: (cb) => subscribe<LocaleCode>('settings:locale', cb),
     onNewTab: (cb) => subscribe<string>('ui:new-tab', cb),
     onShellRole: (cb) => subscribe<boolean>('shell:core', cb),
     onTabDragHover: (cb) => subscribe<boolean>('tab-drag-hover', (on) => cb(!!on)),

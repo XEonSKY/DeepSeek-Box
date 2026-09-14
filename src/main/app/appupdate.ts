@@ -322,7 +322,7 @@ async function onDownloaded(info: UpdateDownloadedEvent): Promise<void> {
     }
     emit({ kind: 'staging', version })
     await archiveRunningVersion()
-    stagePendingUpdate(version, typeof info.downloadedFile === 'string' ? info.downloadedFile : null)
+    stagePendingUpdate(version)
     const slots = appSlotsState()
     emit({ kind: 'downloaded', version, canRollback: slots.canRollback, previous: slots.previous?.version ?? null })
 }

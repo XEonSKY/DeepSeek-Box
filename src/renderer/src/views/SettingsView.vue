@@ -82,6 +82,6 @@ onMounted(async () => {
 
 <!--
   样式已抽到 src/renderer/src/styles/settings.css（非 scoped 的全局样式，由 main.ts 统一加载）。
-  它要同时作用于经 <router-view> 嵌套渲染的 9 个子面板（General / Appearance / Network / Env / Dsh / Log / Hotkeys / Webview / About），留在本组件里既撑大文件、又让这层
+  它要同时作用于经 <router-view> 嵌套渲染的 10 个子面板（General / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / Webview / About），留在本组件里既撑大文件、又让这层
   依赖不可见；抽成独立样式表后，子面板改样式时可一眼看到该改哪个文件。
 -->

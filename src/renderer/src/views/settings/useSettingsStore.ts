@@ -4,7 +4,6 @@ import { ElMessage } from 'element-plus'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import type { Settings, Theme } from '@shared/types'
 import { applyTheme, applyColorScheme } from '../../lib/theme'
-import { appState } from '../../lib/state'
 import { tt } from '../../lib/locales'
 import { payloadFrom, type SettingsState, type SettingsActions } from './settingsStore'
 import { createDshActions } from './actions/dshActions'
@@ -106,7 +105,6 @@ export const useSettingsStore = defineStore('settings', () => {
         state.webviewUserAgent = s.webviewUserAgent ?? DEFAULT_SETTINGS.webviewUserAgent
         state.colorScheme = s.colorScheme ?? DEFAULT_SETTINGS.colorScheme
         state.modelsCredConsent = s.modelsCredConsent === true
-        appState.workspace = s.workspace
         if (typeof s.port === 'number' && s.port > 0) {
             state.portMode = 'manual'
             state.manualPort = s.port
@@ -133,7 +131,6 @@ export const useSettingsStore = defineStore('settings', () => {
         const p = await window.api.openDirectory()
         if (p) {
             state.workspace = p
-            appState.workspace = p
         }
     }
 
@@ -165,7 +162,6 @@ export const useSettingsStore = defineStore('settings', () => {
             const d = await window.api.resetSettings()
             fillFrom(d)
             applyTheme(d.theme)
-            appState.workspace = d.workspace
             await window.api.applySettings()
             ElMessage.success(tt('msg.resetOk'))
         } catch (err) {
@@ -203,7 +199,6 @@ export const useSettingsStore = defineStore('settings', () => {
     // ---- 外部配置自动同步：settings.json / dsh 的 settings.yaml 被外部改动。 ----
     const offSettingsChanged = window.api.onSettingsChanged((s) => {
         fillFrom(s)
-        appState.workspace = s.workspace
     })
     const offThemeChanged = window.api.onThemeChanged((t) => {
         state.theme = t

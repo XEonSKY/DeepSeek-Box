@@ -29,8 +29,6 @@ export interface PendingUpdate {
     to: string
     /** 来源版本。 */
     from: string | null
-    /** electron-updater 已下载的安装包路径（可能为空）。 */
-    installer: string | null
     /** 已启动新版但尚未确认健康的次数。 */
     attempts: number
     at: number
@@ -218,10 +216,10 @@ export async function archiveRunningVersion(): Promise<boolean> {
 }
 
 /** 记录「已下载、待重启安装」的更新，供启动守卫判断。 */
-export function stagePendingUpdate(to: string, installer: string | null): void {
+export function stagePendingUpdate(to: string): void {
     const m = readManifest()
     if (m.pending?.to === to) return
-    writeManifest({ ...m, pending: { to, from: m.current, installer, attempts: 0, at: Date.now() } })
+    writeManifest({ ...m, pending: { to, from: m.current, attempts: 0, at: Date.now() } })
 }
 
 /** 清除待安装记录（安装完成，或确认新版健康）。 */
@@ -239,7 +237,6 @@ export function noteBootAttempt(to: string): number {
         pending: {
             to,
             from: m.pending?.to === to ? m.pending.from : m.current,
-            installer: m.pending?.to === to ? m.pending.installer : null,
             attempts,
             at: Date.now()
         }

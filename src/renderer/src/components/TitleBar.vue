@@ -14,7 +14,9 @@ import {
     StarOutlined,
     StarFilled
 } from '@antdv-next/icons'
+import { ElMessage } from 'element-plus'
 import { useAppIcon } from '../lib/appIcon'
+import { tt } from '../lib/locales'
 import { useView, useGoView } from '../shell/viewnav'
 import { webTabs, activeTab, findTab, activateTab, closeTab, openTab, openNewTab, toggleKeep, tabLabel } from '../shell/tabs'
 import { shellMeta } from '../shell/shellmeta'
@@ -112,6 +114,8 @@ async function ctxMove(): Promise<void> {
     if (!target) return
     const moved = await window.api.moveTabToWindow(target)
     if (moved) closeTab(tab.id)
+    // 「没有其它窗口可接收」时主进程返回 false；不说一声的话就是点了没反应
+    else ElMessage.info(tt('app.tabs.moveWindowNoTarget'))
 }
 
 /** 跳转到核心窗口（副窗口用）：经 IPC 聚焦当前核心窗口；无核心则主进程重建一个。 */
@@ -608,10 +612,6 @@ onBeforeUnmount(() => {
 }
 .ctx button:hover:not(:disabled) {
   background: var(--el-fill-color);
-}
-.ctx button.ctx__disabled {
-  color: var(--el-text-color-placeholder);
-  cursor: default;
 }
 .ctx__sep {
   height: 1px;

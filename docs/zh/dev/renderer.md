@@ -12,9 +12,9 @@
 | `views/settings/ModelsPanel.vue` | 「模型」页：同意流程 + 模型 / 供应商 / 余额三列与「刷新全部」 |
 | `views/settings/actions/` | 设置动作：`dshActions.ts`（启停 / 安装向导）、`dshManageActions.ts`（DeepSeek Harness 版本管理） |
 | `components/` | `DshWizard.vue`（四步安装向导）、`StatusBar.vue`（底部状态栏：余额与版本徽标）、`TitleBar.vue` 等 |
-| `lib/` | 主题、标签、状态、格式化、更新状态、locale 工具 |
+| `lib/` | 主题、格式化、更新状态、locale 等工具（标签相关在 `shell/`） |
 | `lib/update.ts` | 版本更新状态中心：`versionStatus` / `checkDsh` / `checkAllUpdates` / `applyAppUpdateEvent` / `hasUpdate` |
-| `stores` / `views/settings/settingsStore.ts` | Pinia 状态与设置镜像 |
+| `views/settings/useSettingsStore.ts` / `views/settings/settingsStore.ts` | Pinia 状态与设置镜像 |
 
 ## 状态管理
 
@@ -23,7 +23,7 @@
 
 ## 标签与窗口
 
-标签的创建、保活、拖动迁移逻辑在 `lib/tabs.ts` 等；核心窗口与副窗口的角色由主进程 `windowreg.ts` 与渲染层共同决定。
+标签的创建、保活、拖动迁移逻辑在 `shell/tabs.ts` 等；核心窗口与副窗口的角色由主进程 `windowreg.ts` 与渲染层共同决定。
 
 ## 状态栏
 

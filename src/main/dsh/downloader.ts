@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { httpFetch } from './http'
+import type { HttpScope } from './http'
 
 /**
  * 统一文件下载器：默认多线程（HTTP Range 分段并发）。
@@ -37,6 +39,11 @@ interface DownloadFileOpts {
     threads?: number
     /** 外部取消信号（安装流程的 CancelToken）；中止时清理临时文件并返回 canceled=true。 */
     signal?: AbortSignal
+    /**
+     * 走哪一档「代理范围」（见 http.ts）：Node 发行包用 'node'，npm / dsh 的包用 'npm'。
+     * 缺省 'npm'（历史上下载只服务于 npm 包）。
+     */
+    proxyScope?: Extract<HttpScope, 'npm' | 'node'>
 }
 
 /** 一次下载的结果。 */
@@ -96,9 +103,34 @@ async function cancelBody(res: Response): Promise<void> {
     }
 }
 
+/**
+ * 把响应体写进文件，并按块回报字节数。
+ *
+ * 这里显式监听取消信号并在中止时 `destroy()` 读流：不能只依赖网络层是否响应 AbortSignal，
+ * 否则一旦底层不理会 signal，取消就会挂住直到整段下载完。
+ */
+async function pumpBody(
+    body: unknown,
+    signal: AbortSignal,
+    write: NodeJS.WritableStream,
+    onChunk: (len: number) => void
+): Promise<void> {
+    const src = Readable.fromWeb(body as WebBody)
+    const onAbort = (): void => {
+        src.destroy(new Error('canceled'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    src.on('data', (chunk: Buffer) => onChunk(chunk.length))
+    try {
+        await pipeline(src, write)
+    } finally {
+        signal.removeEventListener('abort', onAbort)
+    }
+}
+
 /** 探测总大小与是否支持 Range。 */
-async function probe(url: string, signal: AbortSignal): Promise<{ total: number; ranges: boolean }> {
-    const res = await fetch(url, { headers: { Range: 'bytes=0-0' }, signal })
+async function probe(scope: HttpScope, url: string, signal: AbortSignal): Promise<{ total: number; ranges: boolean }> {
+    const res = await httpFetch(scope, url, { headers: { Range: 'bytes=0-0' }, signal })
     if (res.status === 206) {
         const total = Number((res.headers.get('content-range') ?? '').split('/').pop() ?? 0)
         await cancelBody(res)
@@ -155,21 +187,27 @@ async function withRetry<T>(fn: () => Promise<T>, attempts: number, signal: Abor
 }
 
 /** 单流下载到目标文件（服务器不支持 Range / 文件较小 / 并发=1 时使用）。 */
-async function singleStream(url: string, file: string, signal: AbortSignal, state: DlState, report: (force?: boolean) => void): Promise<void> {
-    const res = await fetch(url, { signal })
+async function singleStream(
+    scope: HttpScope,
+    url: string,
+    file: string,
+    signal: AbortSignal,
+    state: DlState,
+    report: (force?: boolean) => void
+): Promise<void> {
+    const res = await httpFetch(scope, url, { signal })
     if (!res.ok || !res.body) throw new Error('HTTP ' + res.status)
     const len = Number(res.headers.get('content-length') ?? 0)
     if (Number.isFinite(len) && len > 0) state.total = len
-    const src = Readable.fromWeb(res.body as unknown as WebBody)
-    src.on('data', (chunk: Buffer) => {
-        state.downloaded += chunk.length
+    await pumpBody(res.body, signal, fs.createWriteStream(file, { flags: 'w' }), (n) => {
+        state.downloaded += n
         report()
     })
-    await pipeline(src, fs.createWriteStream(file, { flags: 'w' }))
 }
 
 /** 下载 [start, end] 区间到目标文件的对应偏移；断流后从断点续传。 */
 async function rangeStream(
+    scope: HttpScope,
     url: string,
     file: string,
     start: number,
@@ -182,18 +220,18 @@ async function rangeStream(
     let attempt = 0
     while (pos <= end) {
         try {
-            const res = await fetch(url, { headers: { Range: 'bytes=' + pos + '-' + end }, signal })
+            const res = await httpFetch(scope, url, { headers: { Range: 'bytes=' + pos + '-' + end }, signal })
             if (res.status !== 206 || !res.body) {
                 await cancelBody(res)
                 throw new Error('HTTP ' + res.status)
             }
-            const src = Readable.fromWeb(res.body as unknown as WebBody)
-            src.on('data', (chunk: Buffer) => {
-                pos += chunk.length
-                state.downloaded += chunk.length
+            let written = pos
+            await pumpBody(res.body, signal, fs.createWriteStream(file, { flags: 'r+', start: pos }), (n) => {
+                written += n
+                state.downloaded += n
                 report()
             })
-            await pipeline(src, fs.createWriteStream(file, { flags: 'r+', start: pos }))
+            pos = written
         } catch (err) {
             if (signal.aborted) throw err
             attempt += 1
@@ -243,6 +281,8 @@ async function runDownload(
     const tmpDir = o.tmpDir ?? o.destDir
     const tmpPath = path.join(tmpDir, fileName + '.download')
     const threads = normalizeDownloadThreads(o.threads)
+    /** 代理范围：Node 发行包与 npm/dsh 包分属两档（见 http.ts）。 */
+    const scope: HttpScope = o.proxyScope ?? 'npm'
     const ctrl = new AbortController()
     // 外部的取消信号（取消按钮）联动到本地控制器；已取消则立即中止。
     if (o.signal) {
@@ -260,7 +300,7 @@ async function runDownload(
         removeQuietly(tmpPath)
         removeQuietly(finalPath)
 
-        const { total, ranges } = await withRetry(() => probe(o.url, ctrl.signal), MAX_RETRY, ctrl.signal)
+        const { total, ranges } = await withRetry(() => probe(scope, o.url, ctrl.signal), MAX_RETRY, ctrl.signal)
         state.total = total
         const segmented = ranges && threads > 1 && total >= MIN_SEGMENT_BYTES
 
@@ -268,7 +308,7 @@ async function runDownload(
             await withRetry(
                 () => {
                     state.downloaded = 0
-                    return singleStream(o.url, tmpPath, ctrl.signal, state, report)
+                    return singleStream(scope, o.url, tmpPath, ctrl.signal, state, report)
                 },
                 MAX_RETRY,
                 ctrl.signal
@@ -281,7 +321,7 @@ async function runDownload(
                 const start = i * chunkSize
                 if (start >= total) break
                 const end = Math.min(start + chunkSize - 1, total - 1)
-                jobs.push(rangeStream(o.url, tmpPath, start, end, ctrl.signal, state, report))
+                jobs.push(rangeStream(scope, o.url, tmpPath, start, end, ctrl.signal, state, report))
             }
             await Promise.all(jobs)
         }

@@ -36,7 +36,7 @@ Main-process entry `src/main/index.ts`:
 
 ## Window and tab model
 
-- The core window hosts three fixed sites (dsh Web UI / web chat / usage & top-up); the core-window registration and takeover logic lives in `app/windowreg.ts` and the renderer's `lib/tabs.ts`.
+- The core window hosts three fixed sites (dsh Web UI / web chat / usage & top-up); the core-window registration and takeover logic lives in `app/windowreg.ts` and the renderer's `shell/tabs.ts`.
 - Secondary windows are created by "Open in new window"; tabs can be dragged in / out, and after the core window closes the earliest secondary window takes over.
 - Embedded pages use `<webview>`; the address bar is shown only for dynamic tabs, and protocol / search routing lives in the renderer.
 

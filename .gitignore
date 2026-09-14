@@ -1,6 +1,6 @@
 # ============================================================
 # DeepSeek Box — Git 忽略规则
-# 仓库根为 app/。按类别分组，除当前已知产物外，也覆盖未来可能出现的文件。
+# 仓库根即本文件所在目录（工作区根 = git 根）。按类别分组，除当前已知产物外，也覆盖未来可能出现的文件。
 #
 # ⚠️ 必须入库、切勿加入忽略：package-lock.json、.npmrc、package.json、
 #    tsconfig*.json、electron.vite.config.ts、README.md、LICENSE、
@@ -100,4 +100,3 @@ AGENT.md
 # ---------- AI 工作区辅助（本地，不入库） ----------
 .dsh
 .temp
-.dsh

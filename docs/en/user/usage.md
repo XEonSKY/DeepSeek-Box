@@ -9,7 +9,7 @@ The app is a frameless desktop shell: the upper part is a custom-drawn title bar
 | App icon + name | Shows DeepSeek Box |
 | Pinned site icons | Shown only in the **core window**: DeepSeek UI / Web Chat / Usage & Top-up |
 | Jump to core window | Shown only in **secondary windows**, to return to the window hosting DeepSeek UI |
-| Tab strip | Dynamic tabs + `＋` to create; drag the empty area to move the window, and use the wheel to scroll horizontally |
+| Tab strip | Dynamic tabs + `＋` to create (the three pinned sites are not here); drag the empty area to move the window, and use the wheel to scroll horizontally |
 | Refresh | Shown only when the currently active tab is one of the three pinned sites |
 | Settings | Opens the settings page (the terminal is also here: Settings → Terminal) |
 | Minimize / Maximize / Close | Window controls |
@@ -18,9 +18,9 @@ The app is a frameless desktop shell: the upper part is a custom-drawn title bar
 
 ## Tabs
 
-### Pinned tabs (core window only)
+### Pinned site icons (core window only)
 
-The three pinned sites always exist and **cannot be closed**:
+The three pinned sites are **icon buttons on the left of the title bar**; they always exist, **cannot be closed**, and are not in the tab strip:
 
 1. **DeepSeek UI** — the embedded dsh main interface;
 2. **Web Chat** — embedded [chat.deepseek.com](https://chat.deepseek.com/);
@@ -30,7 +30,7 @@ The three pinned sites always exist and **cannot be closed**:
 
 - Origin: `target=_blank` / `window.open` from links inside pages, or clicking “＋” on the tab strip;
 - No upper limit on the number;
-- **Keep-alive policy**: the pages kept alive at the same time are “pinned sites + tabs you starred + the 3 most recent unstarred dynamic tabs”. Tabs beyond that range **remain on the tab strip**, but their pages are recycled and reloaded when you switch back;
+- **Keep-alive policy**: the pages kept alive at the same time are “pinned sites + tabs you starred + the 3 most recent unstarred dynamic tabs”. Dynamic tabs beyond that range **remain on the tab strip**, but their pages are recycled and reloaded when you switch back;
 - A tab actually loads its page only after it has been **opened** at least once.
 
 ### “＋” new tab
@@ -83,8 +83,8 @@ Right-clicking in an input box or on selected text shows **Cut / Copy / Paste / 
 | Shortcut | Action |
 |---|---|
 | `Ctrl` / `Cmd` + `Alt` + `H` | **System-wide**: pressing it in any program brings you back to the main window |
-| `Ctrl` / `Cmd` + `T` | Switch between DeepSeek UI and the terminal |
-| `F12` | Open / close DevTools (**only effective when “Developer Mode” is enabled**) |
+| `Ctrl` / `Cmd` + `T` | Switch between the web view and “Settings · Terminal” |
+| `F12` | Open / close DevTools (**only effective when “Developer Mode” is enabled**; that switch is hidden by default—click the app version number 5 times under “Settings → About” to unlock it) |
 
 All three can be changed under [Settings → Shortcuts](/en/user/settings); “Clear” disables them.
 

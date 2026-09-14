@@ -231,7 +231,6 @@ export interface UpdateResult {
     current: string | null
     latest: string | null
     message: string
-    command?: string
 }
 
 /** 运行环境元信息（关于页展示当前版本/架构）。 */
@@ -533,6 +532,11 @@ export interface RendererApi {
    * (e.g. the theme was changed inside the dsh UI); adopt it in the shell.
    */
     onThemeChanged(cb: (theme: Theme) => void): () => void
+    /**
+   * dsh's own settings.yaml (locale.preference) changed on disk
+   * (e.g. the language was changed inside the dsh UI); adopt it in the shell.
+   */
+    onLocaleChanged(cb: (locale: LocaleCode) => void): () => void
     /** Main asks the renderer to flip between the Web view and the log view. */
     onToggleView(cb: () => void): () => void
     /** Main asks the renderer to show the (Element Plus) close-behaviour prompt. */

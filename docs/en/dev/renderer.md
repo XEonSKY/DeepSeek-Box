@@ -12,9 +12,9 @@ The renderer is a Vue 3 application responsible for the tab shell, settings page
 | `views/settings/ModelsPanel.vue` | The “Models” page: consent flow + the model / provider / balance columns and “Refresh all” |
 | `views/settings/actions/` | Settings actions: `dshActions.ts` (start-stop / install wizard), `dshManageActions.ts` (DeepSeek Harness version management) |
 | `components/` | `DshWizard.vue` (four-step install wizard), `StatusBar.vue` (bottom status bar: balance and version badge), `TitleBar.vue`, etc. |
-| `lib/` | Theme, tabs, state, formatting, update state, locale utilities |
+| `lib/` | Theme, formatting, update state, locale and similar utilities (tab logic lives in `shell/`) |
 | `lib/update.ts` | The version-update state hub: `versionStatus` / `checkDsh` / `checkAllUpdates` / `applyAppUpdateEvent` / `hasUpdate` |
-| `stores` / `views/settings/settingsStore.ts` | Pinia state and settings mirror |
+| `views/settings/useSettingsStore.ts` / `views/settings/settingsStore.ts` | Pinia state and settings mirror |
 
 ## State management
 
@@ -23,7 +23,7 @@ The renderer is a Vue 3 application responsible for the tab shell, settings page
 
 ## Tabs and windows
 
-The creation, keep-alive and drag-migration logic for tabs lives in `lib/tabs.ts` and elsewhere; the roles of the core window and secondary windows are decided jointly by the main process `windowreg.ts` and the renderer.
+The creation, keep-alive and drag-migration logic for tabs lives in `shell/tabs.ts` and elsewhere; the roles of the core window and secondary windows are decided jointly by the main process `windowreg.ts` and the renderer.
 
 ## Status bar
 

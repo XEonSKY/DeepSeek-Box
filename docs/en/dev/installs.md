@@ -37,7 +37,7 @@ Each root directory's `.active` records the currently active version. The core A
 
 ## Cancelling an install
 
-`main/dsh/cancel.ts` provides a single active token: `beginCancelable()` / `cancelActive()` / `isAbortError()` / `CANCELED_MESSAGE`.
+`main/dsh/cancel.ts` provides a single active token: `beginCancelable()` / `cancelActive()` / `CANCELED_MESSAGE`.
 
 Both download and extraction are bound to that token; the IPC `install:cancel` triggers it. After cancellation the temp files are cleaned up and `{ ok:false, canceled:true }` is returned; the renderer does not treat it as an error.
 

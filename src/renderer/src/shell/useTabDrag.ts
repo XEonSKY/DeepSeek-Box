@@ -2,6 +2,7 @@ import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { Ref } from 'vue'
 import { webTabs, closeTab } from './tabs'
 import type { WebTab } from './tabs'
+import { tt } from '../lib/locales'
 import { NEWTAB_URL } from '@shared/types'
 
 /**
@@ -158,7 +159,8 @@ export function useTabDrag(): TabDragApi {
         hoveredId = null
         draggingTabId.value = press.tab.id
         ghost.visible = true
-        ghost.text = press.tab.kind === 'newtab' ? 'New Tab' : press.tab.title || ''
+        // 幽灵标签文案与标签条保持一致：内置导航页走 i18n，不能硬编码英文
+        ghost.text = press.tab.kind === 'newtab' ? tt('app.tabs.new') : press.tab.title || ''
     }
 
     function endLocal(opts: { reorder?: boolean; dropTarget?: number | null }): void {
