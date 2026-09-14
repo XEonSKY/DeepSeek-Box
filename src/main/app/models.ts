@@ -2,17 +2,23 @@ import os from 'node:os'
 import path from 'node:path'
 import fs from 'node:fs'
 import { parse } from 'yaml'
-import type { CurrentBalanceInfo, ModelBalanceInfo, ModelEntryInfo, ModelsInfo } from '@shared/types'
+import type { CurrentBalanceInfo, ModelBalanceInfo, ModelsInfo, ProviderEntryInfo } from '@shared/types'
+import { httpFetch } from '../dsh/http'
 
 /**
- * 「模型」页的数据来源：dsh 的 settings.yaml（供应商与模型）+ .credentials.yaml（API 密钥）
- * + 供应商接口（模型目录与余额）。
+ * 「模型」页的数据来源：dsh 的 settings.yaml（供应商）+ .credentials.yaml（API 密钥）
+ * + 供应商接口（余额）。
  *
- * 两条硬规则：
+ * 三条硬规则：
  *  1. **同一令牌 = 同一个服务商**：多个路由解析到同一个密钥时合并成一组，只查询与展示一次；
- *  2. **密钥不出主进程**：明文只在本文件内用于发起请求，绝不进入返回值、日志或 IPC 事件。
+ *  2. **每个令牌只出一行**：列表按令牌（供应商组）展开，不按模型展开——页面上没有模型名，
+ *     所以过去那次 `GET /models` 目录查询已随展示需求一起移除（余额仍然要查）；
+ *  3. **密钥不出主进程**：明文只在本文件内用于发起请求，绝不进入返回值、日志或 IPC 事件。
  *
- * 健壮性：配置解析、目录解析、网络请求各自兜底，任何单点失败都不会让整页崩掉；
+ * 联网走 httpFetch('app', …)：这是「程序本体」那一档代理范围覆盖的地方 —— 供应商接口
+ * 常常和 npm / GitHub 一样被挡在墙外，代理设置了却不生效等于没设置。
+ *
+ * 健壮性：配置解析、网络请求各自兜底，任何单点失败都不会让整页崩掉；
  * 同时用防御上限挡住异常 / 恶意配置造成的请求风暴与超长列表。
  */
 
@@ -36,7 +42,6 @@ const DEEPSEEK_BASE = 'https://api.deepseek.com'
 const FETCH_TIMEOUT_MS = 10_000
 /** 参考上限：配置异常时不至于拉出天量请求 / 天量列表行。 */
 const MAX_PROVIDERS = 64
-const MAX_MODELS_PER_GROUP = 500
 const MAX_ID_LEN = 120
 const MAX_NAME_LEN = 200
 
@@ -45,7 +50,6 @@ interface ProviderConfig {
     name: string
     baseURL: string
     apiKeyEnv: string | null
-    models: string[]
 }
 
 /** 按令牌合并后的服务商组：同一令牌只保留一个代表，余额 / 目录只查一次。 */
@@ -67,17 +71,6 @@ function str(v: unknown, max = MAX_ID_LEN): string | null {
     const s = v.trim()
     if (!s) return null
     return s.length > max ? s.slice(0, max) : s
-}
-
-/** 供应商配置里的 models 声明：兼容字符串数组与 `{ id }` 对象数组。 */
-function modelIds(v: unknown): string[] {
-    const raw = Array.isArray(v) ? v : v == null ? [] : [v]
-    const out: string[] = []
-    for (const m of raw) {
-        const id = typeof m === 'string' ? str(m) : str(asRecord(m)?.id)
-        if (id) out.push(id)
-    }
-    return out
 }
 
 /** 供应商展示名：配置里有就用它，否则已知路由给人类可读名。 */
@@ -117,18 +110,6 @@ function joinURL(baseURL: string, suffix: string): string {
     return baseURL.replace(/\/+$/, '') + suffix
 }
 
-/** 去重且保序（空串丢弃）。 */
-function unique(list: string[]): string[] {
-    const seen = new Set<string>()
-    const out: string[] = []
-    for (const item of list) {
-        if (!item || seen.has(item)) continue
-        seen.add(item)
-        out.push(item)
-    }
-    return out
-}
-
 /**
  * 读取凭据引用（env 名 → 明文）。
  * 明文只返回给本模块的请求构造函数使用；调用方绝不把它写进 ModelsInfo。
@@ -166,14 +147,15 @@ function readRefs(): Record<string, string> {
 }
 
 /** 把 settings.yaml 里能确定的供应商路由收成一份列表（只保留有合法端点的）。 */
+/** 把 settings.yaml 里能确定的供应商路由收成一份列表（只保留有合法端点的）。 */
 function collectProviders(settings: Record<string, unknown>): ProviderConfig[] {
     const out: ProviderConfig[] = []
     const seen = new Set<string>()
-    const push = (id: string, name: string, baseURL: string, apiKeyEnv: string | null, models: string[]): void => {
+    const push = (id: string, name: string, baseURL: string, apiKeyEnv: string | null): void => {
         if (out.length >= MAX_PROVIDERS) return
         if (!id || seen.has(id) || !baseURL || !isHttpURL(baseURL)) return
         seen.add(id)
-        out.push({ id, name, baseURL, apiKeyEnv, models: unique(models).slice(0, MAX_MODELS_PER_GROUP) })
+        out.push({ id, name, baseURL, apiKeyEnv })
     }
 
     // 1) DeepSeek 官方路由：settings 里可能整段省略（此时用官方默认端点）。
@@ -183,8 +165,7 @@ function collectProviders(settings: Record<string, unknown>): ProviderConfig[] {
             'deepseek-official',
             displayName('deepseek-official', str(ds.name, MAX_NAME_LEN)),
             str(ds.baseURL) ?? DEEPSEEK_BASE,
-            str(ds.apiKeyEnv) ?? defaultKeyEnv('deepseek-official'),
-            modelIds(ds.models)
+            str(ds.apiKeyEnv) ?? defaultKeyEnv('deepseek-official')
         )
     }
 
@@ -195,13 +176,7 @@ function collectProviders(settings: Record<string, unknown>): ProviderConfig[] {
             const cfg = asRecord(raw) ?? {}
             const pid = str(id)
             if (!pid) continue
-            push(
-                pid,
-                displayName(pid, str(cfg.name, MAX_NAME_LEN)),
-                str(cfg.baseURL) ?? '',
-                str(cfg.apiKeyEnv) ?? defaultKeyEnv(pid),
-                modelIds(cfg.models)
-            )
+            push(pid, displayName(pid, str(cfg.name, MAX_NAME_LEN)), str(cfg.baseURL) ?? '', str(cfg.apiKeyEnv) ?? defaultKeyEnv(pid))
         }
     }
 
@@ -209,13 +184,7 @@ function collectProviders(settings: Record<string, unknown>): ProviderConfig[] {
     const def = asRecord(settings['agent-default-model'])
     const defProvider = str(def?.provider)
     if (defProvider) {
-        push(
-            defProvider,
-            displayName(defProvider, null),
-            defProvider.includes('deepseek') ? DEEPSEEK_BASE : '',
-            defaultKeyEnv(defProvider),
-            modelIds(def?.model)
-        )
+        push(defProvider, displayName(defProvider, null), defProvider.includes('deepseek') ? DEEPSEEK_BASE : '', defaultKeyEnv(defProvider))
     }
     return out
 }
@@ -241,10 +210,10 @@ function groupProviders(providers: ProviderConfig[], refs: Record<string, string
     return [...groups.values()]
 }
 
-/** 带超时的 JSON 请求；key 为空时不带 Authorization 头。 */
+/** 带超时的 JSON 请求；key 为空时不带 Authorization 头。走「程序本体」范围的代理。 */
 async function fetchJson(url: string, key: string | null): Promise<unknown> {
     if (!isHttpURL(url)) throw new Error('invalid-url')
-    const res = await fetch(url, {
+    const res = await httpFetch('app', url, {
         headers: {
             Accept: 'application/json',
             ...(key ? { Authorization: 'Bearer ' + key } : {})
@@ -254,20 +223,6 @@ async function fetchJson(url: string, key: string | null): Promise<unknown> {
     })
     if (!res.ok) throw new Error('HTTP ' + res.status)
     return res.json()
-}
-
-/** 供应商公布的模型目录（OpenAI 兼容的 `GET /models`）。失败返回 null，由调用方回退到配置。 */
-async function fetchModels(baseURL: string, key: string | null): Promise<string[] | null> {
-    const body = asRecord(await fetchJson(joinURL(baseURL, '/models'), key))
-    const data = body?.data
-    if (!Array.isArray(data)) return null
-    const ids: string[] = []
-    for (const m of data) {
-        if (ids.length >= MAX_MODELS_PER_GROUP) break
-        const id = str(asRecord(m)?.id)
-        if (id) ids.push(id)
-    }
-    return ids.length ? ids : null
 }
 
 /** 余额：只有 DeepSeek 域可查，其余供应商明确回 unsupported。 */
@@ -304,10 +259,6 @@ function balanceError(err: unknown): ModelBalanceInfo {
     return { state: 'error', currency: null, total: null, granted: null, toppedUp: null, message: sanitizeMessage(raw) }
 }
 
-/**
- * 读取模型列表：settings.yaml 定供应商、凭据文件供密钥、供应商接口给模型目录与余额。
- * 同一令牌的多个路由合并为一个服务商；任一组的失败都不影响其它组。
- */
 /** 读取 settings.yaml 文档；异常收敛成错误码，不抛。 */
 function loadSettingsDoc(): { ok: true; settings: Record<string, unknown> } | { ok: false; errorCode: 'settings-missing' | 'settings-parse' } {
     let raw: string
@@ -323,6 +274,10 @@ function loadSettingsDoc(): { ok: true; settings: Record<string, unknown> } | { 
     }
 }
 
+/**
+ * 读取列表：settings.yaml 定供应商、凭据文件供密钥、供应商接口给余额。
+ * **每个令牌一行**（同一令牌的多个路由合并为一个服务商）；任一组的失败都不影响其它组。
+ */
 async function readModelsInfoInner(): Promise<ModelsInfo> {
     const doc = loadSettingsDoc()
     if (!doc.ok) return { entries: [], errorCode: doc.errorCode }
@@ -331,29 +286,13 @@ async function readModelsInfoInner(): Promise<ModelsInfo> {
 
     const refs = readRefs()
     const groups = groupProviders(providers, refs)
-    const entries: ModelEntryInfo[] = []
-    const seenRow = new Set<string>()
+    const entries: ProviderEntryInfo[] = []
 
+    // 一组 = 一个令牌（合并后的服务商）：只查一次余额、只出一行。
+    // 各组互不相交（collectProviders 已按 id 去重），因此不需要再去重行。
     for (const g of groups) {
-        const baseURL = g.primary.baseURL
-        const [balance, remote] = await Promise.all([
-            fetchBalance(baseURL, g.key).catch(balanceError),
-            fetchModels(baseURL, g.key).catch(() => null)
-        ])
-        // 目录优先用供应商公布的；再并入各成员路由声明的（保序去重）。
-        const declared = g.members.flatMap((m) => m.models)
-        const models = unique([...(remote ?? []), ...declared]).slice(0, MAX_MODELS_PER_GROUP)
-        if (!models.length) {
-            // 供应商没公布、配置也没声明：仍给一行，界面显示占位而不是整块消失。
-            entries.push({ id: '', provider: g.primary.id, providerName: g.primary.name, balance })
-            continue
-        }
-        for (const id of models) {
-            const rowKey = g.primary.id + '\u0000' + id
-            if (seenRow.has(rowKey)) continue
-            seenRow.add(rowKey)
-            entries.push({ id, provider: g.primary.id, providerName: g.primary.name, balance })
-        }
+        const balance = await fetchBalance(g.primary.baseURL, g.key).catch(balanceError)
+        entries.push({ provider: g.primary.id, providerName: g.primary.name, balance })
     }
     return { entries, errorCode: null }
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElCheckbox, ElMessage, ElMessageBox, ElNotification } from 'element-plus'
+import { ElMessage, ElNotification } from 'element-plus'
 import DshWizard from './components/DshWizard.vue'
 import TitleBar from './components/TitleBar.vue'
 import StatusBar from './components/StatusBar.vue'
@@ -41,49 +41,7 @@ watch(
 // Ctrl+T 在 DeepSeek UI 与「设置 → 终端」之间切换（已在终端页则回 UI）。
 const onToggle = useToggleTerminal()
 
-// ---- Element Plus close prompt (requested by the main process) -------------
-const remember = ref(false)
-let askingClose = false
-async function askClosePrompt(): Promise<void> {
-    if (askingClose) return
-    askingClose = true
-    remember.value = false
-
-    const message = h('div', { class: 'close-ask' }, [
-        h('p', { class: 'close-ask__text' }, t('closeAsk.text')),
-        h(
-            ElCheckbox,
-            { onChange: (v: string | number | boolean) => (remember.value = !!v) },
-            { default: () => t('closeAsk.remember') }
-        )
-    ])
-
-    try {
-        await ElMessageBox({
-            title: t('closeAsk.title'),
-            message,
-            confirmButtonText: t('closeAsk.toTray'),
-            cancelButtonText: t('closeAsk.quit'),
-            showCancelButton: true,
-            distinguishCancelAndClose: true,
-            type: 'info',
-            customClass: 'close-ask-box'
-        })
-        // confirm => hide to tray
-        window.api.resolveClose({ action: 'hide', remember: remember.value })
-    } catch (err) {
-    // Element Plus MessageBox 拒绝值就是字符串 'cancel'/'close'（非 { action } 对象）：
-    // "直接退出" (cancel) => quit；Esc / X (close) => do nothing。
-        if (err === 'cancel') {
-            window.api.resolveClose({ action: 'quit', remember: remember.value })
-        }
-    } finally {
-        askingClose = false
-    }
-}
-
 let offToggle: (() => void) | null = null
-let offAskClose: (() => void) | null = null
 let offMissing: (() => void) | null = null
 let offCore: (() => void) | null = null
 let offAppUpdate: (() => void) | null = null
@@ -167,6 +125,9 @@ async function boot(): Promise<void> {
     const ok = await window.api.isDshInstalled()
     if (!ok) {
         showMissing.value = true // main does not start dsh when it is absent
+        // 「默认使用系统浏览器打开 DSH」开启时窗口启动即藏在托盘；dsh 缺失时没有浏览器可开，
+        // 必须把窗口拉回来，否则安装向导无处可见。
+        void window.api.focusCoreWindow()
         return
     }
     if (s.autoCheckUpdate) void checkAndNotify({ prerelease: s.checkPrerelease })
@@ -196,9 +157,9 @@ onMounted(() => {
         if (isCore) activateTab('home')
     })
     offToggle = window.api.onToggleView(onToggle)
-    offAskClose = window.api.onAskClose(() => void askClosePrompt())
     offMissing = window.api.onDshMissing(() => {
         showMissing.value = true
+        void window.api.focusCoreWindow() // 同上：确保（可能藏在托盘的）窗口把向导显示出来
     })
     offAppUpdate = window.api.onAppUpdateEvent(onAppUpdateEvent)
     offMigration = window.api.onConfigMigrationProgress(onMigrationProgress)
@@ -219,7 +180,6 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
     offToggle?.()
-    offAskClose?.()
     offMissing?.()
     offCore?.()
     offAppUpdate?.()

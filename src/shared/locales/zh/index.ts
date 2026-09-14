@@ -32,14 +32,6 @@ export default {
             promptPlaceholder: 'https://…'
         }
     },
-    /** 关闭行为询问（App 内 ElMessageBox） */
-    closeAsk: {
-        title: 'DeepSeek Box',
-        text: '关闭窗口时希望做什么？',
-        remember: '记住我的选择，下次不再询问',
-        toTray: '隐藏到系统托盘',
-        quit: '直接退出'
-    },
     /** DeepSeek Harness 未安装全屏遮罩 */
     dshMissing: {
         title: '未安装 DeepSeek Harness',
@@ -64,6 +56,8 @@ export default {
         restoreDefault: '恢复默认',
         configDirHint: '设置、本地 DeepSeek Harness 与内置 npm 都会放入该目录；更改后在重启应用时自动迁移已有内容。',
         configDirPending: '配置目录已更改，将在重启应用后自动迁移原目录内容。',
+        netHint: '代理会立即保存，本次安装的 Node / npm / DeepSeek Harness 下载即时生效；之后可在「设置 → 网络」里修改。',
+        proxySettings: '代理设置',
         version: '版本',
         npmSystem: '系统 npm',
         npmHint: '系统 npm 用本机已装；内置 npm 首次会在线拉取一份缓存；本地 Node 自带 npm 仅在部署本地 Node 后出现。',
@@ -158,14 +152,15 @@ export default {
     /** 设置页（sv = Settings View） */
     sv: {
         cap: '设置',
-        nav: { general: '常规', appearance: '外观', network: '网络', env: '环境', dsh: 'DeepSeek Harness', models: '模型', log: '终端', hotkeys: '快捷键', webview: 'Webview', about: '关于' },
+        nav: { general: '常规', system: '系统与性能', appearance: '外观', network: '网络', env: '环境', dsh: 'DeepSeek Harness', models: '模型', log: '终端', hotkeys: '快捷键', webview: 'Webview', about: '关于' },
         intro: {
             general: '工作目录、端口与标签页/搜索等基础行为。',
+            system: '开机自启、图形加速与浏览器打开方式。',
             appearance: '界面语言、主题与缩放等观感设置。',
             network: '代理连接与网络作用范围。',
             env: '运行 DeepSeek Harness 所用的 Node 与 npm 来自哪里，以及各来源的版本。',
             dsh: 'DeepSeek Harness 的来源、npm 来源与更新。',
-            models: '模型列表：各供应商提供的模型与余额（同一密钥只展示一次，不显示密钥）。',
+            models: '令牌列表：每个密钥（令牌）一行，显示所属供应商与余额，不显示密钥。',
             log: 'DeepSeek Box 的实时输出（stdout / stderr）。',
             hotkeys: '键盘快捷键：系统全局的与常用的操作。',
             webview: '内嵌页面的渲染方式与浏览器标识。',
@@ -191,12 +186,9 @@ export default {
             shortcutUrl: '网址',
             shortcutAdd: '添加',
             shortcutHint: '显示在新标签页导航页上，点击即可直达。',
-            closeBehavior: '关闭按钮行为',
-            closeTray: '隐藏到系统托盘',
-            closeQuit: '直接退出',
-            askEvery: '每次询问',
-            rememberChoice: '记住选择',
-            askEveryHint: '开启则每次关闭都询问。',
+            closeSection: '关闭程序',
+            closeKeepRunning: '关闭程序后继续运行后台扩展和应用',
+            closeKeepRunningHint: '开启后点击关闭按钮只隐藏到系统托盘，后台任务继续运行；关闭则直接退出并结束 DeepSeek Harness。',
             configDirSection: '配置文件夹',
             configDir: '当前配置目录',
             configDirChange: '更改…',
@@ -214,6 +206,20 @@ export default {
             reset: '恢复默认设置',
             resetTxt: '恢复默认并重启 dsh。',
             resetBtn: '一键恢复默认'
+        },
+        /** 系统与性能：开机自启、图形加速、浏览器打开方式 */
+        system: {
+            startup: '启动',
+            autoLaunch: '启动增强（开机自启）',
+            autoLaunchHint: '登录系统后自动启动 DeepSeek Box 并拉起 DeepSeek Harness。',
+            performance: '性能',
+            gpuAccel: '在可用时使用图形加速',
+            gpuAccelHint: '用 GPU 渲染内嵌页面。关闭后资源占用更低、对老旧驱动的兼容性更好，但滚动与动画会变卡。',
+            gpuAccelText: '图形加速只能在应用启动时决定，改动需要重启应用才能生效。现在重启吗？',
+            restartNow: '立即重启',
+            browser: '浏览器',
+            openInBrowser: '默认使用系统浏览器打开 DSH',
+            openInBrowserHint: '启动时隐藏到系统托盘，并在系统默认浏览器中打开 DeepSeek Harness 界面；之后可随时从托盘图标唤回主窗口。'
         },
         appearance: {
             title: '外观',
@@ -252,18 +258,18 @@ export default {
             host: '主机',
             port: '端口',
             scope: '代理范围',
+            scopeApp: '程序本体（模型 / 余额、内嵌网页）',
+            scopeUpdate: '程序更新（应用自更新）',
+            scopeDsh: 'DSH 本体（dsh 进程联网）',
             scopeNpm: 'npm 安装 / 下载',
             scopeNode: 'Node 下载部署',
-            scopeUpdate: 'DeepSeek Harness 更新检查',
-            scopeHint: '仅在勾选范围内使用代理。',
-            mirror: 'GitHub 镜像',
-            mirrorUrl: '镜像前缀',
-            mirrorHint: '留空则直连 GitHub。填入公共镜像前缀（如 https://ghproxy.com）后，应用更新的安装包下载会经其加速；版本查询等元数据仍走官方，因此镜像不支持 GitHub API 也不会让更新检查失效。',
-            mirrorBroken: '镜像失效时清空此项即可恢复直连。',
+            scopeRegistry: '版本查询（npm registry）',
+            scopeHint: '仅在勾选范围内使用代理；未勾选的范围跟随系统设置直连。',
             download: '下载',
             downloadThreads: '并发连接数',
-            downloadThreadsValue: '当前：{n} 个连接',
-            downloadThreadsHint: '文件下载（Node / npm / 应用更新）默认多线程分段下载；1 = 单线程，网络不稳时可调低，最多 16。'
+            downloadThreadsAuto: '自动',
+            downloadThreadsManual: '手动',
+            downloadThreadsHint: '文件下载（Node / npm / 应用更新）多线程分段下载；「自动」按本机 CPU 核心数自适应（2–8），手动可指定 1–16，1 = 单线程。'
         },
         dsh: {
             installedVersion: 'DeepSeek Harness 版本',
@@ -385,19 +391,17 @@ export default {
             deniedTitle: '尚未授权读取',
             deniedHint: '未征得同意前不会读取配置，也不会联网查询余额。',
             loadFail: '读取失败：{err}',
-            colModel: '模型',
             colProvider: '供应商',
             colBalance: '余额',
-            unknownModel: '—',
             balanceUnknown: '—',
             balanceUnsupported: '不支持查询',
             balanceNoKey: '未配置密钥',
             balanceError: '查询失败：{msg}',
             balanceGranted: '赠送 {amount}',
             balanceToppedUp: '充值 {amount}',
-            empty: '没有可展示的模型。',
+            empty: '没有可展示的供应商。',
             refreshAll: '刷新全部',
-            modelCount: '共 {n} 个模型',
+            modelCount: '共 {n} 个供应商',
             notAuthorized: '点击授权',
             notAuthorizedHint: '前往「设置 → 模型」授权后即可显示余额。',
             clickRefresh: '点击刷新余额',
@@ -440,10 +444,6 @@ export default {
         },
         webview: {
             title: '渲染与标识',
-            hwAccel: '硬件加速',
-            hwAccelHint: '用 GPU 渲染内嵌页面。关闭后资源占用更低、对老旧驱动的兼容性更好，但滚动与动画会变卡。',
-            hwAccelText: '硬件加速只能在应用启动时决定，改动需要重启应用才能生效。现在重启吗？',
-            restartNow: '立即重启',
             ua: 'UserAgent',
             uaHint: '留空即使用下面的默认 UA。作用于 DeepSeek Harness UI、网页对话与所有动态标签；改动后新请求立即采用，已加载的页面需要刷新（或重启）才带上新 UA。',
             uaDefault: '默认 UA',

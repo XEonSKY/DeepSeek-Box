@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CloseOutlined, FileTextOutlined, DownloadOutlined, ReloadOutlined } from '@antdv-next/icons'
+import { CloseOutlined, FileTextOutlined, DownloadOutlined, LinkOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
-import type { ConfigDirInfo, EnvProbe, NodeRuntimeKind, NpmSource } from '@shared/types'
+import type { ConfigDirInfo, EnvProbe, NodeRuntimeKind, NpmSource, ProxyProtocol, ProxyScope } from '@shared/types'
+import { DEFAULT_SETTINGS } from '@shared/types'
 import { MIN_NODE_MAJOR, nodeMajor } from '@shared/version'
 import { useAppIcon } from '../lib/appIcon'
 import { formatDownload } from '../lib/format'
+import ProxyFields from './ProxyFields.vue'
 
 /**
  * @deepseek-ai/dsh 包缺失时的全屏安装向导。
@@ -279,8 +281,26 @@ async function pickConfigDir(): Promise<void> {
 async function resetConfigDir(): Promise<void> {
     applyConfigDir(await window.api.setConfigDir(null))
 }
+// ---- 代理设置（右上角入口 → 全屏面板）----
+// 向导本身**不铺开网络表单**，只在右上角留一个入口，点开才是全屏的代理设置。
+// 为什么必须能在这里配：Node / npm / dsh 都要在线下载，「必须先能出网才能装、装完才能配代理」
+// 是个死锁；而每步执行前都会 persistWizard()，所以这里改完立刻作用于本次安装。
+const proxyEnabled = ref(DEFAULT_SETTINGS.proxyEnabled)
+const proxyProtocol = ref<ProxyProtocol>(DEFAULT_SETTINGS.proxyProtocol)
+const proxyHost = ref(DEFAULT_SETTINGS.proxyHost)
+const proxyPort = ref<number | null>(DEFAULT_SETTINGS.proxyPort)
+const proxyScope = ref<ProxyScope[]>([...DEFAULT_SETTINGS.proxyScope])
+/** 是否打开全屏代理设置。 */
+const proxyFull = ref(false)
+
 const back = (): void => {
     if (step.value > 0) step.value = step.value - 1
+}
+
+/** 关闭全屏代理设置：顺手落盘，避免用户「设置了却忘了按下一步」。 */
+async function closeProxySettings(): Promise<void> {
+    proxyFull.value = false
+    await persistWizard()
 }
 
 /** 把向导当前选择持久化到设置。 */
@@ -292,7 +312,12 @@ async function persistWizard(): Promise<boolean> {
             npmRegistry: installReg.value,
             dshSource: installSource.value,
             nodeRuntime: nodeRuntimeChoice.value,
-            npmSource: installSource.value === 'local' ? installNpm.value : cur.npmSource
+            npmSource: installSource.value === 'local' ? installNpm.value : cur.npmSource,
+            proxyEnabled: proxyEnabled.value,
+            proxyProtocol: proxyProtocol.value,
+            proxyHost: proxyHost.value,
+            proxyPort: proxyPort.value,
+            proxyScope: [...proxyScope.value]
         })
         return true
     } catch (err) {
@@ -446,6 +471,11 @@ onMounted(() => {
             installSource.value = s.dshSource ?? 'local'
             installNpm.value = s.npmSource ?? 'system'
             nodeRuntimeChoice.value = s.nodeRuntime ?? 'electron'
+            proxyEnabled.value = s.proxyEnabled === true
+            proxyProtocol.value = s.proxyProtocol ?? DEFAULT_SETTINGS.proxyProtocol
+            proxyHost.value = s.proxyHost ?? DEFAULT_SETTINGS.proxyHost
+            proxyPort.value = s.proxyPort ?? DEFAULT_SETTINGS.proxyPort
+            proxyScope.value = Array.isArray(s.proxyScope) ? [...s.proxyScope] : [...DEFAULT_SETTINGS.proxyScope]
             await loadConfigDir()
             await loadInstalledNode()
             await probeEnv()
@@ -724,9 +754,33 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <div class="log-toggle">
+            <!-- 右上角入口：代理设置 / 查看日志。向导本身不铺开表单，点开才是全屏面板 -->
+            <div class="wiz-top">
+                <el-button size="small" :icon="LinkOutlined" @click="proxyFull = true">{{ $t('dshMissing.proxySettings') }}</el-button>
                 <el-button size="small" :icon="FileTextOutlined" @click="logFullscreen = true">{{ $t('dshMissing.viewLog') }}</el-button>
             </div>
+
+            <!-- 全屏代理设置：与「设置 → 网络 → 代理」同一批字段（共用 ProxyFields） -->
+            <transition name="fade">
+                <div v-if="proxyFull" class="net-full">
+                    <div class="net-full__head">
+                        <span class="net-full__title">{{ $t('dshMissing.proxySettings') }}</span>
+                        <el-button :icon="CloseOutlined" text @click="closeProxySettings">{{ $t('dshMissing.closeLog') }}</el-button>
+                    </div>
+                    <div class="net-full__body">
+                        <el-form label-position="top">
+                            <ProxyFields
+                                v-model:enabled="proxyEnabled"
+                                v-model:protocol="proxyProtocol"
+                                v-model:host="proxyHost"
+                                v-model:port="proxyPort"
+                                v-model:scope="proxyScope"
+                            />
+                        </el-form>
+                        <div class="wiz-hint">{{ $t('dshMissing.netHint') }}</div>
+                    </div>
+                </div>
+            </transition>
 
             <transition name="fade">
                 <div v-if="logFullscreen" class="log-full">
@@ -752,8 +806,12 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 2000;
   display: flex;
-  align-items: center;
+  /* safe center：卡片比窗口高时不再把顶部裁掉（加了网络设置后第 0 步明显变长）；
+     高度够用时表现与 center 完全一致。 */
+  align-items: safe center;
   justify-content: center;
+  overflow: auto;
+  padding: 24px 0;
   background: var(--el-bg-color);
 }
 .missing-card {
@@ -978,13 +1036,55 @@ onBeforeUnmount(() => {
     left: 100%;
   }
 }
-/* ---- 右上角开关 + 全屏日志 ---- */
-.log-toggle {
+/* ---- 右上角入口 + 全屏面板 ---- */
+.wiz-top {
   position: absolute;
   top: 12px;
   right: 18px;
   z-index: 2001;
+  display: flex;
+  gap: 8px;
 }
+/* 全屏面板（代理设置）：与全屏日志同构，只是内容是表单而不是等宽文本 */
+.net-full {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  background: var(--el-bg-color);
+}
+.net-full__head {
+  flex: 0 0 auto;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+.net-full__title {
+  font-weight: 600;
+  font-size: 15px;
+}
+/* 表单在宽屏下限宽居中，避免输入框被拉成一整行 */
+.net-full__body {
+  flex: 1 1 auto;
+  overflow: auto;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 24px 28px;
+}
+.net-full__body :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+.net-full__body :deep(.el-form-item__label) {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-regular);
+}
+/* ---- 全屏安装日志 ---- */
 .log-full {
   position: fixed;
   inset: 0;

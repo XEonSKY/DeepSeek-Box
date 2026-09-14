@@ -20,6 +20,7 @@ export const router = createRouter({
             children: [
                 { path: '', name: 'settings-root', redirect: { name: 'settings-general' } },
                 { path: 'general', name: 'settings-general', component: () => import('../views/settings/GeneralPanel.vue') },
+                { path: 'system', name: 'settings-system', component: () => import('../views/settings/SystemPanel.vue') },
                 { path: 'appearance', name: 'settings-appearance', component: () => import('../views/settings/AppearancePanel.vue') },
                 { path: 'network', name: 'settings-network', component: () => import('../views/settings/NetworkPanel.vue') },
                 { path: 'env', name: 'settings-env', component: () => import('../views/settings/EnvPanel.vue') },

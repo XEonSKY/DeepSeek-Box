@@ -3,8 +3,8 @@ import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
 import { parseDocument } from 'yaml'
-import { DEFAULT_SETTINGS, COLOR_SCHEME_IDS } from '@shared/types'
-import type { ConfigDirInfo, ConfigMigrationPlan, ConfigMigrationProgress, Settings, Theme, ResolvedLocale, LocaleCode, ColorSchemeId } from '@shared/types'
+import { DEFAULT_SETTINGS, COLOR_SCHEME_IDS, PROXY_SCOPE_IDS, SETTINGS_VERSION } from '@shared/types'
+import type { ConfigDirInfo, ConfigMigrationPlan, ConfigMigrationProgress, Settings, Theme, ResolvedLocale, LocaleCode, ColorSchemeId, ProxyScope } from '@shared/types'
 import { resolveLocale, t as tl } from '@shared/i18n'
 import { broadcast } from './runtime'
 import { clearMigrationPlan, migrateTree, readMigrationPlan, rollbackMoves, scanTree, writeMigrationPlan } from './configmigrate'
@@ -386,8 +386,56 @@ export function normalizeNpmSource(v: unknown): Settings['npmSource'] {
     return 'system'
 }
 
+/** 旧版默认并发数。存量配置里几乎人人都是这个值（自动保存会把默认值一起写盘）。 */
+const LEGACY_DEFAULT_DOWNLOAD_THREADS = 4
+
+/**
+ * 归一化下载并发数：'auto'（自动）或 1–16 的整数，其余一律回默认（'auto'）。
+ *
+ * `legacy` 为真（老配置）且值恰好是旧默认 4 时升级为 'auto' —— 否则「默认自动」只对新装生效。
+ * 之所以必须带 `legacy`：跑过新版之后再手动填 4 是**明确的选择**，不能被反复改回自动。
+ * 数值上限与 downloader.ts 的 MAX_DOWNLOAD_THREADS 一致，避免设置里存下用不到的大值。
+ */
+export function normalizeDownloadThreads(v: unknown, legacy: boolean): Settings['downloadThreads'] {
+    if (v === 'auto' || v === undefined || v === null) return DEFAULT_SETTINGS.downloadThreads
+    const n = Math.floor(Number(v))
+    if (!Number.isFinite(n) || n < 1) return DEFAULT_SETTINGS.downloadThreads
+    if (legacy && n === LEGACY_DEFAULT_DOWNLOAD_THREADS) return DEFAULT_SETTINGS.downloadThreads
+    return Math.min(16, n)
+}
+
+/** 旧版的默认代理范围；数组与之完全一致说明用户从未自定义过。 */
+const LEGACY_DEFAULT_PROXY_SCOPES: readonly ProxyScope[] = ['npm', 'node', 'update']
+
+/**
+ * 归一化代理范围：过滤未知项、按固定顺序还原，并把第 1 版的旧格式升级成新格式。
+ *
+ * 旧格式没有 'app' / 'dsh' / 'registry' 三个键，且其中的 'update' 还**兼任**「注册表版本查询」
+ * 的开关（见代理改造前的 http.ts：registry = npm ∪ update）。因此升级规则是：
+ *  - 用户自定义过的旧配置：**只做等价拆分**（'update' 额外补出 'registry'），
+ *    'app' / 'dsh' 是新增能力，保持关闭由用户自行勾选 —— 不悄悄改变既有用户的网络行为；
+ *  - 恰好等于旧默认值的（从未动过）：直接给新默认（六项全开），否则新装与老装的默认行为会不一致。
+ *
+ * `legacy` 为假时只做过滤与排序：跑过新版之后用户手挑的子集**必须原样保留**
+ *（否则「只留 update」这种选择会在每次重启后被悄悄扩展回六项）。
+ */
+export function normalizeProxyScope(v: unknown, legacy: boolean): ProxyScope[] {
+    if (!Array.isArray(v)) return [...DEFAULT_SETTINGS.proxyScope]
+    const items = v.filter((x): x is ProxyScope => PROXY_SCOPE_IDS.includes(x as ProxyScope))
+    if (!legacy) return PROXY_SCOPE_IDS.filter((s) => items.includes(s))
+    if (LEGACY_DEFAULT_PROXY_SCOPES.every((s) => items.includes(s)) && items.length === LEGACY_DEFAULT_PROXY_SCOPES.length) {
+        return [...DEFAULT_SETTINGS.proxyScope]
+    }
+    const upgraded = new Set<ProxyScope>(items)
+    if (upgraded.has('update')) upgraded.add('registry')
+    return PROXY_SCOPE_IDS.filter((s) => upgraded.has(s))
+}
+
 export function loadSettings(): Settings {
     const disk = readDiskSettings()
+    // 设置结构版本：缺失即第 1 版。只有真正的老配置才做改键名 / 改默认值的迁移，
+    // 这样用户在新版里手填的值不会被每次启动反复改写（见 normalizeProxyScope 等）。
+    const legacy = Number(disk.settingsVersion ?? 0) < SETTINGS_VERSION
     const diskPort = disk.port
     const host = fromArgv('--host') ?? process.env.DSH_DESKTOP_HOST ?? disk.host ?? DEFAULT_SETTINGS.host
     const rawPort =
@@ -399,21 +447,20 @@ export function loadSettings(): Settings {
     const dshBin = fromArgv('--dsh-bin') ?? process.env.DSH_BIN ?? disk.dshBin ?? null
     const timeoutMs = Number(fromArgv('--timeout-ms') ?? process.env.DSH_DESKTOP_TIMEOUT_MS ?? disk.timeoutMs ?? DEFAULT_SETTINGS.timeoutMs)
     return {
+        settingsVersion: SETTINGS_VERSION,
         host,
         port,
         workspace,
         timeoutMs,
         dshBin,
         closeToTray: disk.closeToTray ?? DEFAULT_SETTINGS.closeToTray,
-        rememberClose: disk.rememberClose ?? DEFAULT_SETTINGS.rememberClose,
         theme: disk.theme ?? DEFAULT_SETTINGS.theme,
         autoCheckUpdate: disk.autoCheckUpdate ?? DEFAULT_SETTINGS.autoCheckUpdate,
         checkPrerelease: disk.checkPrerelease ?? DEFAULT_SETTINGS.checkPrerelease,
         npmRegistry: disk.npmRegistry ?? DEFAULT_SETTINGS.npmRegistry,
         appAutoUpdate: disk.appAutoUpdate ?? DEFAULT_SETTINGS.appAutoUpdate,
         appCheckPrerelease: disk.appCheckPrerelease ?? DEFAULT_SETTINGS.appCheckPrerelease,
-        updateMirrorUrl: disk.updateMirrorUrl ?? DEFAULT_SETTINGS.updateMirrorUrl,
-        downloadThreads: disk.downloadThreads ?? DEFAULT_SETTINGS.downloadThreads,
+        downloadThreads: normalizeDownloadThreads(disk.downloadThreads, legacy),
         devMode: disk.devMode ?? DEFAULT_SETTINGS.devMode,
         dshSource: disk.dshSource ?? (disk as { kernelSource?: Settings['dshSource'] }).kernelSource ?? DEFAULT_SETTINGS.dshSource,
         nodeRuntime: disk.nodeRuntime ?? DEFAULT_SETTINGS.nodeRuntime,
@@ -422,7 +469,7 @@ export function loadSettings(): Settings {
         proxyProtocol: disk.proxyProtocol ?? DEFAULT_SETTINGS.proxyProtocol,
         proxyHost: disk.proxyHost ?? DEFAULT_SETTINGS.proxyHost,
         proxyPort: disk.proxyPort ?? DEFAULT_SETTINGS.proxyPort,
-        proxyScope: disk.proxyScope ?? DEFAULT_SETTINGS.proxyScope,
+        proxyScope: normalizeProxyScope(disk.proxyScope, legacy),
         zoomPercent: disk.zoomPercent ?? DEFAULT_SETTINGS.zoomPercent,
         ignoreSystemScale: disk.ignoreSystemScale ?? DEFAULT_SETTINGS.ignoreSystemScale,
         funLocale: disk.funLocale ?? DEFAULT_SETTINGS.funLocale,
@@ -434,17 +481,14 @@ export function loadSettings(): Settings {
         hotkeyToggleTerminal: disk.hotkeyToggleTerminal ?? DEFAULT_SETTINGS.hotkeyToggleTerminal,
         hotkeyDevTools: disk.hotkeyDevTools ?? DEFAULT_SETTINGS.hotkeyDevTools,
         hardwareAcceleration: disk.hardwareAcceleration ?? DEFAULT_SETTINGS.hardwareAcceleration,
+        autoLaunch: disk.autoLaunch ?? DEFAULT_SETTINGS.autoLaunch,
+        openDshInBrowser: disk.openDshInBrowser ?? DEFAULT_SETTINGS.openDshInBrowser,
         webviewUserAgent: disk.webviewUserAgent ?? DEFAULT_SETTINGS.webviewUserAgent,
         colorScheme: COLOR_SCHEME_IDS.includes(disk.colorScheme as ColorSchemeId)
             ? (disk.colorScheme as ColorSchemeId)
             : DEFAULT_SETTINGS.colorScheme,
         modelsCredConsent: disk.modelsCredConsent ?? DEFAULT_SETTINGS.modelsCredConsent
     }
-}
-
-/** Persist a partial close-behavior choice into settings.json. */
-export function saveCloseChoice(patch: { closeToTray: boolean; rememberClose: boolean }): void {
-    persistSettings({ ...DEFAULT_SETTINGS, ...readDiskSettings(), ...patch })
 }
 
 // ---------------------------------------------------------------------------

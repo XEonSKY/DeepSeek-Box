@@ -38,15 +38,6 @@ body {
   box-sizing: border-box;
 }
 
-/* Close-behaviour MessageBox content (teleported to <body>) */
-.close-ask {
-  padding: 2px 0;
-}
-.close-ask__text {
-  margin: 0 0 12px;
-  line-height: 1.5;
-}
-
 /* Update-check notification body (teleported to <body>): version el-tags */
 .update-body {
   display: flex;

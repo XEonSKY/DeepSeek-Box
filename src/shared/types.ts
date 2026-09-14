@@ -1,5 +1,11 @@
 /** Settings persisted in the app's config dir: ~/.dsbox/{release,dev}/settings.json. */
 export interface Settings {
+    /**
+   * 设置结构版本，**仅用于一次性迁移**，界面不展示。
+   * 缺失（老配置）时按第 1 版处理，见 settings.ts 的 normalizeProxyScope / normalizeDownloadThreads：
+   * 只有真正的老配置才做键名拆分与默认值升级，用户后来手填的值不会被反复改写。
+   */
+    settingsVersion?: number
     /** Bind host for dsh. dsh only allows 127.0.0.1 today. */
     host: string
     /**
@@ -15,10 +21,11 @@ export interface Settings {
     timeoutMs: number
     /** Absolute path to the dsh launcher when not on PATH. */
     dshBin: string | null
-    /** When the window close button is pressed: hide to tray (true) or quit (false). */
+    /**
+   * 关闭窗口后的行为：true = 隐藏到系统托盘、后台继续运行；false = 直接退出。
+   * 界面在「设置 → 常规」里呈现为「关闭程序后继续运行后台扩展和应用」。
+   */
     closeToTray: boolean
-    /** Apply closeToTray without asking again. */
-    rememberClose: boolean
     /** UI colour scheme. */
     theme: 'system' | 'light' | 'dark'
     /** Check for a newer @deepseek-ai/dsh automatically at startup. */
@@ -31,14 +38,8 @@ export interface Settings {
     appAutoUpdate: boolean
     /** App 更新检查也把预发布版本当作候选（默认关）。 */
     appCheckPrerelease: boolean
-    /**
-   * App 自更新下载所用的 GitHub 公共镜像前缀（如 `https://ghproxy.com`）。
-   * 空串 = 官方直连。只改写 GitHub **发布资产**的请求（安装包 / latest.yml / blockmap），
-   * 版本元数据仍走官方 —— 这样即使镜像不支持 GitHub API 也不会让检查整体失效。
-   */
-    updateMirrorUrl: string
-    /** 文件下载并发连接数：1 = 单线程，默认 4（可在「设置 → 网络」调整）。 */
-    downloadThreads: number
+    /** 文件下载并发连接数：'auto' = 按本机 CPU 核心数自适应（默认），正整数 = 手动指定。 */
+    downloadThreads: DownloadThreads
     /** 开发模式：开启后 F12 才允许打开 DevTools 控制台（默认关）。 */
     devMode: boolean
     /**
@@ -70,7 +71,7 @@ export interface Settings {
     proxyHost: string
     /** 代理端口。 */
     proxyPort: number | null
-    /** 代理范围：npm(安装/下载) · node(Node 下载部署) · update(dsh 更新检查)。 */
+    /** 代理范围：见 ProxyScope；只勾选到的范围才走代理。 */
     proxyScope: ProxyScope[]
     /** 界面缩放百分比（50–200，默认 100）。 */
     zoomPercent: number
@@ -97,6 +98,10 @@ export interface Settings {
     hotkeyDevTools: string
     /** 内嵌 webview 是否启用硬件加速（默认开）。**改动需重启应用**（Electron 要求 ready 前决定）。 */
     hardwareAcceleration: boolean
+    /** 开机自启（「设置 → 系统与性能」的「启动增强」）。 */
+    autoLaunch: boolean
+    /** 启动时隐藏到系统托盘，并用系统默认浏览器打开 DSH 界面。 */
+    openDshInBrowser: boolean
     /** 内嵌 webview 的 UserAgent；**留空 = 用按平台/版本生成的默认 UA**。 */
     webviewUserAgent: string
     /** 配色方案 id（预制方案见 renderer 的 `lib/theme.ts`；同时决定主色与页面/侧栏底色）。 */
@@ -135,8 +140,25 @@ export type NodeRuntimeKind = 'system' | 'electron' | 'local'
 /** 代理协议。 */
 export type ProxyProtocol = 'http' | 'socks5'
 
-/** 代理范围项：'npm' ｜ 'node' ｜ 'update'。 */
-export type ProxyScope = 'npm' | 'node' | 'update'
+/**
+ * 代理范围项。**一个键对应一处独立的网络出口**，互不牵连：
+ *  - 'app'      程序本体：主进程自身的联网（模型 / 余额查询）+ 内嵌网页（defaultSession）
+ *  - 'update'   程序更新：应用自更新（electron-updater 与 GitHub Releases API）
+ *  - 'dsh'      DSH 本体：dsh 子进程自己的联网（注入代理环境变量）
+ *  - 'npm'      npm 安装 / 下载（npm 子进程与内置 npm 包）
+ *  - 'node'     Node 下载部署（发行索引与安装包）
+ *  - 'registry' 版本查询（npm registry 上的版本列表 / 更新检查）
+ */
+export type ProxyScope = 'app' | 'update' | 'dsh' | 'npm' | 'node' | 'registry'
+
+/** ProxyScope 的稳定顺序（界面按它排列，设置读取时按它校验并还原顺序）。 */
+export const PROXY_SCOPE_IDS: readonly ProxyScope[] = ['app', 'update', 'dsh', 'npm', 'node', 'registry']
+
+/**
+ * 文件下载并发连接数：'auto' 按本机 CPU 核心数自适应，正整数为手动指定的连接数。
+ * 归一化与取值见 src/main/dsh/downloader.ts 的 normalizeDownloadThreads()。
+ */
+export type DownloadThreads = number | 'auto'
 
 /** 本地安装所用 npm：'system' ｜ 'bundled'(内置) ｜ 'localnode'(本地 Node 自带)。 */
 export type NpmSource = 'system' | 'bundled' | 'localnode'
@@ -167,22 +189,27 @@ export type LocaleCode = 'zh' | 'en'
 /** 应用内部实际语言（两字母，与 vue-i18n / element-plus 语言名对应）。 */
 export type ResolvedLocale = 'zh' | 'en'
 
+/**
+ * 设置结构版本：2 = 代理范围拆出 'app' / 'dsh' / 'registry'，下载并发数默认 'auto'。
+ * 每次做「改键名 / 改默认值」的迁移时 +1，见 settings.ts 的 loadSettings。
+ */
+export const SETTINGS_VERSION = 2
+
 export const DEFAULT_SETTINGS: Settings = {
+    settingsVersion: SETTINGS_VERSION,
     host: '127.0.0.1',
     port: null,
     workspace: null,
     timeoutMs: 90000,
     dshBin: null,
     closeToTray: true,
-    rememberClose: false,
     theme: 'system',
     autoCheckUpdate: true,
     checkPrerelease: false,
     npmRegistry: 'npmjs',
     appAutoUpdate: true,
     appCheckPrerelease: false,
-    updateMirrorUrl: '',
-    downloadThreads: 4,
+    downloadThreads: 'auto',
     devMode: false,
     dshSource: 'local',
     nodeRuntime: 'electron',
@@ -191,7 +218,7 @@ export const DEFAULT_SETTINGS: Settings = {
     proxyProtocol: 'http',
     proxyHost: '',
     proxyPort: null,
-    proxyScope: ['npm', 'node', 'update'],
+    proxyScope: [...PROXY_SCOPE_IDS],
     zoomPercent: 100,
     ignoreSystemScale: false,
     funLocale: 'off',
@@ -203,6 +230,8 @@ export const DEFAULT_SETTINGS: Settings = {
     hotkeyToggleTerminal: 'CommandOrControl+T',
     hotkeyDevTools: 'F12',
     hardwareAcceleration: true,
+    autoLaunch: false,
+    openDshInBrowser: false,
     webviewUserAgent: '',
     colorScheme: 'default',
     modelsCredConsent: false
@@ -424,15 +453,13 @@ export interface ModelBalanceInfo {
     message: string | null
 }
 
-/** 「模型」页列表的一行：一个模型 + 它所属供应商的展示名与余额。 */
-export interface ModelEntryInfo {
-    /** 模型 id；供应商未公布任何模型时为空串（界面显示占位）。 */
-    id: string
+/** 「模型」页列表的一行：**一个令牌 = 一个供应商**（多个路由解析到同一密钥时合并成一行）。 */
+export interface ProviderEntryInfo {
     /** 供应商路由名（settings 的键）。 */
     provider: string
     /** 供应商展示名。 */
     providerName: string
-    /** 该供应商的余额；同一供应商的所有行相同。 */
+    /** 该供应商（即该令牌）的余额。 */
     balance: ModelBalanceInfo
 }
 
@@ -446,9 +473,9 @@ export interface CurrentBalanceInfo {
     balance: ModelBalanceInfo
 }
 
-/** 「模型」页的数据：跨供应商展开的模型列表。密钥明文绝不进入该结构。 */
+/** 「模型」页的数据：**每个令牌一行**的供应商列表（不再按模型展开）。密钥明文绝不进入该结构。 */
 export interface ModelsInfo {
-    entries: ModelEntryInfo[]
+    entries: ProviderEntryInfo[]
     /** 顶层错误码：settings-missing ｜ settings-parse ｜ no-provider ｜ internal；正常为 null。 */
     errorCode: string | null
 }
@@ -539,14 +566,10 @@ export interface RendererApi {
     onLocaleChanged(cb: (locale: LocaleCode) => void): () => void
     /** Main asks the renderer to flip between the Web view and the log view. */
     onToggleView(cb: () => void): () => void
-    /** Main asks the renderer to show the (Element Plus) close-behaviour prompt. */
-    onAskClose(cb: () => void): () => void
     /** A webview asked to open a URL in a new window/tab; the shell opens an in-app tab. */
     onNewTab(cb: (url: string) => void): () => void
     /** Main informs this window its role changed (e.g. it became the new core window). */
     onShellRole(cb: (isCore: boolean) => void): () => void
-    /** Renderer reports the user's close decision back to the main process. */
-    resolveClose(decision: { action: 'hide' | 'quit'; remember: boolean }): void
     /** Main detected that dsh was removed/never installed; show the install mask. */
     onDshMissing(cb: () => void): () => void
 

@@ -139,17 +139,14 @@ async function cancelPendingMigration(): Promise<void> {
 
             <el-collapse-item name="general-close">
                 <template #title>
-                    <div class="sec__title"><el-icon><PoweroffOutlined /></el-icon> {{ $t('sv.general.closeBehavior') }}</div>
+                    <div class="sec__title"><el-icon><PoweroffOutlined /></el-icon> {{ $t('sv.general.closeSection') }}</div>
                 </template>
-                <div class="behav">
-                    <div class="behav__row">
-                        <el-radio-group v-model="state.closeMode">
-                            <el-radio-button :value="'tray'">{{ $t('sv.general.closeTray') }}</el-radio-button>
-                            <el-radio-button :value="'quit'">{{ $t('sv.general.closeQuit') }}</el-radio-button>
-                        </el-radio-group>
-                        <el-switch v-model="state.askEveryClose" inline-prompt :active-text="$t('sv.general.askEvery')" :inactive-text="$t('sv.general.rememberChoice')" />
+                <div class="au">
+                    <div class="au__txt">
+                        <div class="au__t">{{ $t('sv.general.closeKeepRunning') }}</div>
+                        <div class="au__desc">{{ $t('sv.general.closeKeepRunningHint') }}</div>
                     </div>
-                    <div class="hint">{{ $t('sv.general.askEveryHint') }}</div>
+                    <el-switch v-model="state.closeKeepRunning" />
                 </div>
             </el-collapse-item>
 

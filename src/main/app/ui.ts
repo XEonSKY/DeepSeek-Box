@@ -6,7 +6,7 @@ import { NEWTAB_URL, isNewTabTarget } from '@shared/types'
 import type { HotkeyState } from '@shared/types'
 import { matchesAccelerator } from '@shared/hotkeys'
 import { CONTENT_HEIGHT, CONTENT_WIDTH, STATUSBAR_HEIGHT, TITLEBAR_HEIGHT } from '@shared/chrome'
-import { loadSettings, mt } from './settings'
+import { loadSettings, mt, configMigrationPlan } from './settings'
 import { APP_TITLE } from './const'
 import {
     getCurrentUrl,
@@ -241,8 +241,18 @@ function buildShellWindow(core: boolean, initialUrl?: string): BrowserWindow {
     if (!core && initialUrl) openIntent.set(wcId, initialUrl)
     // 核心窗口首个 ready-to-show 再显形避免白屏；副窗口立即 show()（有些环境 ready-to-show
     // 对后开的窗口不触发，会导致窗口一直隐藏、看起来“没出现”）。ready-to-show 到达时再 show 一次也无害。
-    if (core) win.once('ready-to-show', () => win.show())
-    else win.show()
+    //
+    // 「默认使用系统浏览器打开 DSH」开启时，核心窗口启动即隐藏到系统托盘（dsh 地址就绪后由主进程在
+    // 默认浏览器里打开界面，见 dsh.ts）。托盘不可用时必须照常显示，否则用户没有召回入口；
+    // 配置目录迁移进行中也不隐藏——迁移进度只在窗口里可见。
+    const startHidden = core && loadSettings().openDshInBrowser && !configMigrationPlan()
+    if (core) {
+        win.once('ready-to-show', () => {
+            if (!(startHidden && getTray())) win.show()
+        })
+    } else {
+        win.show()
+    }
     const wc = win.webContents
 
     // 最大化状态定向推给本窗口：自定义标题栏的「最大化 / 还原」按钮要按状态换图标与提示。
@@ -317,27 +327,25 @@ function buildShellWindow(core: boolean, initialUrl?: string): BrowserWindow {
     })
 
     // Close behaviour：
-    // - 若这是最后一个壳窗口且存在托盘 → 隐藏到托盘 / 应用记忆的选择 / 询问（询问只发回本窗口）。
+    // - 若这是最后一个壳窗口且存在托盘 → 按「关闭程序后继续运行后台扩展和应用」的设置：
+    //   开则隐藏到托盘继续后台运行，关则真正退出。
     // - 否则（有托盘且有其它窗口、或根本没有托盘）→ 让窗口真正关闭。若关掉的是核心且仍有副窗口，
     //   会在 closed 里把角色移交给最早的副窗口（见 finalizeWindowClosed），而不是退出整个应用。
     win.on('close', (e) => {
-        if (isQuitting()) return // real quit (tray "退出" / close-resolve quit) — let it close
+        if (isQuitting()) return // 真退出（托盘「退出」等）：放行真正关闭
         const others = listWindows().filter((w) => w !== win)
         const lastWithTray = getTray() && others.length === 0
         if (!lastWithTray) return // not the final window (or no tray) → allow real close
 
         e.preventDefault()
 
-        const s = loadSettings()
-        if (s.rememberClose) {
-            if (s.closeToTray) {
-                if (!win.isDestroyed()) win.hide()
-            } else {
-                setQuitting(true)
-                app.quit()
-            }
+        // 「设置 → 常规」的「关闭程序后继续运行后台扩展和应用」：开 = 隐藏到托盘继续后台运行，
+        // 关 = 真正退出（并优雅结束 dsh）。
+        if (loadSettings().closeToTray) {
+            if (!win.isDestroyed()) win.hide()
         } else {
-            sendToWindow(win, 'ui:ask-close') // 本窗口 renderer 弹 Element Plus 询问
+            setQuitting(true)
+            app.quit()
         }
     })
 

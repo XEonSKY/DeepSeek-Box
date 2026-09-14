@@ -70,14 +70,11 @@ const api: RendererApi = {
     onShellRole: (cb) => subscribe<boolean>('shell:core', cb),
     onTabDragHover: (cb) => subscribe<boolean>('tab-drag-hover', (on) => cb(!!on)),
     onToggleView: (cb) => subscribeVoid('ui:toggle-view', cb),
-    onAskClose: (cb) => subscribeVoid('ui:ask-close', cb),
     onDshMissing: (cb) => subscribeVoid('dsh:missing', cb),
     onReloadDsh: (cb) => subscribeVoid('ui:reload-dsh', cb),
     onTabDragMoved: (cb) => subscribeVoid('tab-drag:moved', cb),
     onWindowMaximized: (cb) => subscribe<boolean>('win:maximized', (on) => cb(!!on)),
     onHotkeyState: (cb) => subscribe<HotkeyState>('hotkey:state', cb),
-
-    resolveClose: (decision) => ipcRenderer.send('win:close-resolve', decision),
 
     reloadDsh: () => ipcRenderer.send('web:reload'),
 

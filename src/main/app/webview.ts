@@ -2,13 +2,15 @@ import os from 'node:os'
 import { app, session } from 'electron'
 import type { Settings } from '@shared/types'
 import { loadSettings } from './settings'
+import { proxyActive, proxyUrl } from '../dsh/net'
+import { proxyConfigFor } from '../dsh/http'
 
 /**
- * Webview（内嵌页面）相关的渲染与身份设置：硬件加速开关 + UserAgent。
+ * Webview（内嵌页面）相关的渲染与身份设置：硬件加速开关 + UserAgent + 代理。
  *
  * 作用范围：内嵌 `<webview>` 用的是 **defaultSession**（见 appupdate.ts 里那段注释：自更新
  * 刻意只改 `partition: 'electron-updater'`，不动 defaultSession，所以 webview 不受它影响），
- * 因此 UA 设到 `session.defaultSession` 就正好命中所有 webview，而不会波及自更新。
+ * 因此 UA 与代理设到 `session.defaultSession` 就正好命中所有 webview，而不会波及自更新。
  */
 
 /** Chromium 的 WebKit 兼容标记：真实 Chrome/Electron 一直发 537.36，与版本无关。 */
@@ -70,4 +72,37 @@ export function applyWebviewUserAgent(cfg: Settings = loadSettings()): void {
  */
 export function applyHardwareAcceleration(cfg: Settings = loadSettings()): void {
     if (cfg.hardwareAcceleration === false) app.disableHardwareAcceleration()
+}
+
+// ---------------------------------------------------------------------------
+// 内嵌网页的代理（「程序本体」范围）
+// ---------------------------------------------------------------------------
+
+/** 已应用到 defaultSession 的代理 URL；null = 从未显式设置（沿用系统代理）。 */
+let appliedProxy: string | null = null
+
+/**
+ * 把「程序本体」范围的代理应用到 webview 所在的 defaultSession。
+ *
+ * 这一档覆盖的是**应用自己的浏览**：home 页 / 标签页里打开的外部网站。dsh 界面跑在
+ * 127.0.0.1 上，由 proxyConfigFor() 的 `<local>` 绕过规则保证永远直连 —— 否则代理一开，
+ * 内嵌界面会连自己都请求不到。
+ *
+ * 与更新器 session 同样的克制：未启用代理时**不调用 setProxy**，保留 Electron 默认的
+ * 「跟随系统代理」，只有从「有」变「无」时才显式回落 system。
+ *
+ * 返回 Promise：`setProxy` 是异步生效的，建窗 / 保存设置时应当 await，
+ * 否则「设置了代理后的第一批请求」仍会按旧配置发出去。
+ */
+export async function applyWebviewProxy(cfg: Settings = loadSettings()): Promise<void> {
+    const url = proxyActive(cfg, 'app') ? proxyUrl(cfg) : null
+    if (appliedProxy === url) return
+    // 先登记再 await：并发的两次调用不会因为 await 顺序颠倒而把状态记反。
+    appliedProxy = url
+    try {
+        await session.defaultSession.setProxy(proxyConfigFor(url))
+    } catch {
+    /* ready 之前调用会抛：撤销登记，启动流程里 ready 后还会再调一次 */
+        appliedProxy = null
+    }
 }

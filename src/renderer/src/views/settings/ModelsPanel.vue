@@ -6,10 +6,11 @@ import { tt } from '../../lib/locales'
 import { useSettingsStore } from './useSettingsStore'
 
 /**
- * 「模型」页：只读展示**模型列表** —— 每个模型一行，带所属供应商名称与余额。
+ * 「模型」页：只读展示**令牌列表** —— **每个令牌一行**，带所属供应商名称与余额。
  *
  * 规则与隐私：
  *  - 同一密钥的多个路由由主进程合并成一个供应商，只展示一次（见 main/app/models.ts）；
+ *  - 一行里没有模型名：列表按令牌展开，不按模型展开；
  *  - 页面**不展示任何密钥**，密钥只在主进程内用于向供应商接口查询余额；
  *  - 读取发生在用户同意之后：首次进入征求一次，结果持久化在 `settings.modelsCredConsent`。
  */
@@ -127,7 +128,7 @@ function balanceTitle(b: ModelBalanceInfo): string {
             </div>
         </template>
 
-        <!-- 已授权：模型列表（模型 / 供应商 / 余额） -->
+        <!-- 已授权：令牌列表（供应商 / 余额） -->
         <div v-else v-loading="loading" class="mp__body">
             <div class="mp__toolbar">
                 <span class="mp__count">{{ $t('sv.models.modelCount', { n: info?.entries.length ?? 0 }) }}</span>
@@ -140,15 +141,13 @@ function balanceTitle(b: ModelBalanceInfo): string {
             <div v-else-if="isEmpty" class="hint">{{ $t('sv.models.empty') }}</div>
             <div v-else-if="info" class="mp__list">
                 <div class="mp__head">
-                    <span class="mp__c1">{{ $t('sv.models.colModel') }}</span>
-                    <span class="mp__c2">{{ $t('sv.models.colProvider') }}</span>
-                    <span class="mp__c3">{{ $t('sv.models.colBalance') }}</span>
+                    <span class="mp__c1">{{ $t('sv.models.colProvider') }}</span>
+                    <span class="mp__c2">{{ $t('sv.models.colBalance') }}</span>
                 </div>
                 <div class="mp__tbody">
-                    <div v-for="(e, i) in info.entries" :key="e.provider + '/' + e.id + '/' + i" class="mp__row">
-                        <span class="mp__c1"><code class="mp__model">{{ e.id || $t('sv.models.unknownModel') }}</code></span>
-                        <span class="mp__c2"><span class="mp__ellip" :title="e.providerName">{{ e.providerName }}</span></span>
-                        <span class="mp__c3" :class="'is-' + (e.balance ? e.balance.state : 'error')">
+                    <div v-for="e in info.entries" :key="e.provider" class="mp__row">
+                        <span class="mp__c1"><span class="mp__ellip" :title="e.providerName">{{ e.providerName }}</span></span>
+                        <span class="mp__c2" :class="'is-' + (e.balance ? e.balance.state : 'error')">
                             <span class="mp__ellip" :title="balanceTitle(e.balance)">{{ balanceText(e.balance) }}</span>
                         </span>
                     </div>
@@ -229,7 +228,7 @@ function balanceTitle(b: ModelBalanceInfo): string {
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }
-/* ---- 模型列表：三列（模型自适应 / 供应商 / 余额定宽），窄容器不撑横向滚动 ---- */
+/* ---- 令牌列表：两列（供应商自适应 / 余额定宽），窄容器不撑横向滚动 ---- */
 .mp__list {
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
@@ -255,8 +254,7 @@ function balanceTitle(b: ModelBalanceInfo): string {
   background: var(--el-fill-color-lighter);
 }
 .mp__c1,
-.mp__c2,
-.mp__c3 {
+.mp__c2 {
   display: flex;
   align-items: center;
   min-width: 0;
@@ -265,34 +263,24 @@ function balanceTitle(b: ModelBalanceInfo): string {
   flex: 1 1 auto;
 }
 .mp__c2 {
-  flex: 0 0 160px;
-}
-.mp__c3 {
   flex: 0 0 170px;
   justify-content: flex-end;
   font-variant-numeric: tabular-nums;
 }
 /* 余额状态配色：正常用正文色，查不了用次要色，失败用警示色 */
-.mp__c3.is-ok {
+.mp__c2.is-ok {
   color: var(--el-text-color-primary);
 }
-.mp__c3.is-unsupported,
-.mp__c3.is-no-key {
+.mp__c2.is-unsupported,
+.mp__c2.is-no-key {
   color: var(--el-text-color-secondary);
 }
-.mp__c3.is-error {
+.mp__c2.is-error {
   color: var(--el-color-warning);
 }
 .mp__ellip {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.mp__model {
-  font-family: var(--el-font-family-mono);
-  color: var(--el-text-color-primary);
-  background: var(--el-fill-color-light);
-  padding: 1px 8px;
-  border-radius: 6px;
 }
 </style>

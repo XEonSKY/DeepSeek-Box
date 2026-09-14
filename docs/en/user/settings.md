@@ -43,9 +43,8 @@ A change is **not moved immediately**; instead you are prompted that it will “
 | Setting | Effect |
 |---|---|
 | **npm registry mirror** | Official `registry.npmjs.org` or `npmmirror`. |
-| **Proxy** | Enable + protocol (HTTP / SOCKS5) + host + port + proxy scope (npm install / download, Node download and deployment, DeepSeek Harness update check). |
-| **Public GitHub mirror prefix** | App-update installer downloads go through this prefix (e.g. `https://ghproxy.com`); **leave it blank to use GitHub directly**. Release metadata still uses GitHub, so a mirror that does not proxy the GitHub API cannot break update checks. |
-| **Download concurrency** | The number of concurrent connections for multi-threaded segmented downloads: 1 = single-threaded, default 4, maximum 16. |
+| **Proxy** | Enable + protocol (HTTP / SOCKS5) + host + port + proxy scope. The six scopes are independent: **the app itself** (model / balance lookups and embedded pages), **app updates** (self-update), **DSH itself** (the dsh process's own traffic), **npm installs / downloads**, **Node download & deploy**, and **version lookups** (the version list and update checks on the npm registry). Unchecked scopes follow the system settings. |
+| **Download concurrency** | Concurrent connections for multi-threaded segmented downloads. Defaults to **Auto** (2–8, derived from this machine's CPU core count); you can also pin it manually between 1 and 16, where 1 = single-threaded. |
 
 For download progress, temporary directories, de-duplication, and similar behavior, see [Environment Management](/en/user/environment).
 

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { Component } from 'vue'
-import { SettingOutlined, BulbOutlined, ApiOutlined, DeploymentUnitOutlined, ClusterOutlined, CodeFilled, ControlOutlined, CompassOutlined, InfoCircleFilled, RobotFilled } from '@antdv-next/icons'
+import { SettingOutlined, DashboardOutlined, BulbOutlined, ApiOutlined, DeploymentUnitOutlined, ClusterOutlined, CodeFilled, ControlOutlined, CompassOutlined, InfoCircleFilled, RobotFilled } from '@antdv-next/icons'
 import { useRoute, useRouter } from 'vue-router'
 import { useSettingsStore } from './settings/useSettingsStore'
 
-type Group = 'general' | 'appearance' | 'network' | 'env' | 'dsh' | 'models' | 'log' | 'hotkeys' | 'webview' | 'about'
+type Group = 'general' | 'system' | 'appearance' | 'network' | 'env' | 'dsh' | 'models' | 'log' | 'hotkeys' | 'webview' | 'about'
 
 const { actions } = useSettingsStore()
 const route = useRoute()
@@ -13,6 +13,7 @@ const router = useRouter()
 
 const menus: { key: Group; icon: Component }[] = [
     { key: 'general', icon: SettingOutlined },
+    { key: 'system', icon: DashboardOutlined },
     { key: 'appearance', icon: BulbOutlined },
     { key: 'network', icon: ApiOutlined },
     { key: 'env', icon: DeploymentUnitOutlined },
@@ -82,6 +83,6 @@ onMounted(async () => {
 
 <!--
   样式已抽到 src/renderer/src/styles/settings.css（非 scoped 的全局样式，由 main.ts 统一加载）。
-  它要同时作用于经 <router-view> 嵌套渲染的 10 个子面板（General / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / Webview / About），留在本组件里既撑大文件、又让这层
+  它要同时作用于经 <router-view> 嵌套渲染的 11 个子面板（General / System / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / Webview / About），留在本组件里既撑大文件、又让这层
   依赖不可见；抽成独立样式表后，子面板改样式时可一眼看到该改哪个文件。
 -->

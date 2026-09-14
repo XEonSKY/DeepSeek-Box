@@ -3,15 +3,16 @@ import type { BrowserWindow, MenuItemConstructorOptions } from 'electron'
 import { DEFAULT_SETTINGS, NEWTAB_URL } from '@shared/types'
 import type { InstallKind, InstalledVersions, NodeDeployProgress, ResolvedLocale, Settings } from '@shared/types'
 import { resolveLocale, localeCodeOf } from '@shared/i18n'
-import { readDiskSettings, persistSettings, syncDshTheme, syncNativeTheme, loadSettings, saveCloseChoice, dshLocale, writeDshLocale, configDirInfo, setConfigDir, revertConfigDir, runConfigMigration, cancelConfigMigration, normalizeNpmSource } from './settings'
+import { readDiskSettings, persistSettings, syncDshTheme, syncNativeTheme, loadSettings, dshLocale, writeDshLocale, configDirInfo, setConfigDir, revertConfigDir, runConfigMigration, cancelConfigMigration, normalizeNpmSource } from './settings'
 import { readCurrentBalance, readModelsInfo } from './models'
 import { resolveInstall, dshInstalled, listVersions, performUpdateCheck, updateDsh, installDsh, uninstallDsh, listInstalledDshVersions, useDshVersion, removeInstalledDshVersion } from '../dsh/manage'
 import { getLogHistory, restart, isDshRunning, stopServer } from '../dsh/dsh'
 import { appMeta, appSlotsState, appUpdateState, triggerAppUpdate, restartAndInstall, rollbackAppUpdate } from './appupdate'
-import { broadcast, getCurrentUrl, getMainWindow, setQuitting, sendCore, sendToWindow, sendToWcId } from './runtime'
+import { broadcast, getCurrentUrl, getMainWindow, sendCore, sendToWindow, sendToWcId } from './runtime'
 import { isCoreWindow, windowByContentsId, listWindows } from './windowreg'
 import { openStandaloneWindow, focusCoreWindow, takeOpenIntent, createSecondaryShellWindow, syncGlobalHotkey, globalHotkeyState } from './ui'
-import { applyWebviewUserAgent, defaultUserAgent, effectiveUserAgent } from './webview'
+import { applyWebviewProxy, applyWebviewUserAgent, defaultUserAgent, effectiveUserAgent } from './webview'
+import { applyAutoLaunch } from './autolaunch'
 import { findSystemNode, findSystemNpm, nodeVersionOf, localNodeExecPath } from '../dsh/tools'
 import { deployLocalNode, listNodeVersions, nodeStatus, listInstalledNodeVersions, useNodeVersion, removeInstalledNodeVersion } from '../dsh/nodeenv'
 import { listNpmVersions, npmStatus, updateNpm, ensureBundledNpmReady, listInstalledNpmVersions, useNpmVersion, removeInstalledNpmVersion } from '../dsh/npmRunner'
@@ -73,15 +74,24 @@ export function registerIpc(): void {
         return loc
     })
     // Persist only — the renderer auto-saves edits without restarting dsh.
-    ipcMain.handle('settings:save', (_e, s: Settings) => {
+    ipcMain.handle('settings:save', async (_e, s: Settings) => {
         const merged: Settings = { ...DEFAULT_SETTINGS, ...s }
         persistSettings(merged)
         syncDshTheme(merged.theme)
         syncNativeTheme(merged.theme)
         // 快捷键改动要立刻生效（不用等 dsh 重启）：幂等，值没变时什么都不做。
         syncGlobalHotkey()
+        // 开机自启同样立刻写系统登录项（幂等）。
+        applyAutoLaunch(merged.autoLaunch)
         // UA 同理：改完立刻对新请求生效（已加载的页面按新 UA 重新请求）。硬件加速改不了 —— 见 webview.ts。
         applyWebviewUserAgent(merged)
+        // 代理也立刻生效：已加载的内嵌网页要按新代理重新请求（dsh 子进程的代理随下次启动生效）。
+        await applyWebviewProxy(merged)
+        // 广播给**所有**窗口（含发起保存的那一个）：状态栏的余额授权、内嵌网页的缩放 / 搜索引擎
+        // 这类「从设置派生的状态」都靠这条事件刷新，而 settings.json 的 file watcher 对程序自己
+        // 的写入是刻意静默的（见 settings.ts 的 lastSelfSettingsWrite）——不在这里补一条，同窗口内
+        // 的改动就只能等重启才生效。保存方自己会忽略这次回放（见 useSettingsStore 的 lastSaveAt）。
+        broadcast('settings:changed', merged)
         return merged
     })
     // Explicit "apply": restart dsh so the persisted settings take effect.
@@ -89,11 +99,14 @@ export function registerIpc(): void {
         void restart()
     })
     // Restore every setting to its default.
-    ipcMain.handle('settings:reset', () => {
+    ipcMain.handle('settings:reset', async () => {
         const d: Settings = { ...DEFAULT_SETTINGS }
         persistSettings(d)
         syncDshTheme(d.theme)
         syncNativeTheme(d.theme)
+        applyAutoLaunch(d.autoLaunch)
+        await applyWebviewProxy(d)
+        broadcast('settings:changed', d)
         return d
     })
     ipcMain.handle('log:history', () => getLogHistory())
@@ -372,20 +385,4 @@ export function registerIpc(): void {
 
     // Title-bar refresh: ask the (core) window that hosts the dsh UI to reload it.
     ipcMain.on('web:reload', () => sendCore('ui:reload-dsh'))
-
-    // Renderer answered the Element Plus close prompt (origin window closes/quits).
-    ipcMain.on(
-        'win:close-resolve',
-        (e, decision: { action: 'hide' | 'quit'; remember: boolean }) => {
-            const w = windowOfSender(e)
-            if (!w) return
-            if (decision.remember) saveCloseChoice({ closeToTray: decision.action === 'hide', rememberClose: true })
-            if (decision.action === 'hide') {
-                w.hide()
-            } else {
-                setQuitting(true)
-                app.quit()
-            }
-        }
-    )
 }

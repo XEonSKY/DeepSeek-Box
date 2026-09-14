@@ -1,7 +1,9 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import type { DownloadThreads } from '@shared/types'
 import { httpFetch } from './http'
 import type { HttpScope } from './http'
 
@@ -11,6 +13,9 @@ import type { HttpScope } from './http'
  * 先探测服务端是否支持 Range：支持且文件不小于 1MB 时按并发数把文件切成若干段并行
  * 下载（每段直接写目标文件的对应偏移，省掉合并拷贝），否则退回单流下载。无论哪条路径，
  * 进度回调都给出总大小、已下载、百分比与瞬时下载速度（供进度条展示速度与文件大小）。
+ *
+ * 并发数来自设置 `downloadThreads`：'auto'（默认）按本机 CPU 核心数自适应，见
+ * autoDownloadThreads()；用户也可手动钉一个 1–16 的值。
  *
  * 临时文件先写到 opts.tmpDir（应用侧统一传「工作目录/temp/download」），成功后再搬到
  * 目标位置；临时目录与目标目录可能不同盘，此时 rename 会失败，由 moveFile 拷贝兜底。
@@ -35,8 +40,8 @@ interface DownloadFileOpts {
     /** 临时文件目录；默认与目标目录相同（应用侧统一传「工作目录/temp/download」）。 */
     tmpDir?: string
     onProgress?: (p: DlProgress) => void
-    /** 并发连接数（1 = 单线程）；非法值回退默认。 */
-    threads?: number
+    /** 并发连接数（1 = 单线程）；'auto' / 非法值按本机核心数自适应。 */
+    threads?: DownloadThreads
     /** 外部取消信号（安装流程的 CancelToken）；中止时清理临时文件并返回 canceled=true。 */
     signal?: AbortSignal
     /**
@@ -58,10 +63,11 @@ interface InFlight {
 /** 在途下载表：键为最终文件的绝对路径（小写，Windows 大小写不敏感）。 */
 const inFlightDownloads = new Map<string, InFlight>()
 
-/** 默认并发连接数（可在「设置 → 网络」调整）。 */
-const DEFAULT_DOWNLOAD_THREADS = 4
 /** 并发上限：别把服务端与本机同时打爆。 */
 const MAX_DOWNLOAD_THREADS = 16
+/** 自动档的上下限：下限 2 才有分段意义，上限避免在只开代理的小带宽上抢满连接。 */
+const AUTO_DOWNLOAD_THREADS_MIN = 2
+const AUTO_DOWNLOAD_THREADS_MAX = 8
 /** 小于该大小不值得分段（分段本身有额外请求开销）。 */
 const MIN_SEGMENT_BYTES = 1024 * 1024
 /** 单个请求的最大重试次数。 */
@@ -69,10 +75,33 @@ const MAX_RETRY = 3
 /** 进度事件节流（毫秒）。 */
 const EMIT_INTERVAL = 120
 
-/** 归一化并发数：非数字 / 小于 1 回退默认，上限 MAX。 */
+/**
+ * 自动档并发数：按本机 CPU 核心数取，钳在 [2, 8]。
+ *
+ * 用 `availableParallelism()` 而不是 `cpus().length`：前者尊重容器的 CPU 配额，
+ * 在受限环境里不会一口气开出远超实际算力的连接数。老运行时不提供它时回落 `cpus()`。
+ */
+function autoDownloadThreads(): number {
+    let cores: number
+    try {
+        cores = os.availableParallelism?.() ?? os.cpus().length
+    } catch {
+        return AUTO_DOWNLOAD_THREADS_MIN
+    }
+    if (!Number.isFinite(cores) || cores < 1) return AUTO_DOWNLOAD_THREADS_MIN
+    return Math.min(AUTO_DOWNLOAD_THREADS_MAX, Math.max(AUTO_DOWNLOAD_THREADS_MIN, Math.floor(cores)))
+}
+
+/**
+ * 归一化并发数：
+ *  - 'auto' / 缺省 → 按核心数自适应；
+ *  - 非法数字（非有限值、小于 1）→ 同 'auto'（设置里手滑也不至于退化成 0 并发）；
+ *  - 合法数字 → 上限 MAX。
+ */
 function normalizeDownloadThreads(n: unknown): number {
+    if (n === 'auto' || n === undefined || n === null || n === '') return autoDownloadThreads()
     const v = Math.floor(Number(n))
-    if (!Number.isFinite(v) || v < 1) return DEFAULT_DOWNLOAD_THREADS
+    if (!Number.isFinite(v) || v < 1) return autoDownloadThreads()
     return Math.min(MAX_DOWNLOAD_THREADS, v)
 }
 

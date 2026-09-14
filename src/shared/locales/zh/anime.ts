@@ -16,12 +16,6 @@ export default {
         restore: '还原',
         closeHint: '关闭（藏托盘或退出）'
     },
-    closeAsk: {
-        text: '要关闭窗口吗～？',
-        remember: '记住人家，下次别问了',
-        toTray: '藏进托盘',
-        quit: '退出'
-    },
     sv: {
         cap: '设置',
         nav: { general: '一般', appearance: '外观', network: '网络', env: '环境', dsh: 'DeepSeek Harness', log: '终端', hotkeys: '快捷键', webview: 'Webview', about: '关于' },
@@ -34,12 +28,9 @@ export default {
             portAuto: '自动（推荐）',
             portManual: '手动指定',
             portHint: '自动从 3080 找个空闲端口～',
-            closeBehavior: '关闭按钮行为',
-            closeTray: '藏进托盘',
-            closeQuit: '直接退出',
-            askEvery: '每次都问',
-            rememberChoice: '记住选择',
-            askEveryHint: '开启就每次关闭都问哟。',
+            closeSection: '关闭程序',
+            closeKeepRunning: '关闭程序后继续运行后台扩展和应用',
+            closeKeepRunningHint: '开启后点关闭只藏进托盘，后台继续跑；关闭就直接退出并结束 dsh 哟。',
             reset: '恢复默认设置',
             resetTxt: '恢复默认并重启 dsh 喵。',
             resetBtn: '一键恢复默认'
@@ -70,10 +61,13 @@ export default {
             host: '主机',
             port: '端口',
             scope: '代理范围',
+            scopeApp: '程序本体（模型 / 余额、内嵌网页）',
+            scopeUpdate: '程序更新（应用自更新）',
+            scopeDsh: 'DSH 本体（dsh 进程联网）',
             scopeNpm: 'npm 安装 / 下载',
             scopeNode: 'Node 下载部署',
-            scopeUpdate: 'DeepSeek Harness 更新检查',
-            scopeHint: '只对勾选的范围用代理。'
+            scopeRegistry: '版本查询（npm registry）',
+            scopeHint: '只对勾选的范围用代理，其余按系统设置直连。'
         },
         dsh: {
             installedVersion: 'DeepSeek Harness 版本',

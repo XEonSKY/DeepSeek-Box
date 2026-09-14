@@ -41,7 +41,7 @@ Pre-releases / test builds are hidden by default; if **only** pre-release versio
 
 ## Downloader
 
-- File downloads for Node / npm / app updates are **multi-threaded and segmented by default** (concurrent HTTP Range requests); the concurrency is adjusted under “Settings → Network → Download” (1 = single-threaded, maximum 16);
+- File downloads for Node / npm / app updates are **multi-threaded and segmented by default** (concurrent HTTP Range requests); the concurrency is adjusted under “Settings → Network → Download” and defaults to **Auto** (2–8, derived from this machine's CPU core count), or you can pin it manually between 1 and 16 (1 = single-threaded);
 - The progress bar shows **downloaded / total size** and the **real-time speed**;
 - Unfinished temporary files are all placed in **`temp/download` under the working directory** and are moved to the target location once complete;
 - Duplicate requests for the **same target file** are merged into a single in-flight task; later callers share the result and progress, with no duplicate downloads.

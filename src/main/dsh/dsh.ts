@@ -1,4 +1,4 @@
-import { app, dialog } from 'electron'
+import { app, dialog, shell } from 'electron'
 import { spawn, spawnSync } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import net from 'node:net'
@@ -11,6 +11,7 @@ import { listWindows } from '../app/windowreg'
 import type { NodeRuntime } from './tools'
 import { resolveDshModule, nodeRuntimeForCfg } from './tools'
 import { loadSettings, mt } from '../app/settings'
+import { proxyEnv } from './net'
 import { WATCHDOG_CODE } from './watchdog'
 
 /** Build the CLI args passed to the @deepseek-ai/dsh bin entry. */
@@ -201,9 +202,8 @@ async function resolvePort(s: Settings): Promise<number> {
 // ---------------------------------------------------------------------------
 
 /**
- * Spawn dsh (via the watchdog) and resolve with its printed URL.
- * Note: the caller (restart) resolves a free port first and writes it back to
- * cfg.port, so this function always has a concrete port to pass to dsh.
+ * 启动 dsh（经 watchdog 中转）并解析它打印出的 URL。
+ * 注：调用方（restart）会先挑好一个空闲端口并写回 cfg.port，因此这里总能拿到确定端口。
  */
 function launchServer(cfg: Settings): Promise<string> {
     const gen = ++serverGeneration
@@ -233,7 +233,7 @@ function launchServer(cfg: Settings): Promise<string> {
     const launch = { entry: resolved.entry, args: dshArgs(cfg.host || '127.0.0.1', port) }
 
     return new Promise<string>((resolve, reject) => {
-        spawnWatchdog(rt, launch, { cwd, gen, resolve, reject, timeoutMs: cfg.timeoutMs })
+        spawnWatchdog(rt, launch, { cwd, gen, resolve, reject, timeoutMs: cfg.timeoutMs }, cfg)
     })
 }
 
@@ -245,13 +245,15 @@ interface SpawnOpts {
     timeoutMs: number
 }
 
-function spawnWatchdog(rt: NodeRuntime, launch: { entry: string; args: string[] }, o: SpawnOpts): void {
+function spawnWatchdog(rt: NodeRuntime, launch: { entry: string; args: string[] }, o: SpawnOpts, cfg: Settings): void {
+    // 「DSH 本体」范围的代理以环境变量注入：watchdog 把它原样透传给 dsh 子进程
+    //（见 watchdog.ts 里的 `env: process.env`），dsh 内部再自己决定怎么用。
     const child = rememberChild(
         spawn(rt.exec, ['-e', WATCHDOG_CODE, JSON.stringify(launch)], {
             shell: false,
             windowsHide: true,
             cwd: o.cwd,
-            env: { ...process.env, ...rt.env },
+            env: { ...process.env, ...rt.env, ...proxyEnv(cfg, 'dsh') },
             stdio: ['pipe', 'pipe', 'pipe']
         })
     )
@@ -327,6 +329,13 @@ async function runOneRestart(): Promise<void> {
         const url = await launchServer(effective)
         setCurrentUrl(url)
         sendCore('dsh:url', url) // 只通知核心窗口：dsh UI 由核心窗口承载
+        // 「设置 → 系统与性能」的「默认使用系统浏览器打开 DSH」：地址就绪后交给系统默认浏览器
+        // （此时壳窗口多半隐藏在托盘里）。打不开浏览器也不影响托盘召回，故静默忽略失败。
+        if (loadSettings().openDshInBrowser) {
+            void shell.openExternal(url).catch(() => {
+                /* ignore */
+            })
+        }
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         dialog.showErrorBox(mt('m.dialogs.startFailedTitle'), msg)

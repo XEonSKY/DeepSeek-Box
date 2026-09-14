@@ -20,6 +20,8 @@ export interface WebviewEl extends HTMLElement {
     canGoBack?: () => boolean
     canGoForward?: () => boolean
     setZoomFactor?: (factor: number) => void
+    /** 是否正在加载：与 did-start/stop-loading 同源，切换标签页时用它校正加载态，避免遗留转圈。 */
+    isLoading?: () => boolean
     reload?: () => void
     stop?: () => void
     goBack?: () => void

@@ -8,6 +8,7 @@ import type { SearchEngineId } from '@shared/types'
 import { shellMeta } from '../shell/shellmeta'
 import { useWebviews } from './useWebviews'
 import type { WebviewEl } from './useWebviews'
+import { useLoadProgress } from './useLoadProgress'
 
 /**
  * 「/」路由宿主：标签页模式的 web 内容区。
@@ -34,6 +35,21 @@ const nav = reactive({ url: '', canBack: false, canForward: false, loading: fals
 const urlInput = ref('')
 const addrEditing = ref(false)
 
+/** 顶部加载进度条（真实百分比不可得，走模拟进度，见 useLoadProgress）。 */
+const {
+    active: loadBarActive,
+    percent: loadBarPercent,
+    start: startLoadBar,
+    done: finishLoadBar
+} = useLoadProgress()
+
+/** 统一收口「加载中」状态：既更新地址栏的转圈/停止图标，也驱动顶部进度条。 */
+function applyLoading(loading: boolean): void {
+    nav.loading = loading
+    if (loading) startLoadBar()
+    else finishLoadBar()
+}
+
 /** 用某 webview 刷新导航栏状态（仅当其仍是激活标签页时）。 */
 function syncNavFrom(wv: WebviewEl | null): void {
     if (!wv || wv !== wvApi.activeWv()) return
@@ -43,6 +59,10 @@ function syncNavFrom(wv: WebviewEl | null): void {
         nav.canBack = typeof wv.canGoBack === 'function' ? !!wv.canGoBack() : false
         nav.canForward = typeof wv.canGoForward === 'function' ? !!wv.canGoForward() : false
         if (!addrEditing.value) urlInput.value = nav.url
+        // 加载态以 webview 实况为准：切换标签页时 did-start-loading 可能在它非激活时就已错过，
+        // 靠 isLoading() 校正，否则地址栏会一直转圈、顶部进度条也会卡住。放在赋值之后，
+        // 这样即便 webview 尚未 dom-ready、isLoading() 抛错，也不会连累地址栏同步。
+        applyLoading(typeof wv.isLoading === 'function' ? !!wv.isLoading() : false)
     } catch {
     /* ignore */
     }
@@ -50,9 +70,7 @@ function syncNavFrom(wv: WebviewEl | null): void {
 
 const wvApi = useWebviews({
     onNavChange: (wv) => syncNavFrom(wv),
-    onLoadingChange: (loading) => {
-        nav.loading = loading
-    }
+    onLoadingChange: (loading) => applyLoading(loading)
 })
 const { setHolder } = wvApi
 
@@ -228,6 +246,10 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="wb-stage">
+            <!-- 顶部加载进度条：真实百分比不可得，由 useLoadProgress 模拟；覆盖在 webview 之上 -->
+            <div class="whost__progress" :class="{ on: loadBarActive }" aria-hidden="true">
+                <div class="whost__progress-bar" :style="{ width: loadBarPercent + '%' }"></div>
+            </div>
             <div
                 v-for="tab in webTabs.list"
                 :key="tab.id"
@@ -297,6 +319,28 @@ onBeforeUnmount(() => {
   flex: 1 1 auto;
   min-height: 0;
   position: relative;
+}
+/* 顶部加载进度条：贴内容区上沿的一条细线，加载时淡入、结束后补满淡出 */
+.whost__progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.whost__progress.on {
+  opacity: 1;
+}
+.whost__progress-bar {
+  height: 100%;
+  width: 0;
+  background: var(--el-color-primary);
+  box-shadow: 0 0 6px var(--el-color-primary);
+  transition: width 0.18s ease-out;
 }
 .whost__pane {
   position: absolute;

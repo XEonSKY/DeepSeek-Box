@@ -16,12 +16,6 @@ export default {
         restore: '还原',
         closeHint: '关闭（藏于托盘或退出）'
     },
-    closeAsk: {
-        text: '欲关窗时当何为？',
-        remember: '记吾所择，来问不再',
-        toTray: '藏于托盘',
-        quit: '径行退出'
-    },
     sv: {
         cap: '设置',
         nav: { general: '通则', appearance: '仪容', network: '网络', env: '环境', dsh: 'DeepSeek Harness', log: '终端', hotkeys: '捷径', webview: 'Webview', about: '关于' },
@@ -34,12 +28,9 @@ export default {
             portAuto: '自动（宜）',
             portManual: '手定',
             portHint: '自动自 3080 起觅空闲端口。',
-            closeBehavior: '闭钮之为',
-            closeTray: '藏于托盘',
-            closeQuit: '径行退出',
-            askEvery: '每次皆问',
-            rememberChoice: '记之',
-            askEveryHint: '启则每次闭皆询。',
+            closeSection: '闭程序',
+            closeKeepRunning: '闭程序后仍运行后台扩展与应用',
+            closeKeepRunningHint: '启则闭钮唯藏于托盘，后台之事续行；闭则径退并止 dsh。',
             reset: '还原默认',
             resetTxt: '还原默认并重启 dsh。',
             resetBtn: '一键还原默认'
@@ -70,10 +61,13 @@ export default {
             host: '主机',
             port: '端口',
             scope: '代理之域',
+            scopeApp: '程序本体（模型 / 余额、内嵌网页）',
+            scopeUpdate: '程序之自新',
+            scopeDsh: 'DSH 本体（dsh 之联网）',
             scopeNpm: 'npm 装 / 下',
             scopeNode: 'Node 下之部署',
-            scopeUpdate: 'DeepSeek Harness 更新之检',
-            scopeHint: '唯所勾之域用代理。'
+            scopeRegistry: '版本之查询（npm registry）',
+            scopeHint: '唯所勾之域用代理，余者循系统而直连。'
         },
         dsh: {
             installedVersion: 'DeepSeek Harness 之版',

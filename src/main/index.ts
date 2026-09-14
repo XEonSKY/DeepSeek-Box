@@ -4,7 +4,8 @@ import { registerIpc } from './app/ipc'
 import { startAutoCheckIfEnabled } from './app/appupdate'
 import { loadSettings, startConfigWatchers, readDiskSettings, syncNativeTheme, ensureDefaultConfigMigration, waitForConfigMigration } from './app/settings'
 import { createShellWindow, createTray, showMainWindow, syncGlobalHotkey } from './app/ui'
-import { applyHardwareAcceleration, applyWebviewUserAgent } from './app/webview'
+import { applyHardwareAcceleration, applyWebviewProxy, applyWebviewUserAgent } from './app/webview'
+import { applyAutoLaunch } from './app/autolaunch'
 import { resolveInstall } from './dsh/manage'
 import { migrateLegacyInstalls } from './dsh/installs'
 import { nodeVersionOf } from './dsh/tools'
@@ -76,12 +77,14 @@ if (!gotLock) {
     app.whenReady().then(async () => {
         const cfg = loadSettings()
         syncNativeTheme(cfg.theme) // 建窗前先让 webview 深浅色与外壳一致
-        // UA 只能在 ready 之后设（defaultSession 尚不存在），且必须早于建窗：webview 创建时就该拿到它。
+        // UA 与代理同理：都只能在 ready 之后设（defaultSession 尚不存在），且必须早于建窗。
         applyWebviewUserAgent(cfg)
+        await applyWebviewProxy(cfg)
         registerIpc()
         createShellWindow() // 首个窗口注册为核心窗口（内部登记角色并设为主窗口）
         createTray()
         syncGlobalHotkey() // 系统全局快捷键（默认 Ctrl+Alt+H 回到主窗口）
+        applyAutoLaunch(cfg.autoLaunch) // 开机自启：让系统登录项与本机设置保持一致
 
         // 有配置目录迁移计划时，先等渲染层把进度显示完、主进程搬完，再启动 dsh：
         // 否则 dsh 目录会在运行时被搬走。（无计划时立即返回。）

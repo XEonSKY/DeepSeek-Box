@@ -1,4 +1,4 @@
-import type { FunLocale, NewTabMode, NpmRegistry, NpmSource, ProxyProtocol, ProxyScope, SearchEngineId, Settings, Shortcut, Theme, NodeRuntimeKind, ColorSchemeId } from '@shared/types'
+import type { ColorSchemeId, DownloadThreads, FunLocale, NewTabMode, NpmRegistry, NpmSource, NodeRuntimeKind, ProxyProtocol, ProxyScope, SearchEngineId, Settings, Shortcut, Theme } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 
 /** Short, friendly OS label (pure) used by the About header. */
@@ -22,18 +22,16 @@ export interface SettingsState {
     manualPort: number
     dshBin: string
     timeoutMs: number
-    closeMode: 'tray' | 'quit'
-    askEveryClose: boolean
+    /** 关闭窗口后继续在后台运行（隐藏到系统托盘）；关闭则直接退出。 */
+    closeKeepRunning: boolean
     theme: Theme
     autoCheckUpdate: boolean
     autoCheckPrerelease: boolean
     npmRegistry: NpmRegistry
     appAutoUpdate: boolean
     appCheckPrerelease: boolean
-    /** App 更新下载的 GitHub 公共镜像前缀；空串 = 官方直连。 */
-    updateMirrorUrl: string
-    /** 文件下载并发连接数（1 = 单线程）。 */
-    downloadThreads: number
+    /** 文件下载并发连接数：'auto' = 按本机 CPU 核心数自适应，正整数 = 手动指定。 */
+    downloadThreads: DownloadThreads
     devMode: boolean
     /** dsh 来源：'local'（内置/默认）｜ 'global'（使用全局安装）。 */
     dshSource: 'local' | 'global'
@@ -65,6 +63,10 @@ export interface SettingsState {
     hotkeyDevTools: string
     /** 内嵌 webview 是否启用硬件加速（改动需重启）。 */
     hardwareAcceleration: boolean
+    /** 开机自启（「系统与性能」的「启动增强」）。 */
+    autoLaunch: boolean
+    /** 启动时隐藏到托盘并用系统默认浏览器打开 DSH。 */
+    openDshInBrowser: boolean
     /** 内嵌 webview 的 UserAgent；留空 = 默认。 */
     webviewUserAgent: string
     /** 配色方案 id（预制方案见 lib/theme.ts）。 */
@@ -112,15 +114,13 @@ export function payloadFrom(state: SettingsState): Settings {
         workspace: state.workspace || null,
         dshBin: state.dshBin || null,
         timeoutMs: state.timeoutMs,
-        closeToTray: state.closeMode === 'tray',
-        rememberClose: !state.askEveryClose,
+        closeToTray: state.closeKeepRunning,
         theme: state.theme,
         autoCheckUpdate: state.autoCheckUpdate,
         checkPrerelease: state.autoCheckPrerelease,
         npmRegistry: state.npmRegistry,
         appAutoUpdate: state.appAutoUpdate,
         appCheckPrerelease: state.appCheckPrerelease,
-        updateMirrorUrl: state.updateMirrorUrl,
         downloadThreads: state.downloadThreads,
         devMode: state.devMode,
         dshSource: state.dshSource,
@@ -142,6 +142,8 @@ export function payloadFrom(state: SettingsState): Settings {
         hotkeyToggleTerminal: state.hotkeyToggleTerminal,
         hotkeyDevTools: state.hotkeyDevTools,
         hardwareAcceleration: state.hardwareAcceleration,
+        autoLaunch: state.autoLaunch,
+        openDshInBrowser: state.openDshInBrowser,
         webviewUserAgent: state.webviewUserAgent,
         colorScheme: state.colorScheme,
         modelsCredConsent: state.modelsCredConsent

@@ -1,10 +1,12 @@
 import { app, session } from 'electron'
+import type { Session } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { UpdateDownloadedEvent } from 'electron-updater'
 import semver from 'semver'
 import type { AppMeta, AppUpdateEvent, Settings } from '@shared/types'
 import { isPrerelease, stripV } from '@shared/version'
 import { proxyActive, proxyUrl } from '../dsh/net'
+import { proxyConfigFor } from '../dsh/http'
 import { broadcast } from './runtime'
 import { loadSettings, mt } from './settings'
 import {
@@ -72,11 +74,16 @@ function isPortableBuild(): boolean {
  */
 const UPDATER_SESSION = 'electron-updater'
 
+/** 更新器专属 session（代理与发布元数据请求都走它）。 */
+function updaterSession(): Session {
+    return session.fromPartition(UPDATER_SESSION, { cache: false })
+}
+
 /** 已应用到更新器 session 的代理 URL；null 表示「未显式设置，沿用系统代理」。 */
 let appliedProxy: string | null = null
 
 /**
- * 把「更新」范围的代理应用到更新器专属 session。
+ * 把「程序更新」范围的代理应用到更新器专属 session。
  *
  * 此前 `proxyScope` 里的 `'update'` 是**空转**的：`proxyActive(cfg, 'update')` 全项目从未被调用，
  * 代理只作用于 npm 子进程。于是配了代理的用户，app 自更新这一步始终直连（在必须走代理的网络里
@@ -90,121 +97,13 @@ let appliedProxy: string | null = null
 async function applyUpdaterProxy(cfg: Settings): Promise<void> {
     const url = proxyActive(cfg, 'update') ? proxyUrl(cfg) : null
     if (appliedProxy === url) return
-    const updaterSession = session.fromPartition(UPDATER_SESSION, { cache: false })
-    await updaterSession.setProxy(
-        url ? { proxyRules: url, proxyBypassRules: '<local>' } : { mode: 'system' }
-    )
+    await updaterSession().setProxy(proxyConfigFor(url))
     appliedProxy = url
 }
 
-// ---------------------------------------------------------------------------
-// GitHub 公共镜像：把发布资产的请求重写到镜像前缀
-// ---------------------------------------------------------------------------
-
-/** createRequest 收到的请求选项（由 builder-util-runtime 的 configureRequestUrl 填好）。 */
-interface ExecRequestOptions {
-    protocol?: string
-    hostname?: string
-    port?: string
-    path?: string
-}
-
-/** 我们只依赖 httpExecutor 的这一个方法（它是所有 HTTP 的唯一出口）。 */
-interface UpdaterExecutor {
-    createRequest(options: ExecRequestOptions, callback: (response: unknown) => void): unknown
-}
-
-let mirrorPatched = false
-/** 当前生效的镜像前缀（不含尾斜杠）；null = 直连官方。 */
-let activeMirror: string | null = null
-
-/**
- * 规范化镜像前缀：允许省略协议，去掉尾斜杠。
- * 例：`ghproxy.com` → `https://ghproxy.com`；`https://x.cn/gh/` → `https://x.cn/gh`。
- * 解析失败返回 null（按直连处理，不让一个笔误把更新彻底弄坏）。
- */
-function normalizeMirror(raw: string | undefined): string | null {
-    const s = (raw ?? '').trim()
-    if (!s) return null
-    try {
-        const u = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`)
-        return (u.origin + u.pathname).replace(/\/+$/, '')
-    } catch {
-        return null
-    }
-}
-
-/**
- * 只改写 **GitHub 发布资产** 的请求，形式为 `<mirror>/https://github.com/<owner>/<repo>/releases/download/...`
- * —— 这正是 ghproxy 系公共镜像的约定（镜像把原始绝对 URL 接在自身路径之后）。
- *
- * 刻意**只匹配 `/releases/download/`**：版本元数据必须留在官方 ——
- *  - `/<owner>/<repo>/releases.atom`：`allowPrerelease` 为真时 GitHubProvider 用它解析 tag；
- *  - `/<owner>/<repo>/releases/latest`：**正式版线**用它解析 tag（`getLatestTagName()`），
- *    且是以 `Accept: application/json` 请求后 `JSON.parse` 的 —— 镜像一旦不支持该端点或
- *    把请求重定向成 HTML，检查会直接抛 `ERR_UPDATER_LATEST_VERSION_NOT_FOUND`
- *    （报错文案伪装成「找不到最新版本」），表现为**检测不到正式版**。
- *
- * ⚠️ 旧实现用的是 `/^\/[^/]+\/[^/]+\/releases\//`，它**会命中 `/releases/latest`**，
- * 只有 `releases.atom` 因为「releases 后面少一个斜杠」才侥幸幸免 —— 与本节注释声称的
- * 「元数据始终走官方」不符，已修正。镜像现在只搬运发布资产（安装包与 blockmap）。
- */
-function rewriteGithubAsset(options: ExecRequestOptions): void {
-    const mirror = activeMirror
-    if (!mirror) return
-    if (options.hostname !== 'github.com') return
-    const path = options.path ?? ''
-    if (!/^\/[^/]+\/[^/]+\/releases\/download\//.test(path)) return
-    let base: URL
-    try {
-        base = new URL(mirror)
-    } catch {
-        return
-    }
-    options.protocol = base.protocol
-    options.hostname = base.hostname
-    if (base.port) options.port = base.port
-    else delete options.port
-    options.path = `${base.pathname.replace(/\/+$/, '')}/https://github.com${path}`
-}
-
-/**
- * 就地包装 `autoUpdater.httpExecutor.createRequest`（只做一次）。
- *
- * 为什么是这个点：`HttpExecutor.request()`（元数据 / blockmap）与 `download()`→`doDownload()`
- * （安装包 / 差分区间）**两条路都汇到 `createRequest`**，而 provider 每次检查都会从
- * `autoUpdater.httpExecutor` 取执行器（`createProviderRuntimeOptions()`），所以包装一次即全覆盖。
- *
- * ⚠️ 这依赖 electron-updater 的内部结构。升级该依赖前请复核
- * `electron-updater/out/ElectronHttpExecutor.js` 是否仍以 `createRequest` 作为唯一出口。
- */
-function installMirrorRewrite(): void {
-    if (mirrorPatched) return
-    // 注：electron-updater 的 .d.ts 并未声明 httpExecutor（只在运行时赋值），故从 autoUpdater 整体断言。
-    const exec = (autoUpdater as unknown as { httpExecutor?: UpdaterExecutor | null }).httpExecutor
-    const orig = exec?.createRequest
-    if (!exec || typeof orig !== 'function') return
-    const bound = orig.bind(exec)
-    exec.createRequest = (options, callback) => {
-        rewriteGithubAsset(options)
-        return bound(options, callback)
-    }
-    mirrorPatched = true
-}
-
-/** 读取设置并刷新镜像前缀（空串 / 非法值 = 直连）。 */
-function applyMirror(cfg: Settings): void {
-    installMirrorRewrite()
-    activeMirror = normalizeMirror(cfg.updateMirrorUrl)
-}
-
-/**
- * 每次检查前刷新更新器环境：专属 session 的代理 + GitHub 资产镜像。
- * 设置可在运行期被改（网络面板），故每次都读一遍而不是只做一次。
- */
+/** 每次检查前刷新更新器环境（设置可在运行期被改，故每次都读一遍）。 */
 async function prepareUpdater(cfg: Settings): Promise<void> {
     await applyUpdaterProxy(cfg)
-    applyMirror(cfg)
 }
 
 // ---------------------------------------------------------------------------
@@ -222,10 +121,9 @@ interface ReleaseItem {
     prerelease: boolean
 }
 
-/** 用更新器专属 session 请求（自动带上「更新」范围配置的代理）。 */
+/** 用更新器专属 session 请求（自动带上「程序更新」范围配置的代理）。 */
 async function fetchReleases(): Promise<ReleaseItem[]> {
-    const updaterSession = session.fromPartition(UPDATER_SESSION, { cache: false })
-    const res = await updaterSession.fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=30`, {
+    const res = await updaterSession().fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=30`, {
         headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'dsbox-updater' }
     })
     if (!res.ok) throw new Error(`GitHub API ${res.status}`)
@@ -254,7 +152,7 @@ let pinnedTag: string | null = null
 /** 把更新源钉到某个 tag 的资源目录（generic provider，读该 tag 的 latest*.yml）。 */
 function pinFeed(tag: string): void {
     if (pinnedTag === tag) return
-    // GitHub 资源不适合多段 Range 请求，关掉可避免一部分镜像/代理下下载卡住。
+    // GitHub 资源不适合多段 Range 请求，关掉可避免一部分代理下下载卡住。
     autoUpdater.setFeedURL({ provider: 'generic', url: feedUrlFor(tag), useMultipleRangeRequest: false })
     pinnedTag = tag
 }

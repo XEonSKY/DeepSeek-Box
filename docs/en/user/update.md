@@ -27,6 +27,6 @@ The two do not affect each other: when GitHub is unreachable, app self-update ma
 
 ## If an update gets stuck
 
-- Check your network; if necessary, enter a public GitHub mirror prefix under “Settings → Network”;
+- Check your network; if a proxy is required, enable it under “Settings → Network” and tick **app updates** (self-update) and **version lookups** (DeepSeek Harness);
 - App updates and DeepSeek Harness updates use different channels and can be troubleshot separately;
 - For more detailed troubleshooting see [FAQ](/en/user/faq).

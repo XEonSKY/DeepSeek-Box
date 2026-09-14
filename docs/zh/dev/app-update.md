@@ -4,7 +4,7 @@
 
 ## 发布解析
 
-`appupdate.ts` 用 GitHub Releases API 解析目标 tag（是否含预发布由设置 `appCheckPrerelease` 控制），钉到该 tag 的 generic 源，再由 updater 后台下载。支持代理与 GitHub 公共镜像前缀。
+`appupdate.ts` 用 GitHub Releases API 解析目标 tag（是否含预发布由设置 `appCheckPrerelease` 控制），钉到该 tag 的 generic 源，再由 updater 后台下载。下载走「程序更新」范围的代理（electron-updater 的专属 session `electron-updater`，不波及 webview）。
 
 ## 版本槽（A/B）
 

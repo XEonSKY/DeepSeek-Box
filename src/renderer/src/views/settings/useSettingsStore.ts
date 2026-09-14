@@ -21,8 +21,7 @@ export const useSettingsStore = defineStore('settings', () => {
         manualPort: 3080,
         dshBin: '',
         timeoutMs: DEFAULT_SETTINGS.timeoutMs,
-        closeMode: 'tray',
-        askEveryClose: true,
+        closeKeepRunning: true,
         theme: DEFAULT_SETTINGS.theme,
         autoCheckUpdate: DEFAULT_SETTINGS.autoCheckUpdate,
         autoCheckPrerelease: DEFAULT_SETTINGS.checkPrerelease,
@@ -38,7 +37,6 @@ export const useSettingsStore = defineStore('settings', () => {
         proxyHost: DEFAULT_SETTINGS.proxyHost,
         proxyPort: DEFAULT_SETTINGS.proxyPort,
         proxyScope: [...DEFAULT_SETTINGS.proxyScope],
-        updateMirrorUrl: DEFAULT_SETTINGS.updateMirrorUrl,
         downloadThreads: DEFAULT_SETTINGS.downloadThreads,
         zoomPercent: DEFAULT_SETTINGS.zoomPercent,
         ignoreSystemScale: DEFAULT_SETTINGS.ignoreSystemScale,
@@ -51,6 +49,8 @@ export const useSettingsStore = defineStore('settings', () => {
         hotkeyToggleTerminal: DEFAULT_SETTINGS.hotkeyToggleTerminal,
         hotkeyDevTools: DEFAULT_SETTINGS.hotkeyDevTools,
         hardwareAcceleration: DEFAULT_SETTINGS.hardwareAcceleration,
+        autoLaunch: DEFAULT_SETTINGS.autoLaunch,
+        openDshInBrowser: DEFAULT_SETTINGS.openDshInBrowser,
         webviewUserAgent: DEFAULT_SETTINGS.webviewUserAgent,
         colorScheme: DEFAULT_SETTINGS.colorScheme,
         modelsCredConsent: DEFAULT_SETTINGS.modelsCredConsent,
@@ -70,8 +70,7 @@ export const useSettingsStore = defineStore('settings', () => {
         state.workspace = s.workspace ?? ''
         state.dshBin = s.dshBin ?? ''
         state.timeoutMs = s.timeoutMs ?? DEFAULT_SETTINGS.timeoutMs
-        state.closeMode = s.closeToTray !== false ? 'tray' : 'quit'
-        state.askEveryClose = s.rememberClose === false
+        state.closeKeepRunning = s.closeToTray !== false
         state.theme = s.theme ?? DEFAULT_SETTINGS.theme
         state.autoCheckUpdate = s.autoCheckUpdate !== false
         state.autoCheckPrerelease = s.checkPrerelease === true
@@ -87,7 +86,6 @@ export const useSettingsStore = defineStore('settings', () => {
         state.proxyHost = s.proxyHost ?? DEFAULT_SETTINGS.proxyHost
         state.proxyPort = s.proxyPort ?? DEFAULT_SETTINGS.proxyPort
         state.proxyScope = Array.isArray(s.proxyScope) ? [...s.proxyScope] : [...DEFAULT_SETTINGS.proxyScope]
-        state.updateMirrorUrl = s.updateMirrorUrl ?? ''
         state.downloadThreads = s.downloadThreads ?? DEFAULT_SETTINGS.downloadThreads
         state.zoomPercent = s.zoomPercent ?? DEFAULT_SETTINGS.zoomPercent
         state.ignoreSystemScale = s.ignoreSystemScale === true
@@ -102,6 +100,8 @@ export const useSettingsStore = defineStore('settings', () => {
         state.hotkeyToggleTerminal = s.hotkeyToggleTerminal ?? DEFAULT_SETTINGS.hotkeyToggleTerminal
         state.hotkeyDevTools = s.hotkeyDevTools ?? DEFAULT_SETTINGS.hotkeyDevTools
         state.hardwareAcceleration = s.hardwareAcceleration !== false
+        state.autoLaunch = s.autoLaunch === true
+        state.openDshInBrowser = s.openDshInBrowser === true
         state.webviewUserAgent = s.webviewUserAgent ?? DEFAULT_SETTINGS.webviewUserAgent
         state.colorScheme = s.colorScheme ?? DEFAULT_SETTINGS.colorScheme
         state.modelsCredConsent = s.modelsCredConsent === true
@@ -115,8 +115,18 @@ export const useSettingsStore = defineStore('settings', () => {
 
     // ---- Auto-save: edits persist to disk (debounced), no dsh restart. ---------
     let debounce: number | undefined
+    /**
+     * 本窗口最近一次保存的时刻。
+     *
+     * 主进程落盘后会把权威设置回放给所有窗口（`settings:changed`，见 ipc.ts 的 `settings:save`），
+     * 用来让状态栏 / 内嵌网页等「派生状态」即时跟上。**发起保存的这个窗口必须忽略自己的回放**：
+     * 回放内容比 `state` 旧一个保存周期，正好落在「刚改完又接着输入」的那个窗口里，会把用户的
+     * 输入覆盖回去。时间窗与 main 侧抑制自身写入的做法（lastSelfSettingsWrite < 400）保持一致。
+     */
+    let lastSaveAt = 0
     async function persist(): Promise<void> {
         try {
+            lastSaveAt = Date.now()
             await window.api.saveSettings(payloadFrom(state))
         } catch (err) {
             ElMessage.error(tt('msg.saveFail', { err: err instanceof Error ? err.message : String(err) }))
@@ -193,11 +203,13 @@ export const useSettingsStore = defineStore('settings', () => {
     watch(() => state.theme, (t: Theme) => applyTheme(t))
     // 配色方案即时生效（外部改动经 fillFrom 改 state 时这个 watch 也会跑）。
     watch(() => state.colorScheme, (id) => applyColorScheme(id))
-    // 预发布开关/镜像变化时重建版本列表。
+    // 预发布开关或 npm 镜像源变化时重建版本列表。
     watch([() => state.autoCheckPrerelease, () => state.npmRegistry], () => void dshManageActions.loadVersions())
 
     // ---- 外部配置自动同步：settings.json / dsh 的 settings.yaml 被外部改动。 ----
     const offSettingsChanged = window.api.onSettingsChanged((s) => {
+        // 自己刚保存的那次回放跳过（见 lastSaveAt）：它是同一份内容、但比 state 旧一个保存周期。
+        if (Date.now() - lastSaveAt < 400) return
         fillFrom(s)
     })
     const offThemeChanged = window.api.onThemeChanged((t) => {

@@ -4,7 +4,7 @@ App updates go through GitHub Releases and are implemented by `main/app/appupdat
 
 ## Release resolution
 
-`appupdate.ts` resolves the target tag with the GitHub Releases API (whether pre-releases are included is controlled by the `appCheckPrerelease` setting), pins the generic source for that tag, and lets the updater download in the background. It supports proxies and a GitHub public mirror prefix.
+`appupdate.ts` resolves the target tag with the GitHub Releases API (whether pre-releases are included is controlled by the `appCheckPrerelease` setting), pins the generic source for that tag, and lets the updater download in the background. Downloads use the proxy configured for the "app updates" scope (electron-updater's dedicated `electron-updater` session, which does not touch the webviews).
 
 ## Version slots (A/B)
 
