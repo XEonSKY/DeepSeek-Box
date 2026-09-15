@@ -24,11 +24,13 @@ Run these in the repo root:
 | `npm run docs:dev` | Preview the docs site locally |
 | `npm run docs:build` | Build the docs site into `.vitepress/dist` |
 
-> This repository has no test suite; verification relies mainly on `typecheck` / `lint` / `build`.
+::: info
+This repository has no test suite; verification relies mainly on `typecheck` / `lint` / `build`.
+:::
 
 ## Directory structure
 
-```text
+```text [Project layout]
 .
 ├─ src/
 │  ├─ main/            main process (windows, DeepSeek Harness, config, updates)

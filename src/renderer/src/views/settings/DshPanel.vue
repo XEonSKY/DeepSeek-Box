@@ -29,7 +29,7 @@ async function loadInstalled(): Promise<void> {
     if (installedLoading.value) return
     installedLoading.value = true
     try {
-        installed.value = await window.api.listInstalledVersions('dsh')
+        installed.value = await window.api.get('/versions/:kind', { params: { kind: 'dsh' } })
     } catch {
         installed.value = { installed: [], active: null }
     } finally {
@@ -42,7 +42,7 @@ async function cancelInstall(): Promise<void> {
     if (canceling.value) return
     canceling.value = true
     try {
-        await window.api.cancelInstall()
+        await window.api.post('/installs/cancel')
     } catch {
         /* 取消失败无需打扰用户 */
     } finally {
@@ -67,7 +67,7 @@ async function useInstalled(version: string): Promise<void> {
     if (switchingInstalled.value) return
     switchingInstalled.value = version
     try {
-        const r = await window.api.useInstalledVersion('dsh', version)
+        const r = await window.api.put('/versions/:kind/active', { params: { kind: 'dsh' }, body: { version } })
         if (r.ok) {
             state.version = r.version
             ElMessage.success(tt('sv.env.versionSwitched', { version: withV(r.version) }))
@@ -94,7 +94,7 @@ async function removeInstalled(version: string): Promise<void> {
         return // 用户取消
     }
     try {
-        const r = await window.api.removeInstalledVersion('dsh', version)
+        const r = await window.api.delete('/versions/:kind/:version', { params: { kind: 'dsh', version } })
         if (r.ok) {
             await loadInstalled()
             await actions.loadVersion()

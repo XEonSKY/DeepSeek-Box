@@ -24,9 +24,11 @@ export function createDshManageActions(state: SettingsState): DshManageActions {
         if (state.versionsLoading) return
         state.versionsLoading = true
         try {
-            const list = await window.api.listVersions({
-                prerelease: state.autoCheckPrerelease,
-                registry: state.npmRegistry
+            const list = await window.api.get('/dsh/versions', {
+                query: {
+                    prerelease: state.autoCheckPrerelease,
+                    registry: state.npmRegistry
+                }
             })
             state.versions = list
             if (state.selectedVersion && !list.includes(state.selectedVersion)) state.selectedVersion = ''
@@ -50,7 +52,7 @@ export function createDshManageActions(state: SettingsState): DshManageActions {
     async function confirmStopDshIfRunning(body: string): Promise<boolean> {
         let running: boolean
         try {
-            running = await window.api.isDshRunning()
+            running = await window.api.get('/dsh/running')
         } catch {
             running = false
         }
@@ -85,7 +87,7 @@ export function createDshManageActions(state: SettingsState): DshManageActions {
         if (!(await confirmStopDshIfRunning(tt('msg.updateStopText')))) return
         state.updatingDsh = true
         try {
-            const r = await window.api.updateDsh({ registry: state.npmRegistry })
+            const r = await window.api.post('/dsh/update', { body: { registry: state.npmRegistry } })
             if (r.ok) {
                 state.version = r.version
                 dshCheck.found = false
@@ -111,10 +113,10 @@ export function createDshManageActions(state: SettingsState): DshManageActions {
         state.switchingDsh = true
         try {
             // 目标版本已在本地安装列表中 → 只切生效指针（不重装）；否则才真正下载安装。
-            const local = await window.api.listInstalledVersions('dsh')
+            const local = await window.api.get('/versions/:kind', { params: { kind: 'dsh' } })
             const r = local.installed.includes(target)
-                ? await window.api.useInstalledVersion('dsh', target)
-                : await window.api.installDsh({ version: target, registry: state.npmRegistry })
+                ? await window.api.put('/versions/:kind/active', { params: { kind: 'dsh' }, body: { version: target } })
+                : await window.api.post('/dsh/install', { body: { version: target, registry: state.npmRegistry } })
             if (r.ok) {
                 state.version = r.version
                 dshCheck.found = false
@@ -146,7 +148,7 @@ export function createDshManageActions(state: SettingsState): DshManageActions {
         }
         state.uninstalling = true
         try {
-            const r = await window.api.uninstallDsh()
+            const r = await window.api.delete('/dsh')
             if (r.ok) {
                 ElMessage.success(tt('msg.uninstallOk'))
             } else {

@@ -2,7 +2,9 @@
 
 For developers who want to understand the internals, fix bugs, or contribute code. The app is an Electron + Vue 3 + TypeScript desktop shell that runs **DeepSeek Harness** (npm package `@deepseek-ai/dsh`, command `dsh`).
 
-> Just want to use the app? See the [User guide](/en/user/).
+::: tip
+Just want to use the app? See the [User guide](/en/user/).
+:::
 
 ## Dive in by topic
 
@@ -25,7 +27,7 @@ For developers who want to understand the internals, fix bugs, or contribute cod
   </a>
   <a class="card" href="/en/dev/ipc">
     <h3>🔌 IPC contract</h3>
-    <p>Channel naming, main groups and the three-place sync for new IPC.</p>
+    <p>REST routes and events, main groups and the two-place sync for a new endpoint.</p>
   </a>
   <a class="card" href="/en/dev/installs">
     <h3>⬇️ Install pipeline</h3>
@@ -55,7 +57,7 @@ For developers who want to understand the internals, fix bugs, or contribute cod
 2. [Architecture](/en/dev/architecture) — the three-process model, startup sequence, lifecycle;
 3. [Main-process modules](/en/dev/modules) — what each module does;
 4. [Renderer](/en/dev/renderer) — Vue structure, state, theme and i18n;
-5. [IPC contract](/en/dev/ipc) — the main ↔ renderer contract and how to add a channel.
+5. [IPC contract](/en/dev/ipc) — the main ↔ renderer REST contract and how to add an endpoint.
 
 ## Repository at a glance
 
@@ -63,4 +65,6 @@ For developers who want to understand the internals, fix bugs, or contribute cod
 - Main process `src/main/`, preload `src/preload/`, renderer `src/renderer/`, shared code and types `src/shared/`.
 - Docs content `docs/`, site logic `.vitepress/config.mts`.
 
-> Per-file line counts and notes live in the workspace index `.dsh/index/` (`README.md` is the entry point; `files.tsv` is greppable).
+::: info
+AI working rules live in `.dsh/README.md`; see its "docs site map" table for navigation.
+:::

@@ -263,7 +263,7 @@ export function launchFromNewTab(url: string, title?: string): WebTab {
 }
 
 /** dsh 就绪后把地址填入 home 标签页（并确保 home 存在）。 */
-export function setHomeUrl(url: string): void {
+export function setHomeUrl(url: string | null): void {
     const home = webTabs.list.find((t) => t.kind === 'home')
     if (home) {
         if (home.url !== url) home.url = url

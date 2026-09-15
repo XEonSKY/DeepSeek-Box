@@ -110,7 +110,7 @@ async function onAddressEnter(): Promise<void> {
             if (typeof wv.loadURL === 'function') await wv.loadURL(raw).catch(() => {})
         } else {
             urlInput.value = nav.url
-            await window.api.openExternal(raw)
+            await window.api.post('/shell/open-external', { body: { url: raw } })
         }
         return
     }
@@ -151,7 +151,7 @@ function startPolling(): void {
             return
         }
         try {
-            const u = await window.api.getDshUrl()
+            const u = await window.api.get('/dsh/url')
             if (u) {
                 setHomeUrl(u)
                 stopPolling()
@@ -179,7 +179,7 @@ watch(
 
 onMounted(async () => {
     try {
-        const s = await window.api.getSettings()
+        const s = await window.api.get('/settings')
         wvApi.setZoom(s.zoomPercent ?? 100)
         defaultEngine = s.searchEngine || 'bing'
     } catch {
@@ -188,13 +188,13 @@ onMounted(async () => {
 
     // dsh:url 只定向发给“核心窗口”，但这里始终订阅：若本窗口稍后被提升为新的核心窗口，
     // 主进程会在提升后补发 dsh:url，让 dsh UI 固定站能及时拿到地址。
-    offUrl = window.api.onDshUrl((u) => {
+    offUrl = window.api.on('dsh:url', (u) => {
         waitTimedOut.value = false // 地址已就绪，清掉可能残留的超时失败态
         setHomeUrl(u)
     })
-    offNewTab = window.api.onNewTab((url) => { openTarget(url) })
-    offReload = window.api.onReloadDsh(() => wvApi.reloadActive())
-    offSettings = window.api.onSettingsChanged((s) => {
+    offNewTab = window.api.on('ui:new-tab', (url) => { openTarget(url) })
+    offReload = window.api.on('ui:reload-dsh', () => wvApi.reloadActive())
+    offSettings = window.api.on('settings:changed', (s) => {
         wvApi.setZoom(s.zoomPercent ?? 100)
         if (s.searchEngine) defaultEngine = s.searchEngine
     })
@@ -204,7 +204,7 @@ onMounted(async () => {
     wvApi.ensureActive()
     syncNavFrom(wvApi.activeWv())
     if (shellMeta.isCore) {
-        const u = await window.api.getDshUrl()
+        const u = await window.api.get('/dsh/url')
         if (u) setHomeUrl(u)
         else startPolling()
     }
@@ -339,7 +339,6 @@ onBeforeUnmount(() => {
   height: 100%;
   width: 0;
   background: var(--el-color-primary);
-  box-shadow: 0 0 6px var(--el-color-primary);
   transition: width 0.18s ease-out;
 }
 .whost__pane {

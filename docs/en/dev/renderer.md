@@ -29,8 +29,8 @@ The creation, keep-alive and drag-migration logic for tabs lives in `shell/tabs.
 
 The bottom status bar is rendered by `components/StatusBar.vue`, right-aligning a group of read-only items:
 
-- **Current provider balance**: once authorized it reads from `models:balance` the balance of the provider behind the current default model, refreshing automatically every 5 minutes while in the foreground and manually on click; before authorization it shows “Click to authorize” and jumps to “Settings → Models”;
-- **App version · dsh version**: the actual versions come from `getAppMeta()` and `getDshVersion()`; clicking opens a popover that calls `checkAllUpdates()`, and the result appears as a small red dot on the version item (a silent notice, no toast). The source of truth is `versionStatus` in `lib/update.ts`.
+- **Current provider balance**: once authorized it reads from `GET /models/balance` the balance of the provider behind the current default model, refreshing automatically every 5 minutes while in the foreground and manually on click; before authorization it shows “Click to authorize” and jumps to “Settings → Models”;
+- **App version · dsh version**: the actual versions come from `GET /app/meta` and `GET /dsh/version`; clicking opens a popover that calls `checkAllUpdates()`, and the result appears as a small red dot on the version item (a silent notice, no toast). The source of truth is `versionStatus` in `lib/update.ts`.
 
 ## Theme and language
 
@@ -40,4 +40,4 @@ The bottom status bar is rendered by `components/StatusBar.vue`, right-aligning 
 
 ## Communicating with the main process
 
-All main-process capabilities are called through `window.api` (exposed by the preload); the type contract is `RendererApi` in `src/shared/types.ts`. New capabilities must be kept in sync in three places, see [IPC contract](/en/dev/ipc).
+All main-process capabilities are called through `window.api` (a REST client exposed by the preload); the contract is `ApiRoutes` in `src/shared/api.ts`: `window.api.get('/settings')`, `window.api.on('settings:changed', …)`. New endpoints are kept in sync in two places, see [IPC contract](/en/dev/ipc).

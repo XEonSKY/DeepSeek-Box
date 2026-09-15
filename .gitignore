@@ -4,7 +4,7 @@
 #
 # ⚠️ 必须入库、切勿加入忽略：package-lock.json、.npmrc、package.json、
 #    tsconfig*.json、electron.vite.config.ts、README.md、LICENSE、
-#    resources/、src/、.github/、.gitignore
+#    resources/、src/、.github/、.vscode/、.gitignore
 # ============================================================
 
 # ---------- 依赖与包管理器 ----------
@@ -60,8 +60,7 @@ coverage/
 *.lcov
 
 # ---------- 编辑器 / IDE ----------
-.vscode/*
-!.vscode/extensions.json
+# .vscode/ 入库（settings.json / tasks.json / extensions.json 团队共享），不再忽略
 .idea/
 *.suo
 *.ntvs*
@@ -98,5 +97,5 @@ temp/
 AGENT.md
 
 # ---------- AI 工作区辅助（本地，不入库） ----------
+# 临时文件也放在 .dsh/temp/ 下，因此不再单列 .temp
 .dsh
-.temp

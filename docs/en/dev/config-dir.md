@@ -33,7 +33,9 @@ The chosen directory is recorded in `<userData>/config-dir` (decoupled from the 
 - Each processed item broadcasts `configdir:migration` progress (a full-screen progress dialog in the renderer, cancellable);
 - Only on success does the current directory point at the new location; **on cancellation `rollbackMoves` moves everything back in reverse order** and pins the old directory.
 
-> If the move fails (e.g. a file is in use), the source files are not deleted, avoiding data loss; see `mergeInto` in `configmigrate.ts`.
+::: info
+If the move fails (e.g. a file is in use), the source files are not deleted, avoiding data loss; see `mergeInto` in `configmigrate.ts`.
+:::
 
 ## Temp directories
 

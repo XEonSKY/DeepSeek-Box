@@ -122,7 +122,7 @@ export function useTabDrag(): TabDragApi {
     function reportHover(next: number | null): void {
         if (next === hoveredId) return
         hoveredId = next
-        window.api.tabDragHover(next)
+        void window.api.patch('/tab-drag', { body: { targetId: next } })
     }
 
     function syncGhost(cx: number, cy: number): void {
@@ -153,7 +153,7 @@ export function useTabDrag(): TabDragApi {
         if (!press || started) return
         const t = targetOf(press.tab)
         if (!t) return
-        const list = await window.api.tabDragBegin(t)
+        const list = await window.api.post('/tab-drag', { body: { target: t } })
         started = true
         others = list ?? []
         hoveredId = null
@@ -170,10 +170,10 @@ export function useTabDrag(): TabDragApi {
         draggingTabId.value = null
         slotBeforeId.value = null
         if (opts.dropTarget != null && id) {
-            window.api.tabDragDropTo(opts.dropTarget) // 移入其它窗口；标签移除由 onTabDragMoved 处理
+            void window.api.post('/tab-drag/drop', { body: { targetId: opts.dropTarget } }) // 移入其它窗口；标签移除由 onTabDragMoved 处理
             return
         }
-        window.api.tabDragEnd() // 本地排序或取消
+        void window.api.delete('/tab-drag') // 本地排序或取消
         press = null
         started = false
         others = []
@@ -251,8 +251,8 @@ export function useTabDrag(): TabDragApi {
     let offHover: (() => void) | null = null
 
     onMounted(() => {
-        offMoved = window.api.onTabDragMoved(onSourceMovedAway)
-        offHover = window.api.onTabDragHover((on) => {
+        offMoved = window.api.on('tab-drag:moved', onSourceMovedAway)
+        offHover = window.api.on('tab-drag-hover', (on) => {
             hoverMask.value = on
         })
     })

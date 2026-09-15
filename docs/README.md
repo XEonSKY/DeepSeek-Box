@@ -10,7 +10,7 @@
 .
 ├─ .vitepress/config.mts   # 站点配置（srcDir: 'docs'，输出 .vitepress/dist）
 └─ docs/
-   ├─ index.md             # 根路径跳转（meta refresh → /zh/）
+   ├─ index.md             # 根路径跳转（meta refresh → /zh/，另附中英入口表作兜底）
    ├─ zh/
    │  ├─ index.md          # 中文首页（hero + 分流到 user / dev）
    │  ├─ user/             # 用户文档：index / download / quickstart / usage / settings / environment / dsh / models / update / faq
@@ -19,6 +19,8 @@
    ├─ public/              # CNAME / .nojekyll / logo.png / home-page.png
    └─ README.md            # 本文件（srcExclude，不发布）
 ```
+
+仓库根的 `README.md` / `README.en.md` 是面向用户的项目说明，中英互为语言版本，不属于站点内容。
 
 ## URL 与链接约定
 

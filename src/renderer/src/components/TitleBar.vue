@@ -48,7 +48,7 @@ function onTabClick(id: string, ev?: MouseEvent): void {
         const tab = findTab(id)
         if (tab?.url) {
             ev.preventDefault()
-            void window.api.openExternal(tab.url)
+            void window.api.post('/shell/open-external', { body: { url: tab.url } })
             return
         }
     }
@@ -103,7 +103,7 @@ async function ctxOpenWindow(): Promise<void> {
     closeCtx()
     if (!tab) return
     const target = tab.kind === 'newtab' ? NEWTAB_URL : tab.url
-    if (target) await window.api.openWebWindow(target)
+    if (target) await window.api.post('/shell/open-url', { body: { url: target } })
 }
 
 /** 移动到其它窗口：弹出目标窗口选择；目标开该标签（含内置导航页），再从本窗口移除；取消则保留。 */
@@ -113,7 +113,7 @@ async function ctxMove(): Promise<void> {
     if (!tab) return
     const target = tab.kind === 'newtab' ? NEWTAB_URL : tab.url
     if (!target) return
-    const moved = await window.api.moveTabToWindow(target)
+    const moved = await window.api.post('/shell/move-tab', { body: { url: target } })
     if (moved) closeTab(tab.id)
     // 「没有其它窗口可接收」时主进程返回 false；不说一声的话就是点了没反应
     else ElMessage.info(tt('app.tabs.moveWindowNoTarget'))
@@ -121,7 +121,7 @@ async function ctxMove(): Promise<void> {
 
 /** 跳转到核心窗口（副窗口用）：经 IPC 聚焦当前核心窗口；无核心则主进程重建一个。 */
 async function jumpToCore(): Promise<void> {
-    await window.api.focusCoreWindow()
+    await window.api.post('/shell/focus-core')
 }
 
 /** 滚轮滚动标签条时改为横向滚动。 */
@@ -136,7 +136,7 @@ function onTabsWheel(e: WheelEvent): void {
 /** ＋ 新建：按设置开内置导航页或自定义 URL。 */
 async function onPlus(): Promise<void> {
     try {
-        const s = await window.api.getSettings()
+        const s = await window.api.get('/settings')
         if (s.newTabMode === 'url' && s.newTabUrl) openTab(s.newTabUrl)
         else openNewTab()
     } catch {
@@ -162,10 +162,10 @@ const fixedPageReload = computed(() => {
     return k === 'home' || k === 'chat' || k === 'platform'
 })
 
-const winMinimize = (): void => window.api.windowMinimize()
-const winMaximize = (): void => window.api.windowToggleMaximize()
-const winClose = (): void => window.api.windowClose()
-const winReload = (): void => window.api.reloadDsh()
+const winMinimize = (): void => void window.api.post('/windows/minimize')
+const winMaximize = (): void => void window.api.post('/windows/maximize-toggle')
+const winClose = (): void => void window.api.post('/windows/close')
+const winReload = (): void => void window.api.post('/dsh/reload')
 
 /**
  * Windows 下改用系统自带的窗口控制字形（Segoe Fluent Icons → Segoe MDL2 Assets → Segoe UI Symbol），
@@ -191,11 +191,11 @@ const glyphStyle = { fontFamily: WIN_GLYPH_STACK }
 
 onMounted(async () => {
     try {
-        maximized.value = await window.api.isWindowMaximized()
+        maximized.value = await window.api.get('/windows/maximized')
     } catch {
     /* 取不到就按未最大化渲染 */
     }
-    offMaximized = window.api.onWindowMaximized((v) => {
+    offMaximized = window.api.on('win:maximized', (v) => {
         maximized.value = v
     })
 })

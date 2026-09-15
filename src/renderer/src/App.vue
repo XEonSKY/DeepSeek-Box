@@ -7,6 +7,7 @@ import TitleBar from './components/TitleBar.vue'
 import StatusBar from './components/StatusBar.vue'
 import { applyAppUpdateEvent, checkAndNotify } from './lib/update'
 import { applyTheme, applyColorScheme } from './lib/theme'
+import { initAppIcon } from './lib/appIcon'
 import { applyExtTranslation, applyLocaleChange, currentLocale, tt } from './lib/locales'
 import { useView, useGoView, useToggleTerminal } from './shell/viewnav'
 import { webTabs, activeTab, activateTab, openTarget, setCoreRole, tabLabel } from './shell/tabs'
@@ -30,7 +31,7 @@ const chromeStyle = `--titlebar-h: ${TITLEBAR_HEIGHT}px; --statusbar-h: ${STATUS
 function pushShellTitle(): void {
     if (shellMeta.isCore) return
     const a = activeTab()
-    window.api.setShellTitle(a ? tabLabel(a) : '')
+    void window.api.put('/shell/title', { body: { title: a ? tabLabel(a) : '' } })
 }
 watch(
     [() => webTabs.activeId, () => activeTab()?.title, () => activeTab()?.kind],
@@ -94,13 +95,13 @@ function onMigrationProgress(p: ConfigMigrationProgress): void {
 /** 重启后若存在迁移计划：显示进度框，并等主进程搬完再继续启动流程。 */
 async function runStartupMigration(): Promise<void> {
     try {
-        const info = await window.api.getConfigDir()
+        const info = await window.api.get('/config-dir')
         if (!info.pending || !shellMeta.isCore) return
         migration.value = info.pending
         const done = new Promise<void>((resolve) => {
             migrationDone = resolve
         })
-        await window.api.runConfigMigration()
+        await window.api.post('/config-dir/migration')
         await done
     } catch {
         migration.value = null
@@ -109,7 +110,7 @@ async function runStartupMigration(): Promise<void> {
 
 /** 用户取消迁移：主进程回滚已搬内容并保持原配置目录。 */
 function cancelMigration(): void {
-    void window.api.cancelConfigMigration()
+    void window.api.delete('/config-dir/migration')
 }
 
 /**
@@ -117,17 +118,19 @@ function cancelMigration(): void {
  */
 async function boot(): Promise<void> {
     await runStartupMigration()
-    const s = await window.api.getSettings()
+    const s = await window.api.get('/settings')
     applyTheme(s.theme)
     applyColorScheme(s.colorScheme)
-    void window.api.setWindowZoom(s.zoomPercent ?? 100)
+    void window.api.put('/windows/zoom', { body: { percent: s.zoomPercent ?? 100 } })
     applyExtTranslation(s.funLocale ?? 'off')
-    const ok = await window.api.isDshInstalled()
+    // 程序图标（自定义 / 预制）：订阅主进程广播并拉取一次当前值，界面 Logo 随设置即时刷新。
+    void initAppIcon()
+    const ok = await window.api.get('/dsh/installed')
     if (!ok) {
         showMissing.value = true // main does not start dsh when it is absent
         // 「默认使用系统浏览器打开 DSH」开启时窗口启动即藏在托盘；dsh 缺失时没有浏览器可开，
         // 必须把窗口拉回来，否则安装向导无处可见。
-        void window.api.focusCoreWindow()
+        void window.api.post('/shell/focus-core')
         return
     }
     if (s.autoCheckUpdate) void checkAndNotify({ prerelease: s.checkPrerelease })
@@ -140,7 +143,7 @@ onMounted(() => {
     // 副窗口若带“开页意图”（创建时主进程给了 URL），挂载后开一个动态标签页承载之。
     if (!shellMeta.isCore) {
         void window.api
-            .takeOpenIntent()
+            .post('/shell/open-intent')
             .then((u) => {
                 if (u) {
                     openTarget(u)
@@ -151,24 +154,24 @@ onMounted(() => {
             .catch(() => {})
     }
     // 角色可能变化（如本窗口接管成为新核心）→ 更新固定标签并回到 dsh UI
-    offCore = window.api.onShellRole((isCore) => {
+    offCore = window.api.on('shell:core', (isCore) => {
         shellMeta.isCore = isCore
         setCoreRole(isCore)
         if (isCore) activateTab('home')
     })
-    offToggle = window.api.onToggleView(onToggle)
-    offMissing = window.api.onDshMissing(() => {
+    offToggle = window.api.on('ui:toggle-view', onToggle)
+    offMissing = window.api.on('dsh:missing', () => {
         showMissing.value = true
-        void window.api.focusCoreWindow() // 同上：确保（可能藏在托盘的）窗口把向导显示出来
+        void window.api.post('/shell/focus-core') // 同上：确保（可能藏在托盘的）窗口把向导显示出来
     })
-    offAppUpdate = window.api.onAppUpdateEvent(onAppUpdateEvent)
-    offMigration = window.api.onConfigMigrationProgress(onMigrationProgress)
+    offAppUpdate = window.api.on('appupdate:event', onAppUpdateEvent)
+    offMigration = window.api.on('configdir:migration', onMigrationProgress)
     // dsh UI 内切换语言 → 外壳跟随（与主题同步同一套机制：语言存在 dsh 的 settings.yaml）
-    offLocale = window.api.onLocaleChanged((l) => {
+    offLocale = window.api.on('settings:locale', (l) => {
         void (async () => {
             if (l === currentLocale()) return
             try {
-                const cur = await window.api.getSettings()
+                const cur = await window.api.get('/settings')
                 applyLocaleChange(l, cur.funLocale ?? 'off')
             } catch {
                 // 设置读不到也不能让界面停在旧语言上

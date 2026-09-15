@@ -1,8 +1,12 @@
 <div align="center">
 
+<img src="docs/public/logo.png" alt="DeepSeek Box" width="112" />
+
 # DeepSeek Box
 
-**把 DeepSeek Harness 装进桌面：双击就能用，不用命令行、不用自己配环境。**
+**把 DeepSeek Harness 装进桌面窗口：双击就能用，不用命令行、不用自己配环境。**
+
+简体中文 · [English](README.en.md)
 
 [![Electron](https://img.shields.io/badge/Electron-^44-47848F?logo=electron&logoColor=white&style=flat-square)](https://www.electronjs.org/)
 [![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white&style=flat-square)](https://vuejs.org/)
@@ -15,24 +19,40 @@
 
 > 上图就是打开后的样子：顶部是浏览器式标签栏，左侧是工作区与会话，中间可以直接对话。
 
+**目录**：[这是什么](#这是什么) · [三步上手](#三步上手) · [功能一览](#功能一览) · [界面速览](#界面速览) · [常见问题](#常见问题) · [从源码运行](#从源码运行) · [相关链接](#相关链接)
+
 ---
 
-## 这是做什么的？
+## 这是什么
 
-dsh（npm 包名 `@deepseek-ai/dsh`）原本是一个需要在命令行里启动、再用浏览器打开的程序。对不熟悉命令行的用户来说，光是「装 Node、装 dsh、记住启动命令」就足够折腾。
+dsh（npm 包名 `@deepseek-ai/dsh`）原本要在命令行里启动、再用浏览器打开。对不熟悉命令行的用户来说，光是「装 Node、装 dsh、记住启动命令」就够折腾了。
 
 **DeepSeek Box 就是它的桌面版入口**：在后台帮你启动 dsh，并把界面直接嵌进一个原生窗口。你只要双击图标，剩下的交给它。
 
-它不替代 dsh，只是把「启动 dsh」这件事变成点一下按钮。
+它**不替代** dsh，只是把「启动 dsh」这件事变成点一下按钮；对话、工作区、会话等数据仍然属于 DeepSeek Harness 本身。
 
-## 三步就能用
+### 名词小抄
+
+不确定下面这些词是什么意思，看这张表：
+
+| 名词 | 白话解释 |
+| --- | --- |
+| **DeepSeek Harness（dsh）** | 真正干活的 AI 程序（`@deepseek-ai/dsh`），相当于「引擎」 |
+| **Node / npm** | 引擎运行需要的零件；本应用可以帮你自动下载，不用自己装 |
+| **配置目录** | 应用存放自己数据的位置，默认 `~/.dsbox/release`（开发版为 `~/.dsbox/dev`） |
+| **工作区** | dsh 读写文件时所在的文件夹 |
+| **全局安装** | 装在整个系统里的 dsh；如果你本来就有，也可以让本应用直接用它 |
+
+---
+
+## 三步上手
 
 ### 第 1 步：下载安装
 
 打开 [Releases](../../releases) 页面，下载对应你系统的安装包：
 
 | 系统 | 下载哪个 |
-|---|---|
+| --- | --- |
 | Windows | `...-win-x64-setup.exe`（ARM 机器选 `arm64`） |
 | macOS | `...-mac-arm64.dmg` 或 `...-mac-x64.dmg` |
 | Linux | `...-linux-x64.AppImage` |
@@ -43,38 +63,24 @@ dsh（npm 包名 `@deepseek-ai/dsh`）原本是一个需要在命令行里启动
 
 第一次打开会自动弹出**安装向导**，一共四步，每步点「执行并下一步」：
 
-| 步骤 | 你会看到 | 拿不准怎么选？ |
-|---|---|---|
-| 1. 镜像源 / 配置目录 | 官方源 / npmmirror 镜像；配置目录可「选择…」或「恢复默认」 | 国内选 **npmmirror**，更快；配置目录保持默认即可 |
+| 步骤 | 你会看到 | 拿不准怎么选 |
+| --- | --- | --- |
+| 1. 镜像源 / 配置目录 | 官方源 / npmmirror 镜像；配置目录可「选择…」或「恢复默认」 | 国内用户选 **npmmirror** 更快；配置目录保持默认即可 |
 | 2. Node 环境 | Electron 自带 / 系统自带 / 本地部署 | 本机没装 Node 就选 **本地部署** 或 **Electron 自带** |
 | 3. npm 环境 | 程序内置 / 系统自带 / 本机 Node 自带 | 选 **程序内置** 最省心 |
-| 4. 安装 DeepSeek Harness | 版本下拉框 + 安装按钮 | 直接用默认版本，点安装 |
+| 4. 安装 DeepSeek Harness | 版本下拉框 + 安装按钮 | 直接用默认版本，点安装即可 |
 
-下载与解压随时可以取消；想装别的版本，在下拉框里挑即可。安装完成后应用会自动启动，看到主界面就成功了。
+下载与解压随时可以取消；想装别的版本，在下拉框里挑就行。安装完成后应用会自动启动，看到主界面就成功了。
 
 ### 第 3 步：开始使用
 
-- 在左侧「工作区」里选择或打开一个文件夹；
-- 点「新会话」，在中间输入框里描述你想做的事；
-- 一切都在本机运行（默认只监听 `127.0.0.1`）。
+1. 在左侧「工作区」里选择或打开一个文件夹；
+2. 点「新会话」，在中间输入框里描述你想做的事；
+3. 一切都在本机运行（默认只监听 `127.0.0.1`）。
 
 ---
 
-## 术语小抄
-
-不确定下面这些词是什么意思的话，看这张表：
-
-| 名词 | 白话解释 |
-|---|---|
-| **DeepSeek Harness（dsh）** | 真正干活的 AI 程序（`@deepseek-ai/dsh`），相当于「引擎」 |
-| **Node / npm** | 引擎运行需要的零件；本应用可以帮你自动下载，不用自己装 |
-| **配置目录** | 应用存放自己数据的位置，默认 `~/.dsbox/release`（开发版为 `~/.dsbox/dev`） |
-| **工作区** | dsh 读写文件时所在的文件夹 |
-| **全局安装** | 装在整个系统里的 dsh；如果你本来就有，也可以让本应用直接用它 |
-
----
-
-## 它能帮你做什么
+## 功能一览
 
 - **一键运行**：自动定位 / 安装 / 启动 / 停止 / 重启 dsh，窗口与它同生共死，退出不残留后台进程。
 - **版本化安装与切换**：Node、npm、dsh 都按版本号分开存放，可并存、可切换、可删除；装错了能退回旧版本，也可在「设置 → 环境 / DeepSeek Harness」里操作。
@@ -95,7 +101,7 @@ dsh（npm 包名 `@deepseek-ai/dsh`）原本是一个需要在命令行里启动
 - **主区域（DeepSeek Harness 界面）**：左侧竖栏是 dsh 标识、「新会话」按钮和「工作区」列表；中间是欢迎语、工作区 / 模式选择、输入框与模型选择；左下角是「设置」。
 - **设置页**以覆盖层打开，覆盖在网页之上，切回来仍是原来的状态；终端也收在设置里，按 `Ctrl/Cmd + T` 可快速切换。
 
-更完整的说明见 [界面与操作](docs/zh/user/usage.md)（[English](docs/en/user/usage.md)）。
+更完整的说明见[界面与操作](docs/zh/user/usage.md)（[English](docs/en/user/usage.md)）。
 
 ---
 
@@ -143,9 +149,11 @@ dsh（npm 包名 `@deepseek-ai/dsh`）原本是一个需要在命令行里启动
 
 </details>
 
+更多问题见[常见问题文档](docs/zh/user/faq.md)（[English](docs/en/user/faq.md)）。
+
 ---
 
-## 从源码运行（进阶，可跳过）
+## 从源码运行
 
 适合想自己改代码的人，需要 Node ≥ 20：
 
@@ -158,12 +166,15 @@ npm run dev
 
 常用命令：`npm run typecheck`、`npm run lint`、`npm run build`、`npm run docs:dev`。
 
+更多细节见[开发文档](docs/zh/dev/)（[English](docs/en/dev/)）。
+
 ---
 
-## 更多
+## 相关链接
 
 - 在线文档：[简体中文](https://dsbox.xeonsky.com/zh/) · [English](https://dsbox.xeonsky.com/en/)
 - 文档源码：用户文档 [`docs/zh/user/`](docs/zh/user/) · 开发文档 [`docs/zh/dev/`](docs/zh/dev/)（英文见 `docs/en/`）
+- 下载：[最新发行版](../../releases/latest) · [最新预发行版](../../releases)
 - 遇到问题：[Issues](../../issues)
 
 ---

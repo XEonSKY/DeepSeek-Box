@@ -6,7 +6,7 @@
 
 Node、npm 与 DeepSeek Harness 都按版本分开存放，多版本并存：
 
-```text
+```text [配置目录布局]
 <配置目录>/
 ├─ node/<版本>/           Node 运行时（含自带的 npm）
 ├─ npm/<版本>/package/    应用代管的内置 npm
@@ -24,7 +24,9 @@ Node、npm 与 DeepSeek Harness 都按版本分开存放，多版本并存：
 | `listInstalled` / `prepareVersionDir` / `removeVersion` | 列表 / 准备 / 删除 |
 | `migrateLegacyInstalls` | 把旧的平铺目录迁进版本目录 |
 
-> **完整性很关键**：搬迁时被占用的文件（典型是正在运行的 `node.exe`）可能没搬进来。残缺目录一律当作不存在，读取侧会回退到平铺旧布局；`moveFlatInto` 也会在关键文件未落位时拒绝写 `.active`。
+::: warning 完整性很关键
+搬迁时被占用的文件（典型是正在运行的 `node.exe`）可能没搬进来。残缺目录一律当作不存在，读取侧会回退到平铺旧布局；`moveFlatInto` 也会在关键文件未落位时拒绝写 `.active`。
+:::
 
 ## 下载器（多线程）
 
@@ -39,7 +41,7 @@ Node、npm 与 DeepSeek Harness 都按版本分开存放，多版本并存：
 
 `main/dsh/cancel.ts` 提供单活动令牌：`beginCancelable()` / `cancelActive()` / `CANCELED_MESSAGE`。
 
-下载与解压都挂到该令牌上；IPC `install:cancel` 触发。取消后清理临时文件并返回 `{ ok:false, canceled:true }`，渲染层不把它当错误。
+下载与解压都挂到该令牌上；路由 `POST /installs/cancel` 触发。取消后清理临时文件并返回 `{ ok:false, canceled:true }`，渲染层不把它当错误。
 
 ## 解压阶段
 

@@ -20,8 +20,8 @@
 
 ## 事件与 IPC
 
-- 事件：`appupdate:*`（下载进度、就绪、错误）；
-- IPC：`appupdate:check` / `appupdate:trigger` / `appupdate:slots` / `appupdate:rollback`。
+- 事件（主 → 渲染）：`appupdate:event`（检查中 / 可用 / 下载进度 / 下载完成 / 回退 / 错误）；
+- 路由：`POST /app/update/check`（检查并后台下载）、`GET /app/update/state`（最近一次状态）、`GET /app/update/slots`（版本槽）、`POST /app/update/rollback`（回退）、`POST /app/update/restart`（重启并安装）。
 
 ## 与 DeepSeek Harness 更新的区别
 

@@ -24,11 +24,13 @@
 | `npm run docs:dev` | 文档站本地预览 |
 | `npm run docs:build` | 构建文档站到 `.vitepress/dist` |
 
-> 本仓库没有测试套件，验证主要靠 `typecheck` / `lint` / `build`。
+::: info
+本仓库没有测试套件，验证主要靠 `typecheck` / `lint` / `build`。
+:::
 
 ## 目录结构
 
-```text
+```text [项目结构]
 .
 ├─ src/
 │  ├─ main/            主进程（窗口、DeepSeek Harness、配置、更新）

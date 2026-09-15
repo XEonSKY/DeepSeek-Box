@@ -86,9 +86,9 @@ onMounted(async () => {
     ro = new ResizeObserver(ensureFit)
     if (host.value) ro.observe(host.value)
 
-    const history = await window.api.getLogHistory()
+    const history = await window.api.get('/logs')
     for (const entry of history) write(entry.k, entry.s)
-    offLog = window.api.onLog((entry) => write(entry.k, entry.s))
+    offLog = window.api.on('dsh:log', (entry) => write(entry.k, entry.s))
 })
 
 onBeforeUnmount(() => {

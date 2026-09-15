@@ -19,7 +19,7 @@ type DshActions = {
 export function createDshActions(state: SettingsState): DshActions {
     async function loadVersion(): Promise<void> {
         try {
-            state.version = await window.api.getDshVersion()
+            state.version = await window.api.get('/dsh/version')
         } catch {
             state.version = null
         }
@@ -28,7 +28,7 @@ export function createDshActions(state: SettingsState): DshActions {
     /** 刷新 dsh 运行状态。 */
     async function refreshRunning(): Promise<void> {
         try {
-            state.dshRunning = await window.api.isDshRunning()
+            state.dshRunning = await window.api.get('/dsh/running')
         } catch {
             state.dshRunning = false
         }
@@ -37,7 +37,7 @@ export function createDshActions(state: SettingsState): DshActions {
     /** 启动 dsh（未运行时拉起来）。 */
     async function startDsh(): Promise<void> {
         try {
-            await window.api.startDsh()
+            await window.api.post('/dsh/start')
         } catch (err) {
             ElMessage.error(err instanceof Error ? err.message : String(err))
         } finally {
@@ -48,7 +48,7 @@ export function createDshActions(state: SettingsState): DshActions {
     /** 停止 dsh。 */
     async function stopDsh(): Promise<void> {
         try {
-            await window.api.stopDsh()
+            await window.api.post('/dsh/stop')
         } catch (err) {
             ElMessage.error(err instanceof Error ? err.message : String(err))
         } finally {
@@ -59,7 +59,7 @@ export function createDshActions(state: SettingsState): DshActions {
     /** 用当前配置重启 dsh。 */
     async function restartDsh(): Promise<void> {
         try {
-            await window.api.restartDsh()
+            await window.api.post('/dsh/restart')
         } catch (err) {
             ElMessage.error(err instanceof Error ? err.message : String(err))
         } finally {

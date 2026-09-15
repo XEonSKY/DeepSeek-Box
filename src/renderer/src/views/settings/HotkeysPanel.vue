@@ -40,11 +40,11 @@ const open = ref(['hotkeys'])
 
 onMounted(async () => {
     window.addEventListener('keydown', onKeydown, true)
-    offState = window.api.onHotkeyState((s) => {
+    offState = window.api.on('hotkey:state', (s) => {
         globalState.value = s
     })
     try {
-        globalState.value = await window.api.getHotkeyState()
+        globalState.value = await window.api.get('/hotkeys/state')
     } catch {
         globalState.value = null
     }

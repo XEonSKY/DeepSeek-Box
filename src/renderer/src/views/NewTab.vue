@@ -30,7 +30,7 @@ const fixedSites = [
 onMounted(async () => {
     void nextTick(() => inputRef.value?.focus?.())
     try {
-        const s = await window.api.getSettings()
+        const s = await window.api.get('/settings')
         engine.value = s.searchEngine || 'bing'
         shortcuts.value = Array.isArray(s.shortcuts) ? s.shortcuts : []
     } catch {
@@ -71,7 +71,7 @@ async function submit(): Promise<void> {
     if (scheme) {
         const proto = scheme[1].toLowerCase()
         if (proto === 'http' || proto === 'https') openUrl(s)
-        else await window.api.openExternal(s) // 扩展/非内置协议交给系统
+        else await window.api.post('/shell/open-external', { body: { url: s } }) // 扩展/非内置协议交给系统
         return
     }
     if (/^[\w.-]+\.[a-zA-Z]{2,}$/.test(s)) {

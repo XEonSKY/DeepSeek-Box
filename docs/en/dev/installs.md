@@ -6,7 +6,7 @@ This page describes the download and installation of DeepSeek Harness, Node and 
 
 Node, npm and DeepSeek Harness are all stored per version, with multiple versions coexisting:
 
-```text
+```text [Config directory layout]
 <config-dir>/
 ├─ node/<version>/        Node runtime (with bundled npm)
 ├─ npm/<version>/package/ App-managed bundled npm
@@ -24,7 +24,9 @@ Each root directory's `.active` records the currently active version. The core A
 | `listInstalled` / `prepareVersionDir` / `removeVersion` | List / prepare / remove |
 | `migrateLegacyInstalls` | Migrate the old flat directories into versioned directories |
 
-> **Completeness matters**: files that were occupied during the move (typically a running `node.exe`) may not have been migrated. An incomplete directory is treated as nonexistent, and the read side falls back to the old flat layout; `moveFlatInto` also refuses to write `.active` when the key files are not in place.
+::: warning Completeness matters
+Files that were occupied during the move (typically a running `node.exe`) may not have been migrated. An incomplete directory is treated as nonexistent, and the read side falls back to the old flat layout; `moveFlatInto` also refuses to write `.active` when the key files are not in place.
+:::
 
 ## Downloader (multi-threaded)
 
@@ -39,7 +41,7 @@ Each root directory's `.active` records the currently active version. The core A
 
 `main/dsh/cancel.ts` provides a single active token: `beginCancelable()` / `cancelActive()` / `CANCELED_MESSAGE`.
 
-Both download and extraction are bound to that token; the IPC `install:cancel` triggers it. After cancellation the temp files are cleaned up and `{ ok:false, canceled:true }` is returned; the renderer does not treat it as an error.
+Both download and extraction are bound to that token; the route `POST /installs/cancel` triggers it. After cancellation the temp files are cleaned up and `{ ok:false, canceled:true }` is returned; the renderer does not treat it as an error.
 
 ## Extraction phase
 

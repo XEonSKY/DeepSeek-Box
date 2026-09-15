@@ -41,7 +41,7 @@ const loading = ref(false)
 onMounted(async () => {
     loading.value = true
     try {
-        const s = await window.api.getSettings()
+        const s = await window.api.get('/settings')
         actions.fillFrom(s)
     } finally {
         loading.value = false

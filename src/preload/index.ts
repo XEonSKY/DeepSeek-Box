@@ -1,26 +1,59 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppUpdateEvent, ConfigMigrationProgress, HotkeyState, LocaleCode, LogEntry, NodeDeployProgress, RendererApi, Settings, Theme } from '@shared/types'
+import { IPC_EVENT_CHANNEL, IPC_REQUEST_CHANNEL } from '@shared/api'
+import type { AppEvents, HttpMethod, IpcEvent, IpcRequest, RendererApi } from '@shared/api'
 
 /**
- * 订阅一个 main → renderer 频道，返回退订函数。
+ * 渲染层看到的 IPC 客户端：一个 REST 风格的门面。
  *
- * `RendererApi` 里的所有 `onXxx` 都是「注册监听 + 返回 removeListener」这同一套样板，
- * 之前每处都逐字重复一遍；这里收敛为唯一实现，新增频道只需一行。
+ * 每次调用都被打包成 `{ method, path, query?, body? }` 的请求信封，经唯一通道
+ * `ipc:request` 发给主进程的路由表；主进程推送则经 `ipc:event` 回来，按事件名分发。
+ *
+ * ```ts
+ * window.api.get('/settings')
+ * window.api.put('/settings', { body: settings })
+ * window.api.get('/versions/:kind', { params: { kind: 'node' } })
+ * const off = window.api.on('settings:changed', (s) => { ... })
+ * ```
  */
-function subscribe<T>(channel: string, cb: (payload: T) => void): () => void {
-    const listener = (_e: unknown, payload: T): void => cb(payload)
-    ipcRenderer.on(channel, listener)
-    return () => ipcRenderer.removeListener(channel, listener)
+
+/** 路径模板里的 `:name` 占位符。 */
+const PARAM_PATTERN = /:([A-Za-z0-9_]+)/g
+
+/** 请求可选项：路径参数 / 查询参数 / 请求体。 */
+interface RequestOptions {
+    params?: Record<string, string>
+    query?: Record<string, unknown>
+    body?: unknown
 }
 
-/** 无载荷（仅通知）频道的订阅。 */
-function subscribeVoid(channel: string, cb: () => void): () => void {
-    const listener = (): void => cb()
-    ipcRenderer.on(channel, listener)
-    return () => ipcRenderer.removeListener(channel, listener)
+/** 把路径模板里的 `:name` 替换成 URL 编码后的实参（`user/a.png` → `user%2Fa.png`）。 */
+function buildPath(template: string, params?: Record<string, string>): string {
+    if (!params) return template
+    return template.replace(PARAM_PATTERN, (raw, name: string) => {
+        const value = params[name]
+        return value === undefined ? raw : encodeURIComponent(value)
+    })
 }
 
-const api: RendererApi = {
+/** 统一发一次请求。 */
+function request(method: HttpMethod, template: string, options?: RequestOptions): Promise<unknown> {
+    const envelope: IpcRequest = { method, path: buildPath(template, options?.params) }
+    if (options?.query) envelope.query = options.query
+    if (options && 'body' in options) envelope.body = options.body
+    return ipcRenderer.invoke(IPC_REQUEST_CHANNEL, envelope)
+}
+
+/** 订阅一个主进程事件，返回退订函数。 */
+function on<Event extends keyof AppEvents>(event: Event, callback: (payload: AppEvents[Event]) => void): () => void {
+    const listener = (_e: unknown, envelope: IpcEvent): void => {
+        if (envelope && envelope.event === event) callback(envelope.payload as AppEvents[Event])
+    }
+    ipcRenderer.on(IPC_EVENT_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(IPC_EVENT_CHANNEL, listener)
+}
+
+const api = {
+    // 本地常量：无需 IPC，直接从 preload 的进程信息里读。
     platform: process.platform,
     versions: {
         electron: process.versions.electron,
@@ -28,98 +61,15 @@ const api: RendererApi = {
         chrome: process.versions.chrome
     },
 
-    getSettings: () => ipcRenderer.invoke('settings:get'),
-    getUiLocale: () => ipcRenderer.invoke('i18n:get'),
-    setUiLocale: (locale) => ipcRenderer.invoke('i18n:set', locale),
-    saveSettings: (s) => ipcRenderer.invoke('settings:save', s),
-    applySettings: () => ipcRenderer.invoke('settings:apply'),
-    resetSettings: () => ipcRenderer.invoke('settings:reset'),
-    getLogHistory: () => ipcRenderer.invoke('log:history'),
-    getDshUrl: () => ipcRenderer.invoke('dsh:url:get'),
-    isDshRunning: () => ipcRenderer.invoke('dsh:running'),
-    startDsh: () => ipcRenderer.invoke('dsh:start'),
-    stopDsh: () => ipcRenderer.invoke('dsh:stop'),
-    restartDsh: () => ipcRenderer.invoke('dsh:restart'),
-    setWindowZoom: (percent) => ipcRenderer.invoke('zoom:set', percent),
-    relaunch: () => ipcRenderer.send('app:relaunch'),
-    getDshVersion: () => ipcRenderer.invoke('dsh:version'),
-    isDshInstalled: () => ipcRenderer.invoke('dsh:installed'),
-    listVersions: (opts) => ipcRenderer.invoke('dsh:versions', opts),
-    checkForUpdates: (opts) => ipcRenderer.invoke('update:check', opts),
-    getAppMeta: () => ipcRenderer.invoke('appupdate:meta'),
-    getAppUpdateState: () => ipcRenderer.invoke('appupdate:state'),
-    triggerAppUpdate: (opts) => ipcRenderer.invoke('appupdate:trigger', opts),
-    restartAndInstall: () => ipcRenderer.send('appupdate:restart'),
-    getAppSlots: () => ipcRenderer.invoke('appupdate:slots'),
-    rollbackAppUpdate: () => ipcRenderer.invoke('appupdate:rollback'),
-    updateDsh: (opts) => ipcRenderer.invoke('dsh:update', opts),
-    installDsh: (opts) => ipcRenderer.invoke('dsh:install', opts),
-    uninstallDsh: () => ipcRenderer.invoke('dsh:uninstall'),
+    // ---- REST 客户端 ----
+    get: (path: string, options?: RequestOptions) => request('GET', path, options),
+    post: (path: string, options?: RequestOptions) => request('POST', path, options),
+    put: (path: string, options?: RequestOptions) => request('PUT', path, options),
+    patch: (path: string, options?: RequestOptions) => request('PATCH', path, options),
+    delete: (path: string, options?: RequestOptions) => request('DELETE', path, options),
 
-    // ---- main → renderer 订阅 ----
-    onAppUpdateEvent: (cb) => subscribe<AppUpdateEvent>('appupdate:event', cb),
-    onNodeDeployProgress: (cb) => subscribe<NodeDeployProgress>('nodeenv:deploy-progress', cb),
-    onNpmDeployProgress: (cb) => subscribe<NodeDeployProgress>('npmenv:progress', cb),
-    onConfigMigrationProgress: (cb) => subscribe<ConfigMigrationProgress>('configdir:migration', cb),
-    onDshUrl: (cb) => subscribe<string>('dsh:url', cb),
-    onLog: (cb) => subscribe<LogEntry>('dsh:log', cb),
-    onSettingsChanged: (cb) => subscribe<Settings>('settings:changed', cb),
-    onThemeChanged: (cb) => subscribe<Theme>('settings:theme', cb),
-    onLocaleChanged: (cb) => subscribe<LocaleCode>('settings:locale', cb),
-    onNewTab: (cb) => subscribe<string>('ui:new-tab', cb),
-    onShellRole: (cb) => subscribe<boolean>('shell:core', cb),
-    onTabDragHover: (cb) => subscribe<boolean>('tab-drag-hover', (on) => cb(!!on)),
-    onToggleView: (cb) => subscribeVoid('ui:toggle-view', cb),
-    onDshMissing: (cb) => subscribeVoid('dsh:missing', cb),
-    onReloadDsh: (cb) => subscribeVoid('ui:reload-dsh', cb),
-    onTabDragMoved: (cb) => subscribeVoid('tab-drag:moved', cb),
-    onWindowMaximized: (cb) => subscribe<boolean>('win:maximized', (on) => cb(!!on)),
-    onHotkeyState: (cb) => subscribe<HotkeyState>('hotkey:state', cb),
-
-    reloadDsh: () => ipcRenderer.send('web:reload'),
-
-    openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
-    openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
-    openFile: () => ipcRenderer.invoke('dialog:openFile'),
-    probeEnv: () => ipcRenderer.invoke('env:probe'),
-    getNodeStatus: () => ipcRenderer.invoke('nodeenv:status'),
-    listNodeVersions: (opts) => ipcRenderer.invoke('nodeenv:versions', opts),
-    deployLocalNode: (opts) => ipcRenderer.invoke('nodeenv:deploy', opts),
-    getNpmStatus: () => ipcRenderer.invoke('npmenv:status'),
-    listNpmVersions: (opts) => ipcRenderer.invoke('npmenv:versions', opts),
-    updateNpm: (opts) => ipcRenderer.invoke('npmenv:update', opts),
-    ensureBundledNpm: (opts) => ipcRenderer.invoke('npmenv:ensure', opts),
-    cancelInstall: () => ipcRenderer.invoke('install:cancel'),
-    listInstalledVersions: (kind) => ipcRenderer.invoke('versions:list', kind),
-    useInstalledVersion: (kind, version) => ipcRenderer.invoke('versions:use', kind, version),
-    removeInstalledVersion: (kind, version) => ipcRenderer.invoke('versions:remove', kind, version),
-    getHotkeyState: () => ipcRenderer.invoke('hotkey:state'),
-    getWebviewInfo: () => ipcRenderer.invoke('webview:info'),
-    getModelsInfo: () => ipcRenderer.invoke('models:info'),
-    getCurrentBalance: () => ipcRenderer.invoke('models:balance'),
-    getConfigDir: () => ipcRenderer.invoke('configdir:get'),
-    setConfigDir: (dir) => ipcRenderer.invoke('configdir:set', dir),
-    revertConfigDir: () => ipcRenderer.invoke('configdir:revert'),
-    runConfigMigration: () => ipcRenderer.invoke('configdir:migrate-run'),
-    cancelConfigMigration: () => ipcRenderer.invoke('configdir:migrate-cancel'),
-    getShellMeta: () => ipcRenderer.invoke('shell:meta'),
-    openWebWindow: (url) => ipcRenderer.invoke('shell:open-url', url),
-    focusCoreWindow: () => ipcRenderer.invoke('shell:focus-core'),
-    takeOpenIntent: () => ipcRenderer.invoke('shell:take-open-intent'),
-    setShellTitle: (title) => ipcRenderer.send('shell:set-title', title),
-    moveTabToWindow: (url) => ipcRenderer.invoke('shell:move-tab', url),
-
-    tabDragBegin: (target) => ipcRenderer.invoke('tab-drag:begin', { target }),
-    tabDragHover: (targetId) => ipcRenderer.send('tab-drag:hover', { targetId }),
-    tabDragEnd: () => ipcRenderer.send('tab-drag:end'),
-    tabDragDropTo: (targetId) => ipcRenderer.send('tab-drag:drop-to', { targetId }),
-
-    quit: () => ipcRenderer.send('app:quit'),
-
-    windowMinimize: () => ipcRenderer.send('win:minimize'),
-    windowToggleMaximize: () => ipcRenderer.send('win:maximize-toggle'),
-    windowClose: () => ipcRenderer.send('win:close'),
-    isWindowMaximized: () => ipcRenderer.invoke('win:is-maximized')
-}
+    // ---- 主进程 → 渲染层事件订阅 ----
+    on
+} as unknown as RendererApi
 
 contextBridge.exposeInMainWorld('api', api)

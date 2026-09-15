@@ -21,7 +21,9 @@ Running DeepSeek Harness requires **Node ≥ 20**; selecting an older major vers
 - The “Installed versions” list below shows all versions; you can **switch** the active version (changes only the pointer, no reinstall) or **delete** one;
 - If dsh is currently running on the version you want to overwrite, you are prompted to stop it first.
 
-> “Latest LTS” is taken from the nodejs.org release index and cached by the main process for 10 minutes; when offline or when the proxy is unreachable it shows “Unable to get the latest version”.
+::: info
+“Latest LTS” is taken from the nodejs.org release index and cached by the main process for 10 minutes; when offline or when the proxy is unreachable it shows “Unable to get the latest version”.
+:::
 
 ## npm source: three sources
 

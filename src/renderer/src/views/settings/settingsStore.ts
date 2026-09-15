@@ -71,6 +71,8 @@ export interface SettingsState {
     webviewUserAgent: string
     /** 配色方案 id（预制方案见 lib/theme.ts）。 */
     colorScheme: ColorSchemeId
+    /** 程序图标 id：'' = 内置 Logo；'diy/<文件>' 预制；'user/<文件>' 用户上传。 */
+    appIcon: string
     /** 「设置 → 模型」是否已同意读取本地凭据文件。 */
     modelsCredConsent: boolean
     /** dsh 是否正在运行（仅 UI，不持久化）。 */
@@ -146,6 +148,7 @@ export function payloadFrom(state: SettingsState): Settings {
         openDshInBrowser: state.openDshInBrowser,
         webviewUserAgent: state.webviewUserAgent,
         colorScheme: state.colorScheme,
+        appIcon: state.appIcon,
         modelsCredConsent: state.modelsCredConsent
     }
 }

@@ -32,12 +32,12 @@ async function onGpuAccel(v: boolean): Promise<void> {
     }
     state.hardwareAcceleration = v
     try {
-        const cur = await window.api.getSettings()
-        await window.api.saveSettings({ ...cur, hardwareAcceleration: v })
+        const cur = await window.api.get('/settings')
+        await window.api.put('/settings', { body: { ...cur, hardwareAcceleration: v } })
     } catch {
         /* 忽略：重启后仍会按内存里的设置走 */
     }
-    window.api.relaunch()
+    void window.api.post('/app/relaunch')
 }
 </script>
 

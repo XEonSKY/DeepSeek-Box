@@ -20,8 +20,8 @@ Decided per platform: on Windows / macOS the application directory, on Linux the
 
 ## Events and IPC
 
-- Events: `appupdate:*` (download progress, ready, errors);
-- IPC: `appupdate:check` / `appupdate:trigger` / `appupdate:slots` / `appupdate:rollback`.
+- Events (main → renderer): `appupdate:event` (checking / available / download progress / downloaded / rollback / error);
+- Routes: `POST /app/update/check` (check and download in the background), `GET /app/update/state` (latest state), `GET /app/update/slots` (version slots), `POST /app/update/rollback` (roll back), `POST /app/update/restart` (restart and install).
 
 ## Difference from DeepSeek Harness updates
 

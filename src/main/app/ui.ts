@@ -24,6 +24,7 @@ import {
 } from './runtime'
 import { registerShellWindow, hasCoreWindow, promoteNextToCore, windowByContentsId, listWindows } from './windowreg'
 import { attachContextMenu } from './contextmenu'
+import { effectiveIconPath } from './appicon'
 
 function rendererIndex(): string {
     const devUrl = process.env['ELECTRON_RENDERER_URL']
@@ -32,17 +33,15 @@ function rendererIndex(): string {
 }
 
 /**
- * 应用图标路径：深色模式下优先 `resources/icon-dark.png`，否则 `resources/icon.png`。
+ * 应用图标路径：用户在「设置 → 外观 → 程序图标」里选定的自定义 / 预制图标优先（见 appicon.ts），
+ * 未自定义时回退内置 Logo —— 深色模式下优先 `resources/icon-dark.png`，否则 `resources/icon.png`。
  *
  * main 侧的 `nativeTheme.shouldUseDarkColors` 即是**已解析**的明暗：外壳主题经
  * `syncNativeTheme()` 写入 `nativeTheme.themeSource`，故 `theme: 'system'` 也会跟随系统。
  * 缺文件时回退到浅色图标，避免设置成空图标。
  */
 function appIconPath(): string {
-    const dir = path.join(app.getAppPath(), 'resources')
-    const dark = path.join(dir, 'icon-dark.png')
-    if (nativeTheme.shouldUseDarkColors && fs.existsSync(dark)) return dark
-    return path.join(dir, 'icon.png')
+    return effectiveIconPath(loadSettings().appIcon)
 }
 
 /** 当前应用图标（路径不存在时返回 undefined，交由调用方决定回退）。 */

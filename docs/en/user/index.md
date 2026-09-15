@@ -2,7 +2,9 @@
 
 DeepSeek Box puts **DeepSeek Harness** (npm package `@deepseek-ai/dsh`, command `dsh`) into a desktop window: double-click to launch, no command line, no manual environment setup. This section is for **everyday users**.
 
-> To modify the code or learn about the internals, see the [Developer guide](/en/dev/).
+::: tip
+To modify the code or learn about the internals, see the [Developer guide](/en/dev/).
+:::
 
 ## Browse by task
 

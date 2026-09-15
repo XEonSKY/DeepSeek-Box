@@ -26,7 +26,7 @@ const cfgPendingTo = computed(() => cfg.value?.pending?.to ?? '')
 
 async function refreshConfigDir(): Promise<void> {
     try {
-        cfg.value = await window.api.getConfigDir()
+        cfg.value = await window.api.get('/config-dir')
     } catch {
         /* 读不到就留空 */
     }
@@ -52,30 +52,30 @@ async function applyConfigDir(next: ConfigDirInfo, wanted: string): Promise<void
         // 保留更改：真正的迁移等到下次重启的引导阶段执行
         ElMessage.info(t('sv.general.configDirWillMigrate', { to: next.pending.to }))
     } catch {
-        cfg.value = await window.api.revertConfigDir()
+        cfg.value = await window.api.post('/config-dir/revert')
         ElMessage.info(t('sv.general.configDirReverted'))
     }
 }
 
 async function changeConfigDir(): Promise<void> {
-    const picked = await window.api.openDirectory()
+    const picked = await window.api.post('/dialog/directory')
     if (!picked) return
-    await applyConfigDir(await window.api.setConfigDir(picked), picked)
+    await applyConfigDir(await window.api.put('/config-dir', { body: { dir: picked } }), picked)
 }
 
 async function resetConfigDir(): Promise<void> {
-    const next = await window.api.setConfigDir(null)
+    const next = await window.api.put('/config-dir', { body: { dir: null } })
     await applyConfigDir(next, next.default)
 }
 
 /** 立即重启，触发已登记的迁移。 */
 function restartNow(): void {
-    window.api.relaunch()
+    void window.api.post('/app/relaunch')
 }
 
 /** 撤销尚未执行的迁移（继续停留在原目录）。 */
 async function cancelPendingMigration(): Promise<void> {
-    cfg.value = await window.api.revertConfigDir()
+    cfg.value = await window.api.post('/config-dir/revert')
     ElMessage.info(t('sv.general.configDirReverted'))
 }
 </script>

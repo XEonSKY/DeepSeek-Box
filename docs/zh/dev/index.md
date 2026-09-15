@@ -2,7 +2,9 @@
 
 面向想理解内部实现、修 bug 或贡献代码的开发者。应用是 Electron + Vue 3 + TypeScript 的桌面外壳，运行 **DeepSeek Harness**（npm 包 `@deepseek-ai/dsh`，命令 `dsh`）。
 
-> 只想把应用用起来？请看[用户文档](/zh/user/)。
+::: tip
+只想把应用用起来？请看[用户文档](/zh/user/)。
+:::
 
 ## 按主题深入
 
@@ -25,7 +27,7 @@
   </a>
   <a class="card" href="/zh/dev/ipc">
     <h3>🔌 IPC 契约</h3>
-    <p>通道命名、主要分组与新增 IPC 的三处同步。</p>
+    <p>REST 路由与事件、主要分组与新增端点的两处同步。</p>
   </a>
   <a class="card" href="/zh/dev/installs">
     <h3>⬇️ 安装链路</h3>
@@ -55,7 +57,7 @@
 2. [架构总览](/zh/dev/architecture) —— 三进程模型、启动流程、生命周期；
 3. [主进程模块](/zh/dev/modules) —— 每个模块负责什么；
 4. [渲染进程](/zh/dev/renderer) —— Vue 结构、状态、主题与 i18n；
-5. [IPC 契约](/zh/dev/ipc) —— main ↔ renderer 的约定与新增流程。
+5. [IPC 契约](/zh/dev/ipc) —— main ↔ renderer 的 REST 契约与新增流程。
 
 ## 仓库速览
 
@@ -63,4 +65,6 @@
 - 主进程源码 `src/main/`，预加载 `src/preload/`，渲染层 `src/renderer/`，共享代码与类型 `src/shared/`。
 - 文档站内容 `docs/`，逻辑 `.vitepress/config.mts`。
 
-> 具体每个文件的行数 / 说明，见工作区索引 `.dsh/index/`（`README.md` 为总入口，`files.tsv` 可 grep）。
+::: info
+AI 工作规则见 `.dsh/README.md`；文档站导航见其中的「文档站导航」表。
+:::

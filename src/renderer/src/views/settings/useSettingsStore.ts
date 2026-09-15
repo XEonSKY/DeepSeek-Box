@@ -53,6 +53,7 @@ export const useSettingsStore = defineStore('settings', () => {
         openDshInBrowser: DEFAULT_SETTINGS.openDshInBrowser,
         webviewUserAgent: DEFAULT_SETTINGS.webviewUserAgent,
         colorScheme: DEFAULT_SETTINGS.colorScheme,
+        appIcon: DEFAULT_SETTINGS.appIcon,
         modelsCredConsent: DEFAULT_SETTINGS.modelsCredConsent,
         dshRunning: false,
         applying: false,
@@ -104,6 +105,7 @@ export const useSettingsStore = defineStore('settings', () => {
         state.openDshInBrowser = s.openDshInBrowser === true
         state.webviewUserAgent = s.webviewUserAgent ?? DEFAULT_SETTINGS.webviewUserAgent
         state.colorScheme = s.colorScheme ?? DEFAULT_SETTINGS.colorScheme
+        state.appIcon = s.appIcon ?? DEFAULT_SETTINGS.appIcon
         state.modelsCredConsent = s.modelsCredConsent === true
         if (typeof s.port === 'number' && s.port > 0) {
             state.portMode = 'manual'
@@ -127,7 +129,7 @@ export const useSettingsStore = defineStore('settings', () => {
     async function persist(): Promise<void> {
         try {
             lastSaveAt = Date.now()
-            await window.api.saveSettings(payloadFrom(state))
+            await window.api.put('/settings', { body: payloadFrom(state) })
         } catch (err) {
             ElMessage.error(tt('msg.saveFail', { err: err instanceof Error ? err.message : String(err) }))
         }
@@ -138,7 +140,7 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     async function browseWorkspace(): Promise<void> {
-        const p = await window.api.openDirectory()
+        const p = await window.api.post('/dialog/directory')
         if (p) {
             state.workspace = p
         }
@@ -146,7 +148,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
     /** 全局模式下选择 dsh 启动器文件（dshBin）。 */
     async function browseDshBin(): Promise<void> {
-        const p = await window.api.openFile()
+        const p = await window.api.post('/dialog/file')
         if (p) state.dshBin = p
     }
 
@@ -157,8 +159,8 @@ export const useSettingsStore = defineStore('settings', () => {
                 window.clearTimeout(debounce)
                 debounce = undefined
             }
-            await window.api.saveSettings(payloadFrom(state))
-            await window.api.applySettings()
+            await window.api.put('/settings', { body: payloadFrom(state) })
+            await window.api.post('/settings/apply')
             ElMessage.success(tt('msg.applyOk'))
         } catch (err) {
             ElMessage.error(tt('msg.applyFail', { err: err instanceof Error ? err.message : String(err) }))
@@ -169,10 +171,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
     async function resetAll(): Promise<void> {
         try {
-            const d = await window.api.resetSettings()
+            const d = await window.api.post('/settings/reset')
             fillFrom(d)
             applyTheme(d.theme)
-            await window.api.applySettings()
+            await window.api.post('/settings/apply')
             ElMessage.success(tt('msg.resetOk'))
         } catch (err) {
             ElMessage.error(tt('msg.resetFail', { err: err instanceof Error ? err.message : String(err) }))
@@ -198,7 +200,7 @@ export const useSettingsStore = defineStore('settings', () => {
     // 而且保证「被观察的集合」与「被持久化的集合」永远是同一个（此前是手写 29 项，易漏）。
     watch(() => JSON.stringify(payloadFrom(state)), scheduleSave)
     // 缩放即时生效（写主进程窗口 zoom；webview 缩放由 WebHost 订阅 settings:changed 同步）。
-    watch(() => state.zoomPercent, (v) => void window.api.setWindowZoom(v))
+    watch(() => state.zoomPercent, (v) => void window.api.put('/windows/zoom', { body: { percent: v } }))
     // 主题即时生效（dsh 自己 watch 同步的 settings.yaml，无需手动刷新）。
     watch(() => state.theme, (t: Theme) => applyTheme(t))
     // 配色方案即时生效（外部改动经 fillFrom 改 state 时这个 watch 也会跑）。
@@ -207,12 +209,12 @@ export const useSettingsStore = defineStore('settings', () => {
     watch([() => state.autoCheckPrerelease, () => state.npmRegistry], () => void dshManageActions.loadVersions())
 
     // ---- 外部配置自动同步：settings.json / dsh 的 settings.yaml 被外部改动。 ----
-    const offSettingsChanged = window.api.onSettingsChanged((s) => {
+    const offSettingsChanged = window.api.on('settings:changed', (s) => {
         // 自己刚保存的那次回放跳过（见 lastSaveAt）：它是同一份内容、但比 state 旧一个保存周期。
         if (Date.now() - lastSaveAt < 400) return
         fillFrom(s)
     })
-    const offThemeChanged = window.api.onThemeChanged((t) => {
+    const offThemeChanged = window.api.on('settings:theme', (t) => {
         state.theme = t
         applyTheme(t)
     })

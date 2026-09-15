@@ -217,7 +217,7 @@ const envLabel = ref('')
 /** 刷新版本槽状态。 */
 async function refreshSlots(): Promise<void> {
     try {
-        slots.value = await window.api.getAppSlots()
+        slots.value = await window.api.get('/app/update/slots')
     } catch {
         /* ignore */
     }
@@ -240,7 +240,7 @@ async function rollback(): Promise<void> {
     } catch {
         return
     }
-    const r = await window.api.rollbackAppUpdate()
+    const r = await window.api.post('/app/update/rollback')
     if (r.ok) ElMessage.success(tt('sv.about.rollbackStarted'))
     else ElMessage.error(tt('sv.about.rollbackFailed', { message: r.message }))
 }
@@ -249,7 +249,7 @@ async function rollback(): Promise<void> {
 const REPO_URL = 'https://github.com/XEonSKY/DeepSeek-Box'
 
 function openRepo(): void {
-    void window.api.openExternal(REPO_URL)
+    void window.api.post('/shell/open-external', { body: { url: REPO_URL } })
 }
 
 function onEvent(e: AppUpdateEvent): void {
@@ -303,7 +303,7 @@ async function check(): Promise<void> {
     errMsg.value = ''
     phase.value = 'checking'
     try {
-        const r = await window.api.triggerAppUpdate({ prerelease: state.appCheckPrerelease })
+        const r = await window.api.post('/app/update/check', { body: { prerelease: state.appCheckPrerelease } })
         if (!r.ok) {
             errMsg.value = r.message
             phase.value = 'error'
@@ -318,7 +318,7 @@ async function check(): Promise<void> {
 }
 
 function restart(): void {
-    window.api.restartAndInstall()
+    void window.api.post('/app/update/restart')
 }
 
 let offEvent: (() => void) | null = null
@@ -326,21 +326,21 @@ let offEvent: (() => void) | null = null
 let gotLiveEvent = false
 
 onMounted(async () => {
-    offEvent = window.api.onAppUpdateEvent((e) => {
+    offEvent = window.api.on('appupdate:event', (e) => {
         gotLiveEvent = true
         onEvent(e)
     })
     // 启动期的静默检查/下载发生在本页挂载之前，先订阅再补一次最近状态；
     // 若期间已收到实时事件，则以下载/完成等实时状态为准，不用缓存覆盖。
     try {
-        const last = await window.api.getAppUpdateState()
+        const last = await window.api.get('/app/update/state')
         if (last && !gotLiveEvent) onEvent(last)
     } catch {
     /* ignore */
     }
     void refreshSlots()
     try {
-        const m = await window.api.getAppMeta()
+        const m = await window.api.get('/app/meta')
         meta.value = m
         const parts: string[] = []
         if (m.platform) parts.push(friendlyPlatform(m.platform))

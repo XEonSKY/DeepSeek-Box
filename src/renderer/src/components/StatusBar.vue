@@ -50,7 +50,7 @@ async function load(): Promise<void> {
     const cur = ++seq
     loading.value = true
     try {
-        const res = await window.api.getCurrentBalance()
+        const res = await window.api.get('/models/balance')
         if (cur === seq) info.value = res && res.balance ? res : null
     } catch {
         if (cur === seq) info.value = null
@@ -128,7 +128,7 @@ function openAbout(): void {
 
 /** 重启并安装已下载的程序更新（主进程负责重启）。 */
 function restartAndInstall(): void {
-    window.api.restartAndInstall()
+    void window.api.post('/app/update/restart')
 }
 
 /** 浮层里的状态文案；失败原因只放 title，避免撑破一行。 */
@@ -151,7 +151,7 @@ function stateText(line: VersionLine): string {
 
 onMounted(async () => {
     try {
-        consented.value = (await window.api.getSettings()).modelsCredConsent === true
+        consented.value = (await window.api.get('/settings')).modelsCredConsent === true
     } catch {
         consented.value = false
     }
@@ -160,7 +160,7 @@ onMounted(async () => {
         startTimer()
     }
     void refreshVersions()
-    offSettings = window.api.onSettingsChanged((s) => applyConsent(s.modelsCredConsent === true))
+    offSettings = window.api.on('settings:changed', (s) => applyConsent(s.modelsCredConsent === true))
     document.addEventListener('visibilitychange', onForegroundChange)
     window.addEventListener('focus', onForegroundChange)
     window.addEventListener('blur', onForegroundChange)

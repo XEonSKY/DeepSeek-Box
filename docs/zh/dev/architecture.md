@@ -9,7 +9,7 @@ Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus 
 | 进程 | 目录 | 职责 |
 |---|---|---|
 | **主进程 main** | `src/main/` | 创建窗口与托盘、管理配置、启动 / 守护 dsh、下载与安装、应用自更新 |
-| **预加载 preload** | `src/preload/` | 用 `contextBridge` 暴露 `window.api`（类型 `RendererApi` 定义在 `shared/types.ts`） |
+| **预加载 preload** | `src/preload/` | 用 `contextBridge` 暴露 `window.api`（REST 客户端；契约 `ApiRoutes` 定义在 `shared/api.ts`） |
 | **渲染进程 renderer** | `src/renderer/` | Vue 3 界面：标签页外壳、设置页、安装向导、终端 |
 
 共享代码（类型、i18n、版本工具）放在 `src/shared/`，三边都能用。
@@ -45,6 +45,20 @@ Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus 
 - **应用设置**：配置目录下 `settings.json`（不是 Electron 的 userData）；
 - **dsh 自身设置**：`~/.dsh/settings.yaml`，应用会把主题 / 语言同步过去；
 - **DeepSeek Harness / Node / npm**：配置目录下按版本存放，见[DeepSeek Harness 与环境安装链路](/zh/dev/installs)。
+
+## 设置与状态传播
+
+- 应用设置的单一来源是配置目录下的 `settings.json`；`loadSettings()` 读取时做**一次性迁移**，由 `settingsVersion`（当前 2）控制——只有真正的老配置才改键名 / 升级默认值，用户后来手填的值不会被反复改写。改归一化逻辑时**必须保留 `legacy` 判断**。
+- 渲染层保存走 `PUT /settings`：主进程落盘后**广播 `settings:changed` 给所有窗口**；配置文件监听只负责**外部改动**，对程序自己的写入刻意静默。
+- 因此**凡是从设置派生状态的组件都要订阅 `settings:changed`**，漏订阅的表现就是「改完要重启才生效」；发起保存的那个窗口自己忽略这次回放（设置 store 的 `lastSaveAt`）。
+- `PUT /settings` 里还会顺带做几件幂等的事：同步 dsh 主题、写开机自启登录项、更新内嵌网页的 UA 与代理、应用程序图标。
+
+## 网络出口与代理
+
+- **主进程里所有 HTTP 一律走 `httpFetch(scope, url, init)`**（`src/main/dsh/http.ts`），不要直接 `fetch`；`scope` 决定这次请求走不走代理（未启用代理时回落到全局 `fetch`）。
+- 代理范围 `proxyScope` 有六个**互不牵连**的档位：`app`（主进程自身联网：模型 / 余额 + 内嵌网页）、`update`（应用自更新）、`dsh`（dsh 子进程联网）、`npm`（安装 / 下载）、`node`（Node 下载部署）、`registry`（版本列表 / 更新检查）。
+- 落点分三处：`app` → `models.ts` + `app/webview.ts`、`app/appupdate.ts`；`dsh` → `dsh.ts` 注入的代理环境变量；`npm` / `node` / `registry` → `npmRunner.ts`、`nodeenv.ts`、`manage.ts`。三处共用 `proxyConfigFor()`。
+- 代理分支只在「启用代理」时才会走到，改动后需在真机验证。
 
 ## 相关文档
 

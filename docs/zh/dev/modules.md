@@ -10,7 +10,8 @@
 | `settings.ts` | 设置与配置目录 | `configDir()` / `loadSettings()` / `saveSettings()`；配置目录迁移编排；`tempDownloadDir()` / `tempNpmDir()`；文件监听 |
 | `configmigrate.ts` | 配置目录迁移实现 | 计划持久化、`scanTree` / `migrateTree`、`rollbackMoves` |
 | `models.ts` | 模型与余额 | `readModelsInfo()` / `readCurrentBalance()`；读取 dsh 的 `settings.yaml` / `.credentials.yaml`，按令牌合并服务商，联网查询模型目录与余额；**不依赖 electron，密钥只留在主进程** |
-| `ipc.ts` | 所有 `ipcMain` handler | 实现 `RendererApi` 契约；安装进度、版本列表、模型与余额等 |
+| `ipc.ts` | 全部 IPC 端点 | 用 `Router` 登记 REST 路由；窗口 / 设置 / dsh / 环境 / 模型 / 图标等 |
+| `router.ts` | IPC 路由引擎 | Elysia 风格链式路由：`:name` 路径参数、`query` / `body`，在唯一通道 `ipc:request` 上分发 |
 | `ui.ts` | 窗口 / 托盘 / 快捷键 | `createShellWindow` / `createTray` / `syncGlobalHotkey` |
 | `appupdate.ts` | 应用自更新 | 解析 GitHub Releases、后台下载、事件广播 |
 | `appslots.ts` | A/B 版本槽 | 归档旧版、生成回退脚本、启动健康守卫 |
@@ -36,4 +37,6 @@
 | `semver.ts` | 版本工具 | `sortVersionsDesc` / `filterByPrerelease` / `compareVersions` / `pickLatest` |
 | `net.ts` | 代理 | 代理相关辅助 |
 
-> 逐模块细节见对应开发文档：安装链路见[DeepSeek Harness 与环境安装链路](/zh/dev/installs)，配置目录见[配置目录](/zh/dev/config-dir)，更新见[应用自更新](/zh/dev/app-update)。
+::: tip
+逐模块细节见对应开发文档：安装链路见[DeepSeek Harness 与环境安装链路](/zh/dev/installs)，配置目录见[配置目录](/zh/dev/config-dir)，更新见[应用自更新](/zh/dev/app-update)。
+:::

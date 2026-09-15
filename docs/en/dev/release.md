@@ -15,7 +15,7 @@
 
 ## Local packaging
 
-```bash
+```bash [Local packaging]
 npm run build        # build into out/
 npm run dist:win     # package Windows (also dist:mac / dist:linux)
 ```
@@ -27,7 +27,9 @@ npm run dist:win     # package Windows (also dist:mac / dist:linux)
 3. Tag (e.g. `v0.1.5-rc-1`) and push to trigger `Build & Release`;
 4. If docs changes are pushed to `main`, a Pages deployment is triggered separately.
 
-> Before pushing to the remote you must state the target (branch / tag, whether it is a force push) and get confirmation, see [Development conventions](/en/dev/conventions).
+::: warning
+Before pushing to the remote you must state the target (branch / tag, whether it is a force push) and get confirmation, see [Development conventions](/en/dev/conventions).
+:::
 
 ## Docs site
 

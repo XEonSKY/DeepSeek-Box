@@ -9,7 +9,7 @@ Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus 
 | Process | Directory | Responsibility |
 |---|---|---|
 | **Main process** | `src/main/` | Create the window and tray, manage config, start / supervise dsh, download and install, app self-update |
-| **Preload** | `src/preload/` | Expose `window.api` via `contextBridge` (the type `RendererApi` is defined in `shared/types.ts`) |
+| **Preload** | `src/preload/` | Expose `window.api` via `contextBridge` (a REST client; the contract `ApiRoutes` is defined in `shared/api.ts`) |
 | **Renderer** | `src/renderer/` | Vue 3 UI: tab shell, settings page, install wizard, terminal |
 
 Shared code (types, i18n, version utilities) lives in `src/shared/` and is available to all three.
@@ -45,6 +45,20 @@ Main-process entry `src/main/index.ts`:
 - **App settings**: `settings.json` under the config directory (not Electron's userData);
 - **dsh's own settings**: `~/.dsh/settings.yaml`; the app syncs theme / language there;
 - **DeepSeek Harness / Node / npm**: stored per version under the config directory, see [DeepSeek Harness & environment install pipeline](/en/dev/installs).
+
+## Settings and state propagation
+
+- The single source of truth for app settings is `settings.json` in the config directory; `loadSettings()` performs a **one-off migration** on read, gated by `settingsVersion` (currently 2) — only genuinely old configs get keys renamed / defaults upgraded, so values the user typed later are never rewritten. **Keep the `legacy` check** when touching that normalization logic.
+- Saving from the renderer goes through `PUT /settings`: after writing to disk the main process **broadcasts `settings:changed` to every window**; the config-file watcher covers **external edits** only and deliberately stays silent about the app's own writes.
+- So **every component whose state derives from settings must subscribe to `settings:changed`** — missing that subscription shows up as “the change only takes effect after a restart”. The window that initiated the save ignores the echo itself (the settings store's `lastSaveAt`).
+- `PUT /settings` also performs a few idempotent extras: sync the dsh theme, write the launch-at-login entry, refresh the embedded pages' UA / proxy, and apply the app icon.
+
+## Network exits and proxy
+
+- **All HTTP in the main process goes through `httpFetch(scope, url, init)`** (`src/main/dsh/http.ts`) — do not call `fetch` directly; `scope` decides whether that request uses the proxy (with no proxy enabled it falls back to global `fetch`).
+- `proxyScope` has six **independent** slots: `app` (the main process itself: models / balance + embedded pages), `update` (app self-update), `dsh` (the dsh child process), `npm` (installs / downloads), `node` (Node download & deploy), `registry` (version lists / update checks).
+- They land in three places: `app` → `models.ts` + `app/webview.ts`, `app/appupdate.ts`; `dsh` → the proxy env vars injected by `dsh.ts`; `npm` / `node` / `registry` → `npmRunner.ts`, `nodeenv.ts`, `manage.ts`. All three share `proxyConfigFor()`.
+- Those branches are reached only when the proxy is enabled, so changes need verification on a real machine.
 
 ## Related documents
 

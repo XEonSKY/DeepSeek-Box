@@ -5,6 +5,11 @@ const REPO = 'https://github.com/XEonSKY/DeepSeek-Box'
 // 文档分「用户文档 / 开发文档」两类，各自再分中英：
 //   docs/zh/user、docs/zh/dev、docs/en/user、docs/en/dev
 // URL 前缀与目录一一对应；站点根 / 由 docs/index.md 重定向到 /zh/。
+//
+// 分语言的 nav / sidebar 等主题配置必须放在 **locales.<lang>.themeConfig** 下：
+// VitePress 只会把该语言条目的 themeConfig 与顶层 themeConfig 做浅合并
+// （见 types/shared.d.ts 的 LocaleSpecificConfig 与 resolveSiteDataByRoute），
+// 顶层只放各语言共用的 search / socialLinks。
 
 const zhUser = [
   { text: '用户文档', items: [
@@ -101,19 +106,29 @@ export default defineConfig({
     ['meta', { property: 'og:image', content: '/logo.png' }]
   ],
   locales: {
-    zh: { label: '简体中文', lang: 'zh-CN', link: '/zh/' },
-    en: { label: 'English', lang: 'en-US', link: '/en/' }
-  },
-  themeConfig: {
-    search: { provider: 'local' },
-    socialLinks: [{ icon: 'github', link: REPO }],
-    locales: {
-      zh: {
-        label: '简体中文',
-        lang: 'zh-CN',
+    zh: {
+      label: '简体中文',
+      lang: 'zh-CN',
+      link: '/zh/',
+      themeConfig: {
         nav: zhNav,
+        // 左侧边栏：按路径前缀匹配，用户文档 / 开发文档各自一套
         sidebar: { '/zh/user/': zhUser, '/zh/dev/': zhDev },
         outline: { label: '本页导航', level: [2, 3] },
+        // 默认主题的界面文案：VitePress 缺省是英文，这里按语言本地化
+        darkModeSwitchLabel: '外观',
+        lightModeSwitchTitle: '切换到浅色模式',
+        darkModeSwitchTitle: '切换到深色模式',
+        sidebarMenuLabel: '目录',
+        returnToTopLabel: '回到顶部',
+        langMenuLabel: '切换语言',
+        skipToContentLabel: '跳到正文',
+        notFound: {
+          title: '页面不存在',
+          quote: '你访问的页面可能已被移动或删除。',
+          linkLabel: '返回首页',
+          linkText: '回到首页'
+        },
         docFooter: { prev: '上一页', next: '下一页' },
         lastUpdated: { text: '最后更新于', formatOptions: { dateStyle: 'short', timeStyle: 'short' } },
         editLink: { pattern: REPO + '/edit/main/docs/:path', text: '在 GitHub 上编辑此页' },
@@ -121,13 +136,23 @@ export default defineConfig({
           message: 'DeepSeek Box · 用户与开发文档',
           copyright: 'Copyright © 2026 <a href="https://www.xeonsky.com/" target="_blank" rel="noopener">XEonSKY Studio</a>'
         }
-      },
-      en: {
-        label: 'English',
-        lang: 'en-US',
+      }
+    },
+    en: {
+      label: 'English',
+      lang: 'en-US',
+      link: '/en/',
+      themeConfig: {
         nav: enNav,
+        // Left sidebar: one set per section, matched by path prefix
         sidebar: { '/en/user/': enUser, '/en/dev/': enDev },
         outline: { label: 'On this page', level: [2, 3] },
+        notFound: {
+          title: 'Page not found',
+          quote: 'The page you are looking for might have been moved or deleted.',
+          linkLabel: 'Go to home',
+          linkText: 'Take me home'
+        },
         docFooter: { prev: 'Previous', next: 'Next' },
         lastUpdated: { text: 'Last updated at', formatOptions: { dateStyle: 'short', timeStyle: 'short' } },
         editLink: { pattern: REPO + '/edit/main/docs/:path', text: 'Edit this page on GitHub' },
@@ -137,5 +162,10 @@ export default defineConfig({
         }
       }
     }
+  },
+  // 各语言共用的主题配置（会与 locales.<lang>.themeConfig 浅合并）
+  themeConfig: {
+    search: { provider: 'local' },
+    socialLinks: [{ icon: 'github', link: REPO }]
   }
 })

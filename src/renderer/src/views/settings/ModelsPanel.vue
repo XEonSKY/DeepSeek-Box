@@ -36,7 +36,7 @@ async function load(): Promise<void> {
     loading.value = true
     loadError.value = ''
     try {
-        const res = await window.api.getModelsInfo()
+        const res = await window.api.get('/models/info')
         if (seq !== loadSeq) return
         // 主进程返回形状异常时也收敛成一句可展示的错误，而不是让页面炸掉。
         info.value = res && Array.isArray(res.entries) ? res : { entries: [], errorCode: 'internal' }

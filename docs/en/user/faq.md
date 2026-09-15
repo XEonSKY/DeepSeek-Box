@@ -6,7 +6,7 @@ This is dsh failing to read its credentials configuration, not a problem with th
 
 Fix: edit `C:\Users\<you>\.dsh\.credentials.yaml` (or the corresponding home directory) and change the first line to a quoted string:
 
-```yaml
+```yaml [~/.dsh/.credentials.yaml]
 version: "1"
 ```
 
@@ -50,7 +50,9 @@ On Windows, a running dsh locks the DeepSeek Harness module files, causing repla
 
 It is **single-instance** by default: launching it again brings the existing window to the front instead of opening a new one.
 
-> Note the distinction between “multiple instances” and “multiple windows”: this app **supports multiple windows**—right-click a tab and choose “Open in New Window” to open a secondary window (see [Interface & Operations](/en/user/usage)). This is multiple windows within the same app.
+::: tip Note the distinction between “multiple instances” and “multiple windows”
+This app **supports multiple windows**—right-click a tab and choose “Open in New Window” to open a secondary window (see [Interface & Operations](/en/user/usage)). This is multiple windows within the same app.
+:::
 
 ## Other
 

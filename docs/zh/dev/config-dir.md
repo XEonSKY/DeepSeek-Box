@@ -33,7 +33,9 @@
 - 每处理一项广播 `configdir:migration` 进度（渲染层全屏进度框，可取消）；
 - 成功才把当前目录指向新位置；**取消则 `rollbackMoves` 逆序搬回**并固定回旧目录。
 
-> 搬迁失败（如文件被占用）时不会删除源文件，避免丢数据；详见 `configmigrate.ts` 的 `mergeInto`。
+::: info
+搬迁失败（如文件被占用）时不会删除源文件，避免丢数据；详见 `configmigrate.ts` 的 `mergeInto`。
+:::
 
 ## 临时目录
 

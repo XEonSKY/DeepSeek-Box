@@ -16,7 +16,7 @@ import { useSettingsStore } from './useSettingsStore'
  *
  * 数据来自两处：
  *   - `window.api.versions`：Electron 自带 Node / Chromium（preload 里读 `process.versions`，不需要 IPC）；
- *   - `window.api.getNodeStatus()`：系统 / 本地部署 Node 的当前版本 + 最新 LTS 及「是否落后」。
+ *   - `window.api.get('/node/status')`：系统 / 本地部署 Node 的当前版本 + 最新 LTS 及「是否落后」。
  *     ⚠️ 它**会联网**取 nodejs.org/dist/index.json（主进程侧有 10 分钟缓存），所以只在进入本页时调一次。
  */
 
@@ -55,7 +55,7 @@ const probed = ref(false)
 
 async function loadStatus(): Promise<void> {
     try {
-        status.value = await window.api.getNodeStatus()
+        status.value = await window.api.get('/node/status')
     } catch {
         status.value = null
     } finally {
@@ -87,7 +87,7 @@ const npmProgressInfo = computed(() => formatDownload(npmTotal.value, npmDownloa
 
 onMounted(() => {
     // Node 部署下载 / 解压进度由主进程广播（与 dsh 向导同一个事件源）。
-    offNodeProgress = window.api.onNodeDeployProgress((p) => {
+    offNodeProgress = window.api.on('nodeenv:deploy-progress', (p) => {
         deployPhase.value = p.phase
         percent.value = p.percent
         downloaded.value = p.downloaded
@@ -95,7 +95,7 @@ onMounted(() => {
         speed.value = p.speed
     })
     // 内置 npm 下载 / 解压进度（只有 bundled 来源广播）。
-    offNpmProgress = window.api.onNpmDeployProgress((p) => {
+    offNpmProgress = window.api.on('npmenv:progress', (p) => {
         npmProgressSeen.value = true
         npmPhase.value = p.phase
         npmPercent.value = p.percent
@@ -161,7 +161,7 @@ async function loadVersions(): Promise<void> {
     if (versionsLoading.value) return
     versionsLoading.value = true
     try {
-        nodeVersions.value = await window.api.listNodeVersions({ includeNonLts: includeNonLts.value })
+        nodeVersions.value = await window.api.get('/node/versions', { query: { includeNonLts: includeNonLts.value } })
         if (selectedVersion.value && !nodeVersions.value.includes(selectedVersion.value)) selectedVersion.value = ''
     } catch {
         nodeVersions.value = []
@@ -217,7 +217,7 @@ async function stopDshForNode(): Promise<'ok' | 'stopped' | 'cancelled'> {
     if (state.nodeRuntime !== 'local') return 'ok'
     let running: boolean
     try {
-        running = await window.api.isDshRunning()
+        running = await window.api.get('/dsh/running')
     } catch {
         running = false
     }
@@ -250,7 +250,7 @@ async function installNode(version?: string): Promise<void> {
     total.value = 0
     speed.value = 0
     try {
-        const r = await window.api.deployLocalNode(version ? { version } : {})
+        const r = await window.api.post('/node/deploy', { body: version ? { version } : {} })
         // 用户主动取消不算失败，静默返回即可（不弹错误 toast）。
         if (!r.canceled) {
             if (r.ok) ElMessage.success(tt('sv.env.deployOk', { version: withV(r.version) }))
@@ -276,7 +276,7 @@ async function cancelInstall(): Promise<void> {
     if (canceling.value) return
     canceling.value = true
     try {
-        await window.api.cancelInstall()
+        await window.api.post('/installs/cancel')
     } catch {
         /* 取消失败无需打扰用户 */
     } finally {
@@ -293,7 +293,7 @@ const switchingNpm = ref('')
 
 async function loadInstalledNode(): Promise<void> {
     try {
-        installedNode.value = await window.api.listInstalledVersions('node')
+        installedNode.value = await window.api.get('/versions/:kind', { params: { kind: 'node' } })
     } catch {
         installedNode.value = { installed: [], active: null }
     }
@@ -301,7 +301,7 @@ async function loadInstalledNode(): Promise<void> {
 
 async function loadInstalledNpm(): Promise<void> {
     try {
-        installedNpm.value = await window.api.listInstalledVersions('npm')
+        installedNpm.value = await window.api.get('/versions/:kind', { params: { kind: 'npm' } })
     } catch {
         installedNpm.value = { installed: [], active: null }
     }
@@ -313,7 +313,7 @@ async function switchInstalled(kind: 'node' | 'npm', version: string): Promise<v
     if (switching.value) return
     switching.value = version
     try {
-        const r = await window.api.useInstalledVersion(kind, version)
+        const r = await window.api.put('/versions/:kind/active', { params: { kind }, body: { version } })
         if (r.ok) {
             ElMessage.success(tt('sv.env.versionSwitched', { version: withV(r.version) }))
             if (kind === 'node') {
@@ -345,7 +345,7 @@ async function removeInstalled(kind: 'node' | 'npm', version: string): Promise<v
         return // 用户取消
     }
     try {
-        const r = await window.api.removeInstalledVersion(kind, version)
+        const r = await window.api.delete('/versions/:kind/:version', { params: { kind, version } })
         if (r.ok) {
             if (kind === 'node') {
                 await loadInstalledNode()
@@ -367,7 +367,7 @@ async function removeInstalled(kind: 'node' | 'npm', version: string): Promise<v
  * 所以这里只把人送到官方下载页；想由应用代管的可以切到「本地部署」。
  */
 function openNodeDownload(): void {
-    void window.api.openExternal('https://nodejs.org/en/download')
+    void window.api.post('/shell/open-external', { body: { url: 'https://nodejs.org/en/download' } })
 }
 
 // ---- npm 来源（与上面 node 面板同构：三个标签即三个来源）----------------------
@@ -377,7 +377,7 @@ const npmProbed = ref(false)
 
 async function loadNpmStatus(): Promise<void> {
     try {
-        npmStatus.value = await window.api.getNpmStatus()
+        npmStatus.value = await window.api.get('/npm/status')
     } catch {
         npmStatus.value = null
     } finally {
@@ -419,7 +419,7 @@ async function loadNpmVersions(): Promise<void> {
     if (npmVersionsLoading.value) return
     npmVersionsLoading.value = true
     try {
-        npmVersions.value = await window.api.listNpmVersions({ prerelease: npmIncludePre.value })
+        npmVersions.value = await window.api.get('/npm/versions', { query: { prerelease: npmIncludePre.value } })
         if (npmSelected.value && !npmVersions.value.includes(npmSelected.value)) npmSelected.value = ''
     } catch {
         npmVersions.value = []
@@ -471,7 +471,7 @@ async function installNpm(version?: string): Promise<void> {
     npmTotal.value = 0
     npmSpeed.value = 0
     try {
-        const r = await window.api.updateNpm(version ? { source, version } : { source })
+        const r = await window.api.post('/npm/update', { body: version ? { source, version } : { source } })
         // 用户主动取消不算失败，静默返回即可（不弹错误 toast）。
         if (!r.canceled) {
             if (r.ok) ElMessage.success(tt('sv.env.npmOk', { version: withV(r.version) }))

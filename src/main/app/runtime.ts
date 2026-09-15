@@ -1,4 +1,5 @@
 import type { BrowserWindow, Tray } from 'electron'
+import { IPC_EVENT_CHANNEL } from '@shared/api'
 import { listWindows, coreWindowId, windowByContentsId } from './windowreg'
 
 /**
@@ -71,10 +72,15 @@ export function broadcast(channel: string, payload?: unknown): void {
     }
 }
 
-/** Send an event to one specific window's renderer (directed; multi-window safe). */
-export function sendToWindow(w: BrowserWindow | null | undefined, channel: string, payload?: unknown): void {
+/**
+ * Send an event to one specific window's renderer (directed; multi-window safe).
+ *
+ * 所有主进程 → 渲染层的推送都走唯一通道 `ipc:event`，信封为 `{ event, payload }`；
+ * 渲染层用 `window.api.on(event, cb)` 按键名订阅。`event` 即原来各频道的名字。
+ */
+export function sendToWindow(w: BrowserWindow | null | undefined, event: string, payload?: unknown): void {
     if (w && !w.isDestroyed() && !w.webContents.isDestroyed()) {
-        w.webContents.send(channel, payload)
+        w.webContents.send(IPC_EVENT_CHANNEL, { event, payload })
     }
 }
 

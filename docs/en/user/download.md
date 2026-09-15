@@ -11,11 +11,21 @@ DeepSeek Box is a cross-platform desktop application; installers are published o
 | Network | An internet connection is required on first run to download DeepSeek Harness and the (optional) Node / npm; afterwards only the local loopback address is used |
 | Disk | Installer + DeepSeek Harness and runtime (roughly tens to hundreds of MB each time, depending on the chosen source) |
 
-> DeepSeek Harness `@deepseek-ai/dsh` is detected automatically by the app; when it is missing, an installation wizard pops up where you can choose the official `registry.npmjs.org` or the `npmmirror` mirror.
+::: info
+DeepSeek Harness `@deepseek-ai/dsh` is detected automatically by the app; when it is missing, an installation wizard pops up where you can choose the official `registry.npmjs.org` or the `npmmirror` mirror.
+:::
 
 ## Where to download
 
-Open the [Releases](https://github.com/XEonSKY/DeepSeek-Box/releases) page and choose the latest version. Artifacts are named like:
+Use these fixed entry points — there is no version to pick by hand:
+
+- **Latest stable release (recommended)**: <https://github.com/XEonSKY/DeepSeek-Box/releases/latest>
+  - The stable build for everyday use; this URL redirects to the newest stable release page.
+- **Latest pre-release**: <https://github.com/XEonSKY/DeepSeek-Box/releases?q=prerelease%3Atrue&expanded=true>
+  - Test builds such as `-alpha` / `-beta` / `-rc`; they **may be unstable** — use them only to try new features or help test.
+- **All releases (including older versions)**: <https://github.com/XEonSKY/DeepSeek-Box/releases>
+
+Once the page is open, pick the artifact for your system and architecture. Artifacts are named like:
 
 ```text
 DeepSeek-Box-<version>-<platform>-<arch>.<extension>

@@ -14,7 +14,9 @@ The app is a frameless desktop shell: the upper part is a custom-drawn title bar
 | Settings | Opens the settings page (the terminal is also here: Settings → Terminal) |
 | Minimize / Maximize / Close | Window controls |
 
-> Settings is an **overlay**: the page underneath is not unloaded, and switching back still shows its original state.
+::: tip
+Settings is an **overlay**: the page underneath is not unloaded, and switching back still shows its original state.
+:::
 
 ## Tabs
 
@@ -95,4 +97,6 @@ After closing to the tray:
 - Single click: show / hide the window;
 - Right-click menu: “Show / Hide Window”, “Quit (also terminates dsh)”.
 
-> Closing the window does not terminate dsh; on a real quit the app synchronously terminates the dsh process it manages, to avoid leaving anything behind. If no tray is available, closing the last window quits the app directly.
+::: info
+Closing the window does not terminate dsh; on a real quit the app synchronously terminates the dsh process it manages, to avoid leaving anything behind. If no tray is available, closing the last window quits the app directly.
+:::

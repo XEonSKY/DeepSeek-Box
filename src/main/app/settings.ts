@@ -487,6 +487,7 @@ export function loadSettings(): Settings {
         colorScheme: COLOR_SCHEME_IDS.includes(disk.colorScheme as ColorSchemeId)
             ? (disk.colorScheme as ColorSchemeId)
             : DEFAULT_SETTINGS.colorScheme,
+        appIcon: disk.appIcon ?? DEFAULT_SETTINGS.appIcon,
         modelsCredConsent: disk.modelsCredConsent ?? DEFAULT_SETTINGS.modelsCredConsent
     }
 }

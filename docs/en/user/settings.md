@@ -94,7 +94,9 @@ The rendering mode and browser identity of embedded pages (dsh Web UI, web chat,
 - **Check for pre-releases**: whether to include pre-release versions;
 - **Developer Mode**: **hidden by default**; click the **app version number** 5 times (within 1.5 seconds) under “Settings → About” to unlock the switch, after which `F12` toggles DevTools (the shortcut can be changed on the “Shortcuts” page).
 
-> **Easter eggs**: on the “About” page, click the **app version number** 5 times to unlock the “Developer Mode” switch above; click the **system architecture** badge 5 times to open a tic-tac-toe mini-game.
+::: tip Easter eggs
+On the “About” page, click the **app version number** 5 times to unlock the “Developer Mode” switch above; click the **system architecture** badge 5 times to open a tic-tac-toe mini-game.
+:::
 
 ## Status bar
 
@@ -105,4 +107,6 @@ The window's bottom status bar is read-only; on the right it shows, in order:
 | **Current provider balance** | Once authorized it shows the balance, refreshing automatically every 5 minutes while in the foreground; clicking refreshes manually. Before authorization it shows “Click to authorize”, which jumps to “Settings → Models”. Hovering shows the granted / topped-up breakdown. |
 | **App version · dsh version** | Shaped like `v0.1.5-rc-1 · dsh 0.1.5-rc.2`. Clicking opens a popover that checks for updates; when a newer version is found it **only shows a small red dot on the version item** (a silent notice, no toast), and the popover shows the status of both the app and dsh version lines. |
 
-> The base source of theme and language is still dsh's `~/.dsh/settings.yaml`; the app's own settings are stored in `settings.json` in the **configuration directory**.
+::: info
+The base source of theme and language is still dsh's `~/.dsh/settings.yaml`; the app's own settings are stored in `settings.json` in the **configuration directory**.
+:::

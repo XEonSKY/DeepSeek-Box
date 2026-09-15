@@ -66,12 +66,12 @@ export function hasUpdate(): boolean {
 /** 读取程序 / dsh 的当前版本（只改 current，不动检查结果）。 */
 export async function refreshVersions(): Promise<void> {
     try {
-        versionStatus.app.current = (await window.api.getAppMeta()).version
+        versionStatus.app.current = (await window.api.get('/app/meta')).version
     } catch {
         /* 读不到就保留原值 */
     }
     try {
-        versionStatus.dsh.current = await window.api.getDshVersion()
+        versionStatus.dsh.current = await window.api.get('/dsh/version')
     } catch {
         /* 读不到就保留原值 */
     }
@@ -148,10 +148,12 @@ export async function checkDsh(opts?: {
 }): Promise<UpdateResult | null> {
     const dsh = versionStatus.dsh
     try {
-        const cfg: Settings = await window.api.getSettings()
-        const r = await window.api.checkForUpdates({
-            prerelease: opts?.prerelease ?? cfg.checkPrerelease,
-            registry: opts?.registry ?? cfg.npmRegistry
+        const cfg: Settings = await window.api.get('/settings')
+        const r = await window.api.get('/dsh/update-check', {
+            query: {
+                prerelease: opts?.prerelease ?? cfg.checkPrerelease,
+                registry: opts?.registry ?? cfg.npmRegistry
+            }
         })
         dshCheck.found = r.status === 'update' && !!r.latest
         dshCheck.latest = r.latest
@@ -202,7 +204,7 @@ export async function checkAndNotify(opts?: {
 export async function checkAllUpdates(): Promise<void> {
     let cfg: Settings | null = null
     try {
-        cfg = await window.api.getSettings()
+        cfg = await window.api.get('/settings')
     } catch {
         /* 读不到设置就按默认检查 */
     }
@@ -210,7 +212,7 @@ export async function checkAllUpdates(): Promise<void> {
     versionStatus.dsh.state = 'checking'
 
     const app = window.api
-        .triggerAppUpdate({ prerelease: cfg?.appCheckPrerelease ?? false })
+        .post('/app/update/check', { body: { prerelease: cfg?.appCheckPrerelease ?? false } })
         .then(async (r) => {
             if (!r.ok) {
                 versionStatus.app.state = 'error'
@@ -218,7 +220,7 @@ export async function checkAllUpdates(): Promise<void> {
                 return
             }
             // 事件可能早于订阅/晚于本次调用：用主进程记录的最后一次状态补齐。
-            const last = await window.api.getAppUpdateState()
+            const last = await window.api.get('/app/update/state')
             if (last) applyAppUpdateEvent(last)
         })
         .catch((err) => {

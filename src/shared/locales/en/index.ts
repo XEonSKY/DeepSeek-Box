@@ -238,7 +238,16 @@ export default {
             ignoreScaleHint: 'Ignores the operating system’s display scaling when on.',
             sysScaleText: 'This takes effect after an app restart. Restart now?',
             restartNow: 'Restart now',
-            funHint: 'Language & extended translation; never modifies dsh settings.'
+            funHint: 'Language & extended translation; never modifies dsh settings.',
+            iconTitle: 'App icon',
+            iconHint: 'Choose the icon used in the window, taskbar and system tray; the built-in logo follows light/dark mode. Uploaded images are center-cropped and normalized to 1024×1024.',
+            iconDefault: 'DeepSeek',
+            iconUpload: 'Upload image',
+            iconUploaded: 'Icon uploaded and applied.',
+            iconUploadFail: 'Upload failed: please pick a common image format such as PNG / JPG / WebP.',
+            iconDelete: 'Delete custom icon',
+            iconDeleteText: 'Delete the custom icon “{name}”?',
+            iconDeleteFail: 'Failed to delete the icon.'
         },
         network: {
             registry: 'npm registry',
@@ -502,6 +511,7 @@ export default {
         uninstallBoxText: 'This uninstalls the DeepSeek Harness ({pkg}) and stops any running dsh first. You will need to reinstall it to use DeepSeek Box again. Continue?',
         uninstallOkBtn: 'Uninstall',
         cancelBtn: 'Cancel',
+        deleteBtn: 'Delete',
         dshRunningTitle: 'A running dsh must be stopped first',
         updateStopText: 'Upgrading the DeepSeek Harness will first force-close any running dsh service; it will restart automatically afterwards to run the new version. Continue?',
         switchStopText: 'Installing / switching to the selected version will first force-close any running dsh service; it will restart automatically afterwards to run that version. Continue?',

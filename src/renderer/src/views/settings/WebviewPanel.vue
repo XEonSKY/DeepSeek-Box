@@ -21,7 +21,7 @@ const currentUa = ref('')
 
 onMounted(async () => {
     try {
-        const info = await window.api.getWebviewInfo()
+        const info = await window.api.get('/webview/info')
         defaultUa.value = info.defaultUserAgent
         currentUa.value = info.currentUserAgent
     } catch {

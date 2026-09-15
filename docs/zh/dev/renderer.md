@@ -29,8 +29,8 @@
 
 底部状态栏由 `components/StatusBar.vue` 渲染，右对齐一组只读信息：
 
-- **当前供应商余额**：授权后从 `models:balance` 读取当前默认模型所属供应商的余额，前台每 5 分钟自动刷新、点击手动刷新；未授权时显示「点击授权」并跳转到「设置 → 模型」；
-- **程序版本 · dsh 版本**：实际版本来自 `getAppMeta()` 与 `getDshVersion()`；点击弹出浮层触发 `checkAllUpdates()`，检测结果显示为版本项上的小红点（静默提示，不弹通知）。状态真源是 `lib/update.ts` 的 `versionStatus`。
+- **当前供应商余额**：授权后从 `GET /models/balance` 读取当前默认模型所属供应商的余额，前台每 5 分钟自动刷新、点击手动刷新；未授权时显示「点击授权」并跳转到「设置 → 模型」；
+- **程序版本 · dsh 版本**：实际版本来自 `GET /app/meta` 与 `GET /dsh/version`；点击弹出浮层触发 `checkAllUpdates()`，检测结果显示为版本项上的小红点（静默提示，不弹通知）。状态真源是 `lib/update.ts` 的 `versionStatus`。
 
 ## 主题与语言
 
@@ -40,4 +40,4 @@
 
 ## 与主进程通信
 
-所有主进程能力都通过 `window.api`（预加载暴露）调用，类型契约见 `src/shared/types.ts` 的 `RendererApi`。新增能力必须三处同步，见 [IPC 契约](/zh/dev/ipc)。
+所有主进程能力都通过 `window.api`（预加载暴露的 REST 客户端）调用，契约是 `src/shared/api.ts` 的 `ApiRoutes`：`window.api.get('/settings')`、`window.api.on('settings:changed', …)`。新增端点两处同步，见 [IPC 契约](/zh/dev/ipc)。

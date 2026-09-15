@@ -24,7 +24,7 @@ async function bootstrap(): Promise<void> {
     await loadShellMeta()
     let resolved: ResolvedLocale = 'zh'
     try {
-        resolved = await window.api.getUiLocale()
+        resolved = await window.api.get('/locale')
     } catch {
     /* window.api 可能在异常环境不可用，按 zh 处理 */
     }

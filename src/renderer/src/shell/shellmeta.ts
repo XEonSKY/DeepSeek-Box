@@ -12,7 +12,7 @@ export const shellMeta = reactive<{ winId: number; isCore: boolean; loaded: bool
 
 export async function loadShellMeta(): Promise<void> {
     try {
-        const m = await window.api.getShellMeta()
+        const m = await window.api.get('/shell/meta')
         shellMeta.winId = m.winId
         shellMeta.isCore = m.isCore
     } catch {

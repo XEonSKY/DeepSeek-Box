@@ -11,11 +11,21 @@ DeepSeek Box 是跨平台桌面应用，安装包发布在 GitHub Releases。
 | 网络 | 首次需联网以下载 DeepSeek Harness 与（可选的）Node / npm；之后只使用本机回环地址 |
 | 磁盘 | 安装包 + DeepSeek Harness 与运行时（每次约几十到几百 MB，取决于所选来源） |
 
-> DeepSeek Harness `@deepseek-ai/dsh` 由应用自动检测；缺失时会弹出安装向导，可选官方 `registry.npmjs.org` 或 `npmmirror` 镜像。
+::: info
+DeepSeek Harness `@deepseek-ai/dsh` 由应用自动检测；缺失时会弹出安装向导，可选官方 `registry.npmjs.org` 或 `npmmirror` 镜像。
+:::
 
 ## 从哪里下载
 
-打开 [Releases](https://github.com/XEonSKY/DeepSeek-Box/releases) 页面，选择最新版本。产物命名形如：
+直接使用下面的固定入口，不用自己找版本：
+
+- **最新正式版（推荐）**：<https://github.com/XEonSKY/DeepSeek-Box/releases/latest>
+  - 稳定版，适合日常使用；该地址会自动跳转到最新的正式版发布页。
+- **最新预发布版**：<https://github.com/XEonSKY/DeepSeek-Box/releases?q=prerelease%3Atrue&expanded=true>
+  - `-alpha` / `-beta` / `-rc` 等测试版，**可能不稳定**，仅在尝鲜或协助测试时使用。
+- **全部版本（含历史版本）**：<https://github.com/XEonSKY/DeepSeek-Box/releases>
+
+打开上述页面后，按你的系统与架构选择产物。产物命名形如：
 
 ```text
 DeepSeek-Box-<版本>-<平台>-<架构>.<后缀>

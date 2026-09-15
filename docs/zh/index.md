@@ -37,6 +37,12 @@ features:
     details: 主题跟随系统 / 浅色 / 深色，可关闭到系统托盘；仅使用本地 127.0.0.1。
 ---
 
+## 它是什么
+
+DeepSeek Box 是 **DeepSeek Harness**（命令 `dsh`，npm 包 `@deepseek-ai/dsh`）的桌面入口与环境管家：在后台启动并守护 dsh 进程，把 Web UI 嵌进原生窗口，还可以代管 Node、npm 与 dsh 的版本。
+
+它**不替代** dsh —— 对话、工作区、会话等数据仍然属于 DeepSeek Harness 本身；默认只监听本机 `127.0.0.1`。
+
 ## 快速导航
 
 <div class="card-grid">
@@ -56,9 +62,9 @@ features:
     <h3>⚙️ 设置说明</h3>
     <p>主题、语言、镜像源、代理、下载与 DeepSeek Harness 选项。</p>
   </a>
-  <a class="card" href="/zh/user/environment">
-    <h3>🧰 环境管理</h3>
-    <p>Node / npm 来源与版本，内置或本机部署随你选。</p>
+  <a class="card" href="/zh/user/faq">
+    <h3>❓ 常见问题</h3>
+    <p>启动、安装、下载与更新的排查与解决。</p>
   </a>
   <a class="card" href="/zh/dev/">
     <h3>🧑💻 开发文档</h3>
@@ -86,4 +92,16 @@ features:
   </div>
 </div>
 
-> 英文站见右上角 **English** 切换。
+## 该从哪里看起
+
+| 你的情况 | 建议从这开始 |
+| --- | --- |
+| 第一次使用 | [下载与系统要求](/zh/user/download) → [快速开始](/zh/user/quickstart) |
+| 想弄清每个设置项 | [设置说明](/zh/user/settings) |
+| 想换主题、语言或缩放 | [设置说明](/zh/user/settings) |
+| 想改代码 | [开发文档](/zh/dev/) |
+| 遇到问题 | [常见问题](/zh/user/faq) |
+
+::: tip 英文站
+右上角的 **English** 可切换到英文文档；也可以在仓库根目录查看 [README](https://github.com/XEonSKY/DeepSeek-Box#readme)。
+:::

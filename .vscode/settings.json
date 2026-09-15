@@ -1,0 +1,83 @@
+{
+  "files.encoding": "utf8",
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "editor.detectIndentation": false,
+  "editor.tabSize": 4,
+  "editor.insertSpaces": true,
+  "editor.rulers": [
+    120
+  ],
+  "editor.formatOnSave": false,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "eslint.useFlatConfig": true,
+  "eslint.validate": [
+    "javascript",
+    "typescript",
+    "vue"
+  ],
+  "eslint.workingDirectories": [
+    "."
+  ],
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/out": true,
+    "**/dist": true,
+    "**/.vite": true,
+    "**/.vitepress/cache": true,
+    "**/.vitepress/dist": true
+  },
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "package.json": "package-lock.json, pnpm-lock.yaml, yarn.lock, npm-shrinkwrap.json, .npmrc, .nvmrc, .node-version, dev-app-update.yml",
+    "tsconfig.json": "tsconfig.*.json, *.tsbuildinfo",
+    "electron.vite.config.ts": ".env, .env.*",
+    "eslint.config.mjs": ".eslintignore, .prettierrc, .prettierrc.*, .prettierignore, .editorconfig",
+    "README.md": "LICENSE, LICENSE.*, CHANGELOG.md, .gitignore, .gitattributes"
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/out/**": true,
+    "**/dist/**": true,
+    "**/.vitepress/cache/**": true,
+    "**/.vitepress/dist/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/out": true,
+    "**/dist": true,
+    "**/.vitepress/cache": true,
+    "**/.vitepress/dist": true,
+    "**/package-lock.json": true
+  },
+  "[vue]": {
+    "editor.tabSize": 4
+  },
+  "[typescript]": {
+    "editor.tabSize": 4
+  },
+  "[typescriptreact]": {
+    "editor.tabSize": 4
+  },
+  "[javascript]": {
+    "editor.tabSize": 4
+  },
+  "[json]": {
+    "editor.tabSize": 2
+  },
+  "[jsonc]": {
+    "editor.tabSize": 2
+  },
+  "[yaml]": {
+    "editor.tabSize": 2
+  },
+  "[markdown]": {
+    "files.trimTrailingWhitespace": false
+  }
+}

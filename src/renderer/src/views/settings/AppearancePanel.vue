@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { ElMessageBox } from 'element-plus'
-import { BgColorsOutlined, BulbOutlined } from '@antdv-next/icons'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { BgColorsOutlined, BulbOutlined, DeleteOutlined, PictureOutlined, PlusOutlined } from '@antdv-next/icons'
 import { tt, applyExtTranslation, applyLocaleChange, currentLocale } from '../../lib/locales'
 import { COLOR_SCHEMES, isDark, schemeBackgrounds } from '../../lib/theme'
 import { useSettingsStore } from './useSettingsStore'
-import type { FunLocale, ResolvedLocale } from '@shared/types'
+import type { AppIconInfo, FunLocale, ResolvedLocale } from '@shared/types'
 
 const { state } = useSettingsStore()
 
-const open = ref(['appearance-main'])
+const open = ref(['appearance-main', 'appearance-icon'])
 const ZOOMS = [50, 75, 100, 125, 150, 175, 200]
 
 /**
@@ -48,7 +48,7 @@ async function chooseLang(l: ResolvedLocale): Promise<void> {
     // 语言与扩展风格一起应用：风格只对它所属的语言生效（anime/wenyan/hant→zh、pirate/shakespeare→en）
     applyLocaleChange(l, state.funLocale)
     try {
-        await window.api.setUiLocale(l)
+        await window.api.put('/locale', { body: l })
     } catch {
     /* 忽略写盘失败，界面仍即时切换 */
     }
@@ -71,12 +71,76 @@ async function onSysScale(v: boolean): Promise<void> {
     }
     state.ignoreSystemScale = v
     try {
-        const cur = await window.api.getSettings()
-        await window.api.saveSettings({ ...cur, ignoreSystemScale: v })
+        const cur = await window.api.get('/settings')
+        await window.api.put('/settings', { body: { ...cur, ignoreSystemScale: v } })
     } catch {
     /* ignore */
     }
-    window.api.relaunch()
+    void window.api.post('/app/relaunch')
+}
+
+// ---------------------------------------------------------------------------
+// 程序图标（内置 Logo + resources/diy 预制 + 用户上传）
+// ---------------------------------------------------------------------------
+
+const icons = ref<AppIconInfo[]>([])
+const fileInput = ref<HTMLInputElement | null>(null)
+
+/** 拉取图标列表；读不到不影响其它外观设置。 */
+async function loadIcons(): Promise<void> {
+    try {
+        icons.value = await window.api.get('/icons')
+    } catch {
+    /* 忽略：保持空列表 */
+    }
+}
+onMounted(loadIcons)
+
+/** 选中某个图标：改 state 即触发自动保存，主进程应用后广播预览回来。 */
+function chooseIcon(id: string): void {
+    state.appIcon = id
+}
+
+function pickIconFile(): void {
+    fileInput.value?.click()
+}
+
+/** 上传：整份读成字节交给主进程（中心裁剪 + 归一化 1024×1024 PNG），完成后自动选中。 */
+async function onIconFile(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement
+    const file = input.files?.[0]
+    input.value = '' // 清空以便连续选同一个文件
+    if (!file) return
+    try {
+        const data = new Uint8Array(await file.arrayBuffer())
+        const res = await window.api.post('/icons', { body: { name: file.name, data } })
+        icons.value = res.list
+        chooseIcon(res.id)
+        ElMessage.success(tt('sv.appearance.iconUploaded'))
+    } catch {
+        ElMessage.error(tt('sv.appearance.iconUploadFail'))
+    }
+}
+
+/** 删除用户上传的图标；若它正被选中，主进程会一并回退内置 Logo。 */
+async function removeIcon(it: AppIconInfo): Promise<void> {
+    try {
+        await ElMessageBox.confirm(tt('sv.appearance.iconDeleteText', { name: it.name }), tt('sv.appearance.iconDelete'), {
+            confirmButtonText: tt('msg.deleteBtn'),
+            cancelButtonText: tt('msg.cancelBtn'),
+            type: 'warning'
+        })
+    } catch {
+        return // 取消删除
+    }
+    try {
+        // 选中的正是它时先在本地回退内置 Logo：主进程也会落盘回退，但它的 settings:changed 广播
+        // 可能落在本窗口的「忽略自保存回放」窗口期内，本地同步一次才不会留下悬空的选中态。
+        if (state.appIcon === it.id) state.appIcon = ''
+        icons.value = await window.api.delete('/icons/:id', { params: { id: it.id } })
+    } catch {
+        ElMessage.error(tt('sv.appearance.iconDeleteFail'))
+    }
 }
 </script>
 
@@ -151,6 +215,49 @@ async function onSysScale(v: boolean): Promise<void> {
                     </el-form-item>
                 </el-form>
             </el-collapse-item>
+
+            <el-collapse-item name="appearance-icon">
+                <template #title>
+                    <div class="sec__title"><el-icon><PictureOutlined /></el-icon> {{ $t('sv.appearance.iconTitle') }}</div>
+                </template>
+
+                <div class="hint">{{ $t('sv.appearance.iconHint') }}</div>
+                <div class="icons">
+                    <button
+                        v-for="it in icons"
+                        :key="it.id"
+                        type="button"
+                        class="icon-cell"
+                        :class="{ 'icon-cell--on': state.appIcon === it.id }"
+                        :title="it.source === 'default' ? $t('sv.appearance.iconDefault') : it.name"
+                        @click="chooseIcon(it.id)"
+                    >
+                        <img class="icon-cell__img" :src="it.dataUrl" alt="" />
+                        <span class="icon-cell__name">{{ it.source === 'default' ? $t('sv.appearance.iconDefault') : it.name }}</span>
+                        <span
+                            v-if="it.source === 'user'"
+                            class="icon-cell__del"
+                            :title="$t('sv.appearance.iconDelete')"
+                            @click.stop="removeIcon(it)"
+                        >
+                            <DeleteOutlined />
+                        </span>
+                    </button>
+
+                    <!-- 上传入口：点开系统文件选择框，图标由主进程归一化后存到配置目录 -->
+                    <button type="button" class="icon-cell icon-cell--add" @click="pickIconFile">
+                        <span class="icon-cell__add"><PlusOutlined /></span>
+                        <span class="icon-cell__name">{{ $t('sv.appearance.iconUpload') }}</span>
+                    </button>
+                </div>
+                <input
+                    ref="fileInput"
+                    class="icon-file"
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    @change="onIconFile"
+                />
+            </el-collapse-item>
         </el-collapse>
     </div>
 </template>
@@ -211,5 +318,87 @@ async function onSysScale(v: boolean): Promise<void> {
 }
 .scheme__name {
   white-space: nowrap;
+}
+
+/* ---- 程序图标选择器 ---- */
+.icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+.icon-cell {
+  position: relative;
+  width: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-regular);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.icon-cell:hover {
+  border-color: var(--el-color-primary);
+}
+.icon-cell--on {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+.icon-cell:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+.icon-cell__img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.icon-cell__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 删除按钮只在悬停该图标时出现；只对用户上传的图标渲染 */
+.icon-cell__del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--el-color-danger);
+  color: #fff;
+  font-size: 10px;
+}
+.icon-cell:hover .icon-cell__del {
+  display: flex;
+}
+.icon-cell--add {
+  border-style: dashed;
+  color: var(--el-text-color-secondary);
+}
+.icon-cell__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+}
+.icon-file {
+  display: none;
 }
 </style>

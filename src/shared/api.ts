@@ -1,0 +1,309 @@
+/**
+ * IPC 的「网络层」契约：把主进程与渲染层之间的通信建模成一个 REST 服务。
+ *
+ * - 渲染层 → 主进程是**请求**：统一走 `ipc:request` 通道，信封为 `IpcRequest`
+ *   (`{ method, path, query?, body? }`)，由主进程的 Router 按「方法 + 路径」分发。
+ *   前端拿到完整的五个动词：`api.get / post / put / patch / delete`。
+ * - 主进程 → 渲染层是**推送**：统一走 `ipc:event` 通道，信封为 `IpcEvent`
+ *   (`{ event, payload }`)，渲染层按键名订阅。
+ *
+ * `ApiRoutes` 是全部端点的唯一事实来源：主进程按它校验路由与返回值，渲染层的
+ * `window.api` 也按它推导每个调用的入参与返回值类型。新增端点时先在这里登记。
+ */
+
+import type {
+    AppIconInfo,
+    AppIconState,
+    AppMeta,
+    AppSlotsState,
+    AppUpdateEvent,
+    ConfigDirInfo,
+    ConfigMigrationProgress,
+    CurrentBalanceInfo,
+    DshActionResult,
+    EnvProbe,
+    HotkeyState,
+    InstalledVersions,
+    LocaleCode,
+    LogEntry,
+    ModelsInfo,
+    NodeDeployProgress,
+    NodeDeployResult,
+    NodeStatus,
+    NpmRegistry,
+    NpmSource,
+    NpmStatus,
+    ResolvedLocale,
+    Settings,
+    Theme,
+    ToolActionResult,
+    UpdateResult,
+    WebviewInfo
+} from './types'
+
+// ---------------------------------------------------------------------------
+// 传输层：通道与信封
+// ---------------------------------------------------------------------------
+
+/** 渲染层 → 主进程的请求通道（`ipcRenderer.invoke`）。 */
+export const IPC_REQUEST_CHANNEL = 'ipc:request'
+
+/** 主进程 → 渲染层的推送通道（`webContents.send`）。 */
+export const IPC_EVENT_CHANNEL = 'ipc:event'
+
+/** 请求方法（语义对齐 HTTP 动词）。 */
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+
+/** 一个 IPC 请求的信封。 */
+export interface IpcRequest {
+    method: HttpMethod
+    /** 具体路径，路径参数已由客户端 URL 编码后填入（如 `/versions/node`）。 */
+    path: string
+    /** 查询参数（等价于 URL query）。 */
+    query?: Record<string, unknown>
+    /** 请求体（等价于 HTTP body）。 */
+    body?: unknown
+}
+
+/** 主进程推送给渲染层的事件信封。 */
+export interface IpcEvent<T = unknown> {
+    event: string
+    payload: T
+}
+
+// ---------------------------------------------------------------------------
+// 路由表：全部端点的唯一事实来源
+// ---------------------------------------------------------------------------
+
+/**
+ * 每个键是 `"<METHOD> <path>"`，值是这次请求的入参 / 出参类型：
+ * - `query`：`?a=b` 形式的查询参数
+ * - `body`：请求体（JSON 可序列化）
+ * - `result`：返回值（`void` 表示只发不收）
+ *
+ * 路径里的 `:name` 是路径参数（如 `/versions/:kind/:version`）。
+ */
+export interface ApiRoutes {
+    // ---- 设置 / 界面语言 ----
+    'GET /settings': { result: Settings }
+    'PUT /settings': { body: Settings; result: Settings }
+    'POST /settings/apply': { result: void }
+    'POST /settings/reset': { result: Settings }
+    'GET /locale': { result: ResolvedLocale }
+    'PUT /locale': { body: ResolvedLocale; result: ResolvedLocale }
+
+    // ---- 日志 ----
+    'GET /logs': { result: LogEntry[] }
+
+    // ---- dsh 本体（子进程）----
+    'GET /dsh/url': { result: string | null }
+    'GET /dsh/running': { result: boolean }
+    'GET /dsh/version': { result: string | null }
+    'GET /dsh/installed': { result: boolean }
+    'GET /dsh/versions': { query: { prerelease: boolean; registry: NpmRegistry }; result: string[] }
+    'GET /dsh/update-check': { query: { prerelease?: boolean; registry?: NpmRegistry }; result: UpdateResult }
+    'POST /dsh/start': { result: void }
+    'POST /dsh/stop': { result: void }
+    'POST /dsh/restart': { result: void }
+    'POST /dsh/update': { body?: { registry?: NpmRegistry }; result: DshActionResult }
+    'POST /dsh/install': { body?: { version?: string | null; registry?: NpmRegistry }; result: DshActionResult }
+    'DELETE /dsh': { result: DshActionResult }
+    /** 请核心窗口重新加载内嵌的 dsh UI（标题栏刷新按钮）。 */
+    'POST /dsh/reload': { result: void }
+
+    // ---- 应用元信息 / 自动更新 ----
+    'GET /app/meta': { result: AppMeta }
+    'GET /app/update/state': { result: AppUpdateEvent | null }
+    'POST /app/update/check': { body: { prerelease: boolean }; result: { ok: boolean; message: string } }
+    'GET /app/update/slots': { result: AppSlotsState }
+    'POST /app/update/rollback': { result: { ok: boolean; message: string } }
+    'POST /app/update/restart': { result: void }
+    'POST /app/relaunch': { result: void }
+    'POST /app/quit': { result: void }
+
+    // ---- 运行环境 / Node ----
+    'GET /env': { result: EnvProbe }
+    'GET /node/status': { result: NodeStatus }
+    'GET /node/versions': { query: { includeNonLts?: boolean }; result: string[] }
+    'POST /node/deploy': { body?: { version?: string }; result: NodeDeployResult }
+
+    // ---- npm ----
+    'GET /npm/status': { result: NpmStatus }
+    'GET /npm/versions': { query: { prerelease?: boolean }; result: string[] }
+    'POST /npm/update': { body?: { source?: NpmSource; version?: string }; result: ToolActionResult }
+    'POST /npm/ensure': { body?: { version?: string }; result: ToolActionResult }
+
+    // ---- 安装取消 / 版本管理（node · npm · dsh 通用）----
+    'POST /installs/cancel': { result: boolean }
+    'GET /versions/:kind': { result: InstalledVersions }
+    /** 切换某个工具的生效版本（不重装）。 */
+    'PUT /versions/:kind/active': { body: { version: string }; result: ToolActionResult }
+    /** 删除某个已安装版本。 */
+    'DELETE /versions/:kind/:version': { result: ToolActionResult }
+
+    // ---- 配置目录 ----
+    'GET /config-dir': { result: ConfigDirInfo }
+    'PUT /config-dir': { body: { dir: string | null }; result: ConfigDirInfo }
+    'POST /config-dir/revert': { result: ConfigDirInfo }
+    'POST /config-dir/migration': { result: void }
+    'DELETE /config-dir/migration': { result: void }
+
+    // ---- 只读状态 ----
+    'GET /hotkeys/state': { result: HotkeyState }
+    'GET /webview/info': { result: WebviewInfo }
+    'GET /models/info': { result: ModelsInfo }
+    'GET /models/balance': { result: CurrentBalanceInfo | null }
+
+    // ---- 程序图标 ----
+    'GET /icons': { result: AppIconInfo[] }
+    'GET /icons/current': { result: AppIconState }
+    'POST /icons': { body: { name: string; data: Uint8Array }; result: { id: string; list: AppIconInfo[] } }
+    'DELETE /icons/:id': { result: AppIconInfo[] }
+
+    // ---- 原生对话框 ----
+    'POST /dialog/directory': { result: string | null }
+    'POST /dialog/file': { result: string | null }
+
+    // ---- 外壳窗口 / 标签 ----
+    'POST /shell/open-external': { body: { url: string }; result: void }
+    'POST /shell/open-url': { body: { url: string }; result: void }
+    'POST /shell/focus-core': { result: void }
+    'GET /shell/meta': { result: { winId: number; isCore: boolean } }
+    /** 取走本窗口的「开页意图」（创建副窗口时若带 URL，据此开一个动态标签页）。 */
+    'POST /shell/open-intent': { result: string | null }
+    'PUT /shell/title': { body: { title: string }; result: void }
+    'POST /shell/move-tab': { body: { url: string }; result: boolean }
+
+    // ---- 跨窗口拖标签 ----
+    'POST /tab-drag': { body: { target: string }; result: Array<{ id: number; x: number; y: number; w: number; h: number }> }
+    /** 报告当前「指针悬停的目标窗口」。 */
+    'PATCH /tab-drag': { body: { targetId: number | null }; result: void }
+    /** 结束 / 取消拖拽。 */
+    'DELETE /tab-drag': { result: void }
+    'POST /tab-drag/drop': { body: { targetId: number }; result: void }
+
+    // ---- 窗口控制 ----
+    'PUT /windows/zoom': { body: { percent: number }; result: void }
+    'GET /windows/maximized': { result: boolean }
+    'POST /windows/minimize': { result: void }
+    'POST /windows/maximize-toggle': { result: void }
+    'POST /windows/close': { result: void }
+}
+
+/** 主进程推送给渲染层的全部事件及其载荷类型。 */
+export interface AppEvents {
+    'appupdate:event': AppUpdateEvent
+    'nodeenv:deploy-progress': NodeDeployProgress
+    'npmenv:progress': NodeDeployProgress
+    'configdir:migration': ConfigMigrationProgress
+    'dsh:url': string | null
+    'dsh:log': LogEntry
+    'settings:changed': Settings
+    'settings:theme': Theme
+    'settings:locale': LocaleCode
+    'appicon:changed': AppIconState
+    'hotkey:state': HotkeyState
+    'win:maximized': boolean
+    'shell:core': boolean
+    'tab-drag-hover': boolean
+    'tab-drag:moved': void
+    'ui:new-tab': string
+    'ui:toggle-view': void
+    'ui:reload-dsh': void
+    'dsh:missing': void
+}
+
+// ---------------------------------------------------------------------------
+// 类型工具：从路由表推导每个端点的路径 / 入参 / 出参
+// ---------------------------------------------------------------------------
+
+/** 全部路由键。 */
+export type RouteKey = keyof ApiRoutes
+
+/** 某个 HTTP 方法下的全部路由键。 */
+export type RouteKeys<Method extends HttpMethod> = Extract<RouteKey, `${Method} ${string}`>
+
+/** 从路由键取出路径模板。 */
+export type PathOf<Key extends RouteKey> = Key extends `${HttpMethod} ${infer Path}` ? Path : never
+
+/** 按「路径 → 路由键」建索引：让客户端能从具体路径反查出路由定义。 */
+export type RoutesByPath<Method extends HttpMethod> = { [Key in RouteKeys<Method> as PathOf<Key>]: Key }
+
+/** 按路径查表（`Map` 作为裸类型参数，才能用 `keyof` 索引）。 */
+type LookupPath<Map, Path extends string> = Path extends keyof Map ? Map[Path] : never
+
+/** 某个方法下、某条具体路径对应的路由键。 */
+export type RouteAt<Method extends HttpMethod, Path extends string> = LookupPath<RoutesByPath<Method>, Path>
+
+/** 路径模板按 `/` 拆成的段（联合类型）。 */
+type Segments<Template extends string> = Template extends `${infer Head}/${infer Tail}`
+    ? Head | Segments<Tail>
+    : Template
+
+/** 单个路径段若是 `:name` 则取出 name。 */
+type SegmentParam<Segment> = Segment extends `:${infer Name}` ? Name : never
+
+/** 路径模板里的全部参数名。 */
+export type PathParams<Template extends string> = SegmentParam<Segments<Template>>
+
+/** 路由声明的查询参数类型（未声明则为 undefined）。 */
+export type QueryOfRoute<Key extends RouteKey> = 'query' extends keyof ApiRoutes[Key]
+    ? ApiRoutes[Key] extends { query?: infer Q } ? Q : never
+    : undefined
+
+/** 路由声明的请求体类型（未声明则为 undefined）。 */
+export type BodyOfRoute<Key extends RouteKey> = 'body' extends keyof ApiRoutes[Key]
+    ? ApiRoutes[Key] extends { body?: infer B } ? B : never
+    : undefined
+
+/** 路由声明的返回值类型。 */
+export type ResultOfRoute<Key extends RouteKey> = ApiRoutes[Key] extends { result: infer R } ? R : never
+
+/** 一次请求的可选项：路径参数按需必填，query / body 按路由声明。 */
+export type RequestOptions<Key extends RouteKey> =
+    (PathParams<PathOf<Key>> extends never
+        ? { params?: undefined }
+        : { params: Record<PathParams<PathOf<Key>>, string> })
+    & { query?: QueryOfRoute<Key> }
+    & { body?: BodyOfRoute<Key> }
+
+/**
+ * REST 风格客户端：方法与路径一对一，入参 / 出参由 `ApiRoutes` 推导。
+ *
+ * ```ts
+ * api.get('/settings')
+ * api.put('/settings', { body: settings })
+ * api.get('/versions/:kind', { params: { kind: 'node' } })
+ * api.delete('/icons/:id', { params: { id: 'user/abc.png' } })
+ * ```
+ */
+export interface RestClient {
+    get<Path extends keyof RoutesByPath<'GET'>>(
+        path: Path,
+        options?: RequestOptions<RouteAt<'GET', Path>>
+    ): Promise<ResultOfRoute<RouteAt<'GET', Path>>>
+    post<Path extends keyof RoutesByPath<'POST'>>(
+        path: Path,
+        options?: RequestOptions<RouteAt<'POST', Path>>
+    ): Promise<ResultOfRoute<RouteAt<'POST', Path>>>
+    put<Path extends keyof RoutesByPath<'PUT'>>(
+        path: Path,
+        options?: RequestOptions<RouteAt<'PUT', Path>>
+    ): Promise<ResultOfRoute<RouteAt<'PUT', Path>>>
+    patch<Path extends keyof RoutesByPath<'PATCH'>>(
+        path: Path,
+        options?: RequestOptions<RouteAt<'PATCH', Path>>
+    ): Promise<ResultOfRoute<RouteAt<'PATCH', Path>>>
+    delete<Path extends keyof RoutesByPath<'DELETE'>>(
+        path: Path,
+        options?: RequestOptions<RouteAt<'DELETE', Path>>
+    ): Promise<ResultOfRoute<RouteAt<'DELETE', Path>>>
+}
+
+/** 渲染层可见的全部能力：REST 客户端 + 少量本地常量 + 事件订阅。 */
+export interface RendererApi extends RestClient {
+    platform: string
+    versions: { electron: string; node: string; chrome: string }
+    /** 订阅主进程推送的事件，返回退订函数。 */
+    on<Event extends keyof AppEvents>(event: Event, callback: (payload: AppEvents[Event]) => void): () => void
+}

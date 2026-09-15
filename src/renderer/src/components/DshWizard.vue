@@ -119,7 +119,7 @@ async function deployOnce(version?: string): Promise<boolean> {
     deployTotal.value = 0
     deploySpeed.value = 0
     try {
-        const r = await window.api.deployLocalNode(version ? { version } : {})
+        const r = await window.api.post('/node/deploy', { body: version ? { version } : {} })
         if (r.canceled) {
             // 用户主动取消：不算失败，也不弹错误提示。
             ElMessage.info(r.message || t('dshMissing.cancel'))
@@ -151,7 +151,7 @@ async function ensureNpmOnce(version?: string): Promise<boolean> {
     canceling.value = false
     npmExtracting.value = false
     try {
-        const r = await window.api.ensureBundledNpm(version ? { version } : {})
+        const r = await window.api.post('/npm/ensure', { body: version ? { version } : {} })
         if (r.canceled) {
             // 用户主动取消：不算失败，也不弹错误提示。
             ElMessage.info(r.message || t('dshMissing.cancel'))
@@ -176,7 +176,7 @@ async function ensureNpmOnce(version?: string): Promise<boolean> {
 /** 探测「程序内置」npm 是否已缓存：决定第 2 步是否需要先下载。 */
 async function loadNpmStatus(): Promise<void> {
     try {
-        npmBundledPresent.value = (await window.api.getNpmStatus()).bundled.present
+        npmBundledPresent.value = (await window.api.get('/npm/status')).bundled.present
     } catch {
         npmBundledPresent.value = false
     }
@@ -187,7 +187,7 @@ async function loadNodeVersions(): Promise<void> {
     if (nodeVersionsLoading.value) return
     nodeVersionsLoading.value = true
     try {
-        const list = await window.api.listNodeVersions({ includeNonLts: nodeIncludeNonLts.value })
+        const list = await window.api.get('/node/versions', { query: { includeNonLts: nodeIncludeNonLts.value } })
         nodeVersions.value = list
         if (!list.includes(nodeVersion.value)) nodeVersion.value = list[0] ?? ''
     } catch {
@@ -202,7 +202,7 @@ async function loadNpmVersions(): Promise<void> {
     if (npmVersionsLoading.value) return
     npmVersionsLoading.value = true
     try {
-        const list = await window.api.listNpmVersions({ prerelease: npmIncludePre.value })
+        const list = await window.api.get('/npm/versions', { query: { prerelease: npmIncludePre.value } })
         npmVersions.value = list
         if (!list.includes(npmVersion.value)) npmVersion.value = list[0] ?? ''
     } catch {
@@ -215,7 +215,7 @@ async function loadNpmVersions(): Promise<void> {
 /** 读取本地 Node 已安装版本的生效项（envProbe 读不到时的兜底）。 */
 async function loadInstalledNode(): Promise<void> {
     try {
-        nodeActiveVersion.value = (await window.api.listInstalledVersions('node')).active
+        nodeActiveVersion.value = (await window.api.get('/versions/:kind', { params: { kind: 'node' } })).active
     } catch {
         nodeActiveVersion.value = null
     }
@@ -226,7 +226,7 @@ async function cancelCurrentInstall(): Promise<void> {
     if (canceling.value) return
     canceling.value = true
     try {
-        await window.api.cancelInstall()
+        await window.api.post('/installs/cancel')
     } catch {
         // 取消失败不额外打扰用户，等安装流程自行结束。
     }
@@ -235,7 +235,7 @@ async function cancelCurrentInstall(): Promise<void> {
 async function probeEnv(): Promise<void> {
     probingEnv.value = true
     try {
-        envProbe.value = await window.api.probeEnv()
+        envProbe.value = await window.api.get('/env')
         envError.value = null
         // 所选 npm 在不可用时回退到内置 npm。
         if (envProbe.value) {
@@ -260,7 +260,7 @@ const cfgDir = ref('')
 const cfgDefaultDir = ref('')
 async function loadConfigDir(): Promise<void> {
     try {
-        const info = await window.api.getConfigDir()
+        const info = await window.api.get('/config-dir')
         cfgDir.value = info.current
         cfgDefaultDir.value = info.default
     } catch {
@@ -274,12 +274,12 @@ function applyConfigDir(info: ConfigDirInfo): void {
     if (info.pending) ElMessage.info(t('dshMissing.configDirPending'))
 }
 async function pickConfigDir(): Promise<void> {
-    const p = await window.api.openDirectory()
+    const p = await window.api.post('/dialog/directory')
     if (!p) return
-    applyConfigDir(await window.api.setConfigDir(p))
+    applyConfigDir(await window.api.put('/config-dir', { body: { dir: p } }))
 }
 async function resetConfigDir(): Promise<void> {
-    applyConfigDir(await window.api.setConfigDir(null))
+    applyConfigDir(await window.api.put('/config-dir', { body: { dir: null } }))
 }
 // ---- 代理设置（右上角入口 → 全屏面板）----
 // 向导本身**不铺开网络表单**，只在右上角留一个入口，点开才是全屏的代理设置。
@@ -306,18 +306,20 @@ async function closeProxySettings(): Promise<void> {
 /** 把向导当前选择持久化到设置。 */
 async function persistWizard(): Promise<boolean> {
     try {
-        const cur = await window.api.getSettings()
-        await window.api.saveSettings({
-            ...cur,
-            npmRegistry: installReg.value,
-            dshSource: installSource.value,
-            nodeRuntime: nodeRuntimeChoice.value,
-            npmSource: installSource.value === 'local' ? installNpm.value : cur.npmSource,
-            proxyEnabled: proxyEnabled.value,
-            proxyProtocol: proxyProtocol.value,
-            proxyHost: proxyHost.value,
-            proxyPort: proxyPort.value,
-            proxyScope: [...proxyScope.value]
+        const cur = await window.api.get('/settings')
+        await window.api.put('/settings', {
+            body: {
+                ...cur,
+                npmRegistry: installReg.value,
+                dshSource: installSource.value,
+                nodeRuntime: nodeRuntimeChoice.value,
+                npmSource: installSource.value === 'local' ? installNpm.value : cur.npmSource,
+                proxyEnabled: proxyEnabled.value,
+                proxyProtocol: proxyProtocol.value,
+                proxyHost: proxyHost.value,
+                proxyPort: proxyPort.value,
+                proxyScope: [...proxyScope.value]
+            }
         })
         return true
     } catch (err) {
@@ -331,9 +333,11 @@ async function performInstall(): Promise<boolean> {
     installLog.value = []
     try {
         if (!(await persistWizard())) return false
-        const r = await window.api.installDsh({
-            version: installVersion.value || null,
-            registry: installReg.value
+        const r = await window.api.post('/dsh/install', {
+            body: {
+                version: installVersion.value || null,
+                registry: installReg.value
+            }
         })
         if (!r.ok) {
             installError.value = r.message
@@ -392,9 +396,11 @@ async function loadInstallVersions(): Promise<void> {
     versionsLoading.value = true
     const scope = versionsScope()
     try {
-        const list = await window.api.listVersions({
-            prerelease: installPrerelease.value,
-            registry: installReg.value
+        const list = await window.api.get('/dsh/versions', {
+            query: {
+                prerelease: installPrerelease.value,
+                registry: installReg.value
+            }
         })
         installVersions.value = list
         versionsLoadedFor.value = scope
@@ -433,7 +439,7 @@ watch([installPrerelease, installReg], () => {
 watch(nodeIncludeNonLts, () => void loadNodeVersions())
 watch(npmIncludePre, () => void loadNpmVersions())
 
-const quitShell = (): void => window.api.quit()
+const quitShell = (): void => void window.api.post('/app/quit')
 
 let offLog: (() => void) | null = null
 let offDeploy: (() => void) | null = null
@@ -441,13 +447,13 @@ let offNpm: (() => void) | null = null
 
 onMounted(() => {
     // 安装时把主进程的 stdout/stderr 追加到本页日志。
-    offLog = window.api.onLog((entry) => {
+    offLog = window.api.on('dsh:log', (entry) => {
         if (!installingDsh.value) return
         const line = (entry.k === 'e' ? '[err] ' : '') + entry.s
         installLog.value.push(line)
         if (installLog.value.length > 500) installLog.value.splice(0, installLog.value.length - 500)
     })
-    offDeploy = window.api.onNodeDeployProgress((p) => {
+    offDeploy = window.api.on('nodeenv:deploy-progress', (p) => {
         // 解压阶段只显示不确定动画，不显示百分比。
         nodeExtracting.value = p.phase === 'extract'
         deployPercent.value = p.percent
@@ -455,7 +461,7 @@ onMounted(() => {
         deployTotal.value = p.total
         deploySpeed.value = p.speed
     })
-    offNpm = window.api.onNpmDeployProgress((p) => {
+    offNpm = window.api.on('npmenv:progress', (p) => {
         installingNpm.value = true
         npmExtracting.value = p.phase === 'extract'
         npmPercent.value = p.percent
@@ -465,7 +471,7 @@ onMounted(() => {
     })
     void (async () => {
         try {
-            const s = await window.api.getSettings()
+            const s = await window.api.get('/settings')
             installReg.value = s.npmRegistry
             installPrerelease.value = s.checkPrerelease === true
             installSource.value = s.dshSource ?? 'local'

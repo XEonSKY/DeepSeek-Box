@@ -245,7 +245,16 @@ export default {
             ignoreScaleHint: '开启后忽略操作系统显示缩放。',
             sysScaleText: '此设置需重启应用后生效。立即重启？',
             restartNow: '立即重启',
-            funHint: '语言与扩展翻译；不改 dsh 设置。'
+            funHint: '语言与扩展翻译；不改 dsh 设置。',
+            iconTitle: '程序图标',
+            iconHint: '自定义软件在窗口、任务栏与系统托盘中的图标；内置 Logo 会随深浅色切换。上传的图片会中心裁剪并归一化为 1024×1024。',
+            iconDefault: 'DeepSeek',
+            iconUpload: '上传图片',
+            iconUploaded: '图标已上传并应用。',
+            iconUploadFail: '图标上传失败：请选择 PNG / JPG / WebP 等常见图片格式。',
+            iconDelete: '删除自定义图标',
+            iconDeleteText: '将删除自定义图标「{name}」，确定继续吗？',
+            iconDeleteFail: '删除图标失败。'
         },
         network: {
             registry: 'npm 镜像源',
@@ -510,6 +519,7 @@ export default {
         uninstallBoxText: '将卸载 DeepSeek Harness（{pkg}），并先停止运行中的 dsh。卸载后需要重新安装才能使用。确定继续吗？',
         uninstallOkBtn: '卸载',
         cancelBtn: '取消',
+        deleteBtn: '删除',
         dshRunningTitle: '需先关闭正在运行的 dsh',
         updateStopText: '升级 DeepSeek Harness 前会先强制关闭正在运行的 dsh 服务，升级完成后会自动重启以运行新版本。确定继续吗？',
         switchStopText: '安装 / 切换到所选版本前会先强制关闭正在运行的 dsh 服务，完成后会自动重启以运行该版本。确定继续吗？',

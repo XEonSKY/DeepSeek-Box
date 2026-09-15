@@ -10,7 +10,8 @@ The main process has two halves: `app/` handles the app itself (windows, config,
 | `settings.ts` | Settings and config directory | `configDir()` / `loadSettings()` / `saveSettings()`; config-directory migration orchestration; `tempDownloadDir()` / `tempNpmDir()`; file watcher |
 | `configmigrate.ts` | Config-directory migration implementation | Plan persistence, `scanTree` / `migrateTree`, `rollbackMoves` |
 | `models.ts` | Models and balances | `readModelsInfo()` / `readCurrentBalance()`; reads dsh's `settings.yaml` / `.credentials.yaml`, merges providers by token, and queries model catalogues and balances over the network; **does not depend on electron, keys stay in the main process** |
-| `ipc.ts` | All `ipcMain` handlers | Implements the `RendererApi` contract; install progress, version lists, models and balances, etc. |
+| `ipc.ts` | All IPC endpoints | Registers REST routes with `Router`; windows / settings / dsh / environment / models / icons, etc. |
+| `router.ts` | IPC route engine | Elysia-style chained routing: `:name` path parameters, `query` / `body`, dispatched on the single `ipc:request` channel |
 | `ui.ts` | Windows / tray / shortcuts | `createShellWindow` / `createTray` / `syncGlobalHotkey` |
 | `appupdate.ts` | App self-update | Resolves GitHub Releases, background download, event broadcasts |
 | `appslots.ts` | A/B version slots | Archives the old version, generates the rollback script, startup health guard |
@@ -36,4 +37,6 @@ The main process has two halves: `app/` handles the app itself (windows, config,
 | `semver.ts` | Version utilities | `sortVersionsDesc` / `filterByPrerelease` / `compareVersions` / `pickLatest` |
 | `net.ts` | Proxy | Proxy-related helpers |
 
-> For per-module details see the corresponding developer docs: the install pipeline in [DeepSeek Harness & environment install pipeline](/en/dev/installs), the config directory in [Config directory](/en/dev/config-dir), and updates in [App self-update](/en/dev/app-update).
+::: tip
+For per-module details see the corresponding developer docs: the install pipeline in [DeepSeek Harness & environment install pipeline](/en/dev/installs), the config directory in [Config directory](/en/dev/config-dir), and updates in [App self-update](/en/dev/app-update).
+:::

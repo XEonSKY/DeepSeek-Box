@@ -107,6 +107,11 @@ export interface Settings {
     /** 配色方案 id（预制方案见 renderer 的 `lib/theme.ts`；同时决定主色与页面/侧栏底色）。 */
     colorScheme: ColorSchemeId
     /**
+   * 程序图标：'' = 内置 Logo（随深浅色切换）；'diy/<文件>' = `resources/diy` 下的预制图标；
+   * 'user/<文件>' = 用户自行上传（存于 <configDir>/icons）。见 main/app/appicon.ts。
+   */
+    appIcon: string
+    /**
    * 「设置 → 模型」是否已获得读取本地凭据文件（`<dshHome>/.credentials.yaml`）的同意。
    * 首次进入该页时由用户确认并置 true；撤回后不再自动读取。
    */
@@ -234,6 +239,7 @@ export const DEFAULT_SETTINGS: Settings = {
     openDshInBrowser: false,
     webviewUserAgent: '',
     colorScheme: 'default',
+    appIcon: '',
     modelsCredConsent: false
 }
 
@@ -267,6 +273,23 @@ export interface AppMeta {
     version: string | null
     arch: string | null
     platform: string | null
+}
+
+/** 程序图标列表项（「设置 → 外观」的图标选择器）。 */
+export interface AppIconInfo {
+    /** '' = 内置 Logo；'diy/<文件>' = 预制图标；'user/<文件>' = 用户上传。 */
+    id: string
+    /** 展示名（内置 Logo 由界面本地化，其余为文件名）。 */
+    name: string
+    source: 'default' | 'diy' | 'user'
+    /** 缩略后的预览图（data URL，可直接喂给 <img>）。 */
+    dataUrl: string
+}
+
+/** 当前生效的程序图标：id + 预览图（id 为 '' 表示内置 Logo）。 */
+export interface AppIconState {
+    id: string
+    dataUrl: string
 }
 
 /** 已压缩保留的一个旧版本（A/B 双槽里的「上一版」）。 */
@@ -478,195 +501,6 @@ export interface ModelsInfo {
     entries: ProviderEntryInfo[]
     /** 顶层错误码：settings-missing ｜ settings-parse ｜ no-provider ｜ internal；正常为 null。 */
     errorCode: string | null
-}
-
-/** Everything the renderer (shell UI) can ask of the main process. */
-export interface RendererApi {
-    platform: string
-    versions: { electron: string; node: string; chrome: string }
-
-    getSettings(): Promise<Settings>
-    /** 当前界面语言：读取 dsh settings.yaml 的 locale.preference（zh/en；未设则跟随系统解析）。 */
-    getUiLocale(): Promise<ResolvedLocale>
-    /** 把界面语言写回 dsh settings.yaml 的 locale.preference（两字母码）。 */
-    setUiLocale(locale: ResolvedLocale): Promise<void>
-    /** Persist settings to disk only (no restart). */
-    saveSettings(s: Settings): Promise<Settings>
-    /** (Re)start dsh using the persisted settings so they take effect. */
-    applySettings(): Promise<void>
-    /** Reset all settings to defaults (persisted) and return them. */
-    resetSettings(): Promise<Settings>
-    getLogHistory(): Promise<LogEntry[]>
-    getDshUrl(): Promise<string | null>
-    /** Whether a dsh server instance is currently running in the main process. */
-    isDshRunning(): Promise<boolean>
-    /** Start / restart the dsh server (start is a no-op-ish restart). */
-    startDsh(): Promise<void>
-    /** Stop the running dsh server and clear its URL. */
-    stopDsh(): Promise<void>
-    /** Restart the dsh server with current settings. */
-    restartDsh(): Promise<void>
-    /** 设置外壳窗口缩放百分比（50–200）。 */
-    setWindowZoom(percent: number): Promise<void>
-    /** 重启应用（用于需重启生效的设置）。 */
-    relaunch(): void
-    /** Current installed @deepseek-ai/dsh version (from the local module). */
-    getDshVersion(): Promise<string | null>
-    /** Whether @deepseek-ai/dsh is present on this machine. */
-    isDshInstalled(): Promise<boolean>
-    /** List published dsh versions (descending), filtered by prerelease flag. */
-    listVersions(opts: { prerelease: boolean; registry: NpmRegistry }): Promise<string[]>
-    /** Check @deepseek-ai/dsh version/update in the main process. */
-    checkForUpdates(opts?: { prerelease?: boolean; registry?: NpmRegistry }): Promise<UpdateResult>
-    /**
-   * Upgrade the installed @deepseek-ai/dsh to the newest considered
-   * version (runs `npm install -g`). Resolves when the install finishes.
-   */
-    updateDsh(opts?: { registry?: NpmRegistry }): Promise<DshActionResult>
-    /** 运行环境元信息（关于页显示当前版本/架构）。 */
-    getAppMeta(): Promise<AppMeta>
-    /** 触发一次 app 自动更新检查；有可用更新时由主进程后台自动下载。 */
-    triggerAppUpdate(opts: { prerelease: boolean }): Promise<{ ok: boolean; message: string }>
-    /** 最近一次自动更新状态；页面挂载晚于事件时据此补齐（从未有过事件则为 null）。 */
-    getAppUpdateState(): Promise<AppUpdateEvent | null>
-    /** 订阅主进程的自动更新事件（检查中/可用/下载进度/下载完成/出错）。 */
-    onAppUpdateEvent(cb: (e: AppUpdateEvent) => void): () => void
-    /** 立即重启并安装已下载的更新。 */
-    restartAndInstall(): void
-    /** 版本槽状态：当前版本、压缩保留的上一版、待重启安装的版本。 */
-    getAppSlots(): Promise<AppSlotsState>
-    /** 回退到压缩保留的上一版（会重启应用）。 */
-    rollbackAppUpdate(): Promise<{ ok: boolean; message: string }>
-    /**
-   * Install / switch dsh to a specific version (or latest when no
-   * version is given). If nothing was installed, dsh is started afterwards.
-   */
-    installDsh(opts?: { version?: string | null; registry?: NpmRegistry }): Promise<DshActionResult>
-    /** Uninstall @deepseek-ai/dsh (stops dsh first). */
-    uninstallDsh(): Promise<DshActionResult>
-
-    /** A dsh server URL is (re)available; the shell should show it in the webview. */
-    onDshUrl(cb: (url: string) => void): () => void
-    /** Stream live dsh stdout/stderr lines. */
-    onLog(cb: (entry: LogEntry) => void): () => void
-    /**
-   * The app's own settings.json changed on disk (edited outside the shell);
-   * re-sync the whole settings form with the authoritative persisted values.
-   */
-    onSettingsChanged(cb: (s: Settings) => void): () => void
-    /**
-   * dsh's own settings.yaml (ui-theme.preference) changed on disk
-   * (e.g. the theme was changed inside the dsh UI); adopt it in the shell.
-   */
-    onThemeChanged(cb: (theme: Theme) => void): () => void
-    /**
-   * dsh's own settings.yaml (locale.preference) changed on disk
-   * (e.g. the language was changed inside the dsh UI); adopt it in the shell.
-   */
-    onLocaleChanged(cb: (locale: LocaleCode) => void): () => void
-    /** Main asks the renderer to flip between the Web view and the log view. */
-    onToggleView(cb: () => void): () => void
-    /** A webview asked to open a URL in a new window/tab; the shell opens an in-app tab. */
-    onNewTab(cb: (url: string) => void): () => void
-    /** Main informs this window its role changed (e.g. it became the new core window). */
-    onShellRole(cb: (isCore: boolean) => void): () => void
-    /** Main detected that dsh was removed/never installed; show the install mask. */
-    onDshMissing(cb: () => void): () => void
-
-    /** Ask the main process to request a reload of the dsh UI (title-bar refresh). */
-    reloadDsh(): void
-    /** The shell should reload the dsh UI when this fires. */
-    onReloadDsh(cb: () => void): () => void
-
-    openExternal(url: string): Promise<void>
-    /** Open a native directory picker; resolves the chosen path or null. */
-    openDirectory(): Promise<string | null>
-    /** Open a native file picker (e.g. for the dsh launcher); resolves the chosen path or null. */
-    openFile(): Promise<string | null>
-    /** Probe whether a system Node / npm is installed on this machine. */
-    probeEnv(): Promise<EnvProbe>
-    /** 环境页用：系统 / 本地部署 Node 的当前版本 + 最新 LTS 对比（会联网取 index.json）。 */
-    getNodeStatus(): Promise<NodeStatus>
-    /** 可安装的 Node 版本列表（新 → 旧；来自 nodejs.org 发行索引）。 */
-    listNodeVersions(opts: { includeNonLts: boolean }): Promise<string[]>
-    /** 下载并按当前平台/架构把 Node（默认最新 LTS，可指定版本）部署到配置目录。 */
-    deployLocalNode(opts?: { version?: string }): Promise<NodeDeployResult>
-    /** 环境页用：三个 npm 来源（系统 / 内置 / 本地 Node 自带）的当前版本 + registry 最新版对比。 */
-    getNpmStatus(): Promise<NpmStatus>
-    /** 可安装的 npm 版本列表（新 → 旧；来自所选 registry）。 */
-    listNpmVersions(opts: { prerelease: boolean }): Promise<string[]>
-    /** 按来源下载 / 切换 npm 版本（不传 version 为最新版）。 */
-    updateNpm(opts: { source: NpmSource; version?: string }): Promise<ToolActionResult>
-    /** 首次安装向导用：确保「程序内置」npm 已就绪（不传 version 时已缓存即免下载）。 */
-    ensureBundledNpm(opts?: { version?: string }): Promise<ToolActionResult>
-    /** 系统全局快捷键的注册状态（设置 → 快捷键页）。 */
-    getHotkeyState(): Promise<HotkeyState>
-    /** 系统全局快捷键注册状态变化（改设置后重新注册的结果）。 */
-    onHotkeyState(cb: (s: HotkeyState) => void): () => void
-    /** Webview 设置页用：默认 UA 与实际生效的 UA。 */
-    getWebviewInfo(): Promise<WebviewInfo>
-    /** 「设置 → 模型」用：读取 dsh 配置并联网查询各供应商余额（密钥明文绝不离开主进程）。 */
-    getModelsInfo(): Promise<ModelsInfo>
-    /** 状态栏用：当前供应商余额；未同意读取或无法解析时返回 null。 */
-    getCurrentBalance(): Promise<CurrentBalanceInfo | null>
-    /** 本地 Node 部署进度广播。 */
-    onNodeDeployProgress(cb: (p: NodeDeployProgress) => void): () => void
-    /** 「程序内置」npm 下载 / 解压进度广播。 */
-    onNpmDeployProgress(cb: (p: NodeDeployProgress) => void): () => void
-    /** 取消正在进行的 Node / npm / dsh 安装（下载与解压阶段）。 */
-    cancelInstall(): Promise<boolean>
-    /** 某个工具的已安装版本与生效版本（Node / npm / dsh）。 */
-    listInstalledVersions(kind: InstallKind): Promise<InstalledVersions>
-    /** 切换某个工具的生效版本（不重装）。 */
-    useInstalledVersion(kind: InstallKind, version: string): Promise<ToolActionResult>
-    /** 删除某个已安装版本。 */
-    removeInstalledVersion(kind: InstallKind, version: string): Promise<ToolActionResult>
-    /** 配置目录状态：当前有效 / 默认 / 覆盖值 / 待迁移计划。 */
-    getConfigDir(): Promise<ConfigDirInfo>
-    /** 设置自选配置目录（传 null 恢复默认）；旧目录有内容时返回带 pending 的状态，需重启迁移。 */
-    setConfigDir(dir: string | null): Promise<ConfigDirInfo>
-    /** 撤销尚未执行的配置目录迁移，固定回原目录。 */
-    revertConfigDir(): Promise<ConfigDirInfo>
-    /** 开始执行待迁移计划（重启引导阶段由渲染层触发）。 */
-    runConfigMigration(): Promise<void>
-    /** 请求取消正在执行的迁移（已搬内容会回滚）。 */
-    cancelConfigMigration(): Promise<void>
-    /** 配置目录迁移进度广播（进度条 + 当前文件）。 */
-    onConfigMigrationProgress(cb: (p: ConfigMigrationProgress) => void): () => void
-    /** 本窗口元信息：窗口 id 与是否核心窗口（核心窗口才承载 dsh UI）。 */
-    getShellMeta(): Promise<{ winId: number; isCore: boolean }>
-    /** 把一个 URL 开到一个独立（副）窗口（右键“在新窗口打开 / 移动”）。 */
-    openWebWindow(url: string): Promise<void>
-    /** 聚焦核心窗口（副窗口“跳转核心窗口”按钮）；无核心窗口时重建一个。 */
-    focusCoreWindow(): Promise<void>
-    /** 取走本窗口的“开页意图”（创建副窗口时若带 URL，据此开一个动态标签页）。 */
-    takeOpenIntent(): Promise<string | null>
-    /** 把本窗口“当前标签页标题”同步给主进程，用于命名本（副）窗口为：<标题> - 软件名。 */
-    setShellTitle(title: string): void
-    /** “移动到其它窗口”：主进程弹目标选择（其它壳窗口）。true=已移走（本窗口应移除对应标签）；false=取消。 */
-    moveTabToWindow(url: string): Promise<boolean>
-    /** 跨窗口拖标签：源窗口开始拖拽某标签，登记并取回“其它壳窗口”的屏幕几何供算落点。target 为 URL 或内置导航页伪链接。 */
-    tabDragBegin(target: string): Promise<Array<{ id: number; x: number; y: number; w: number; h: number }>>
-    /** 源窗口报告当前“指针悬停的目标窗口 id”（null=没有）。主进程让那个窗口亮起可接收遮罩。 */
-    tabDragHover(targetId: number | null): void
-    /** 结束/取消拖拽（源窗口未移入其它窗口时）。 */
-    tabDragEnd(): void
-    /** 源窗口决定把被拖标签移入某目标窗口。 */
-    tabDragDropTo(targetId: number): void
-    /** 主进程通知源窗口：被拖标签已移入其它窗口，应移除本地那个标签。 */
-    onTabDragMoved(cb: () => void): () => void
-    /** 主进程通知本窗口：是否正被某跨窗口拖拽“悬停”为目标（用于亮可接收遮罩）。 */
-    onTabDragHover(cb: (on: boolean) => void): () => void
-    quit(): void
-
-    // Frameless-window controls (drawn by the renderer's custom title bar).
-    windowMinimize(): void
-    windowToggleMaximize(): void
-    windowClose(): void
-    /** 本窗口当前是否最大化（自定义标题栏据此在「最大化 / 还原」之间切换图标与提示）。 */
-    isWindowMaximized(): Promise<boolean>
-    /** 主进程通知本窗口：最大化状态变化（双击拖动区 / 系统快捷键 / Aero Snap 也会触发）。 */
-    onWindowMaximized(cb: (maximized: boolean) => void): () => void
 }
 
 /**
