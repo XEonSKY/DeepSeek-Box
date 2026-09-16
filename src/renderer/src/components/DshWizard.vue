@@ -3,14 +3,15 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CloseOutlined, FileTextOutlined, DownloadOutlined, LinkOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
-import type { ConfigDirInfo, EnvProbe, NodeRuntimeKind, NpmSource, ProxyProtocol, ProxyScope } from '@shared/types'
+import type { ConfigDirInfo, EnvProbe, NodeRuntimeKind, NpmSource, ProxyProtocol, ProxyScope, RegistrySpeedResult } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
-import { MIN_NODE_MAJOR, nodeMajor } from '@shared/version'
+import { MIN_NODE_MAJOR, isPrerelease, nodeMajor } from '@shared/version'
 import { errorMessage } from '@shared/errors'
 import { useAppIcon } from '../lib/appIcon'
 import { formatDownload } from '../lib/format'
 import ProxyFields from './ProxyFields.vue'
 import WindowControls from './WindowControls.vue'
+import WizardSteps from './WizardSteps.vue'
 
 /**
  * @deepseek-ai/dsh 包缺失时的全屏安装向导。
@@ -45,9 +46,40 @@ const installLog = ref<string[]>([])
 // 是否打开全屏安装日志。
 const logFullscreen = ref(false)
 
-// ---- 首次安装四步引导 -----------------------------------------------
-// 0 镜像源 · 1 Node 环境 · 2 NPM 环境 · 3 DSH 环境
+// ---- 首次安装引导 ---------------------------------------------------
+// 0 安装方式 · 1 镜像源 · 2 Node 环境 · 3 NPM 环境 · 4 DSH 环境
+// 第 0 步决定后面是「简易安装」自动跑完 1–4，还是「自定义安装」由用户逐步选择。
 const step = ref(0)
+
+/** 安装方式：简易（自动）/ 自定义（逐步）；null = 尚未选择。 */
+type InstallMode = 'simple' | 'custom'
+const mode = ref<InstallMode | null>(null)
+
+/** 步骤条的分段定义（与 step 下标一一对应）。 */
+const STEP_KEYS = ['mode', 'source', 'node', 'npm', 'dsh'] as const
+const wizardSteps = computed(() => STEP_KEYS.map((k) => ({ key: k, label: t(`dshMissing.wiz.${k}`) })))
+
+/**
+ * 当前步的整体进度（0–100），`null` 表示不确定（显示动画）。
+ * 只有真正能给出百分比的阶段才报数：解压、测速、装 dsh 都拿不到准确百分比。
+ */
+const stepProgress = computed<number | null>(() => {
+    if (deployingNode.value) return nodeExtracting.value ? null : deployPercent.value
+    if (installingNpm.value) return npmExtracting.value ? null : npmPercent.value
+    return null
+})
+
+// ---- 镜像源测速（简易安装用来自动选源）----
+const speedTesting = ref(false)
+const speedResult = ref<RegistrySpeedResult | null>(null)
+const speedFailed = computed(() => speedResult.value !== null && speedResult.value.fastest === null)
+
+// ---- 简易安装 ----
+const simpleRunning = ref(false)
+/** 简易安装选定的 dsh 版本与其来源（用于给用户一句「要装什么」的说明）。 */
+const simpleVersion = ref('')
+const simplePrerelease = ref(false)
+
 const envProbe = ref<EnvProbe | null>(null)
 const probingEnv = ref(false)
 /** 环境探测 / 初始化失败的原因（原文，展示时套 i18n 前缀）；非空说明选项不可用是「探测失败」而非「真的没有」。 */
@@ -102,7 +134,29 @@ const npmExtracting = ref(false)
 const canceling = ref(false)
 
 /** 没有专用进度条（Node / npm 下载）时，通用执行条的文案。 */
-const installLabel = computed(() => (step.value === 3 ? t('dshMissing.progressDsh') : t('dshMissing.executing')))
+const installLabel = computed(() => (step.value === 4 ? t('dshMissing.progressDsh') : t('dshMissing.executing')))
+
+/** 安装 / 测速期间：禁用一切会改变流程的按钮。 */
+const busy = computed(() => installingDsh.value || simpleRunning.value || speedTesting.value)
+
+/** 第 0 步还没选装法时，主按钮不可点（否则点了也没反应，像是坏了）。 */
+const primaryDisabled = computed(() => step.value === 0 && mode.value === null)
+
+/** 主按钮文案：第 0 步按装法区分，最后一步是「安装」，其余是「执行并下一步」。 */
+const primaryLabel = computed(() => {
+    if (step.value === 0) {
+        return mode.value === 'simple' ? t('dshMissing.modeSimpleStart') : t('dshMissing.next')
+    }
+    return step.value < 4 ? t('dshMissing.runStep') : t('dshMissing.install')
+})
+
+/** 简易安装期间显示的说明：最终会装哪个版本（含「没有正式版」的提示）。 */
+const simplePlan = computed(() => {
+    if (!simpleVersion.value) return ''
+    return simplePrerelease.value
+        ? t('dshMissing.simplePlanPrerelease', { version: simpleVersion.value })
+        : t('dshMissing.simplePlanStable', { version: simpleVersion.value })
+})
 
 const runtimeHint = computed(() => {
     const c = nodeRuntimeChoice.value
@@ -354,20 +408,30 @@ async function performInstall(): Promise<boolean> {
 
 /** 执行当前步（持久化 + 该步动作），成功后自动进入下一步 / 完成。 */
 async function runCurrentStep(): Promise<void> {
-    if (installingDsh.value) return
+    if (installingDsh.value || simpleRunning.value) return
+    // 第 0 步不联网也不写设置：选了简易安装就直接交给自动流程，选了自定义才往下走。
+    if (step.value === 0) {
+        if (mode.value === 'simple') {
+            await runSimpleInstall()
+            return
+        }
+        if (mode.value === 'custom') step.value = 1
+        return
+    }
     installingDsh.value = true
     installError.value = ''
     let ok: boolean
     try {
-        if (step.value === 0) {
+        // 下标 1–4 依次是「镜像源 · Node · NPM · DSH」，相比原来的 0–3 整体后移一位。
+        if (step.value === 1) {
             ok = await persistWizard()
-        } else if (step.value === 1) {
+        } else if (step.value === 2) {
             ok = await persistWizard()
             // 选了本地 Node 但尚未部署 → 自动按所选版本下载部署（带进度）。
             if (ok && nodeRuntimeChoice.value === 'local' && envProbe.value && !envProbe.value.local.present) {
                 ok = await deployOnce(nodeVersion.value || undefined)
             }
-        } else if (step.value === 2) {
+        } else if (step.value === 3) {
             ok = await persistWizard()
             // 「程序内置」npm 由应用代管：选版本时装该版本，未选则由主进程复用缓存 / 拉最新。
             if (ok && installNpm.value === 'bundled') {
@@ -380,10 +444,106 @@ async function runCurrentStep(): Promise<void> {
         installingDsh.value = false
     }
     if (!ok) return
-    if (step.value >= 3) {
+    if (step.value >= 4) {
         emit('done') // 安装完成：主进程会自动启动 dsh，由父组件收起本向导
     } else {
         step.value = step.value + 1
+    }
+}
+
+/**
+ * 测速选出最快的镜像源。全部失败时返回 null（调用方保留用户当前设置，不瞎选）。
+ * 结果写进 `speedResult` 供界面展示每个源的实测延迟。
+ */
+async function pickFastestRegistry(): Promise<string | null> {
+    speedTesting.value = true
+    try {
+        const r = await window.api.post('/registries/speed')
+        speedResult.value = r
+        if (r.fastest) installReg.value = r.fastest
+        return r.fastest
+    } catch {
+        // 测速本身失败不该阻断安装：沿用当前设置继续。
+        // 但结果要留一个「空的成功结构」而不是 null —— 否则结果框整个消失，
+        // 用户既看不到「测速失败」的说明，也不知道为什么源没被自动切换。
+        speedResult.value = { samples: [], fastest: null }
+        return null
+    } finally {
+        speedTesting.value = false
+    }
+}
+
+/**
+ * 选 dsh 版本：**优先最新正式版，没有正式版时退回最新测试版**。
+ *
+ * 无需自己判两次：主进程的 `filterByPrerelease` 在「过滤掉预发布后为空」时会自动回退到全量，
+ * 所以传 `prerelease: false` 一次请求就同时满足这两种情况。
+ * 返回是否为「退回了测试版」，用于给用户一句说明。
+ */
+async function pickLatestDsh(): Promise<boolean> {
+    installPrerelease.value = false
+    // 先同步写上「已加载」标记：watch(step) 会在下一个 tick 看到 step 变成 4 并检查这个标记，
+    // 不先占位的话它会再发一次一模一样的请求。
+    versionsLoadedFor.value = versionsScope()
+    try {
+        const list = await window.api.get('/dsh/versions', { query: { prerelease: false, registry: installReg.value } })
+        installVersions.value = list
+        installVersion.value = list[0] ?? ''
+        simpleVersion.value = installVersion.value
+        simplePrerelease.value = list.length > 0 && isPrerelease(list[0])
+        return simplePrerelease.value
+    } catch (err) {
+        // 失败就别把标记留着，否则用户点「重试」时会被当成「已经加载过」而不再请求。
+        versionsLoadedFor.value = ''
+        throw err
+    }
+}
+
+/**
+ * 简易安装：按固定策略自动跑完「镜像源 → Node → NPM → DSH」四步。
+ *
+ * 策略（用户选定，见 modeSimpleDesc）：
+ *  1. 镜像源：实测两个源，取最快（都失败则沿用当前设置）；
+ *  2. Node：用 Electron 自带的 Node —— 不需要下载任何东西，是唯一「零等待」的选项；
+ *  3. npm：用内置 npm，未缓存时由主进程下载；
+ *  4. dsh：装最新正式版，没有正式版则装最新测试版。
+ *
+ * 每一步都先把 `step` 推到位再执行，这样步骤条的进度与真实进度一致 ——
+ * 简易安装里用户唯一能看到流程的地方就是这条步骤条。
+ */
+async function runSimpleInstall(): Promise<void> {
+    if (simpleRunning.value) return
+    simpleRunning.value = true
+    installError.value = ''
+    try {
+        // 1) 镜像源：测速选最快
+        step.value = 1
+        speedResult.value = null
+        await pickFastestRegistry()
+
+        // 2) Node：用 Electron 自带（无需部署）
+        step.value = 2
+        nodeRuntimeChoice.value = 'electron'
+        // dsh 装进配置目录（应用默认），全程不碰用户的全局 npm。
+        installSource.value = 'local'
+        if (!(await persistWizard())) return
+
+        // 3) npm：内置（未缓存则先下载）
+        step.value = 3
+        installNpm.value = 'bundled'
+        if (!(await persistWizard())) return
+        if (!(await ensureNpmOnce(npmVersion.value || undefined))) return
+
+        // 4) dsh：最新正式版，没有则最新测试版
+        step.value = 4
+        await pickLatestDsh()
+        if (!(await performInstall())) return
+
+        emit('done')
+    } catch (err) {
+        installError.value = errorMessage(err)
+    } finally {
+        simpleRunning.value = false
     }
 }
 
@@ -421,20 +581,21 @@ async function loadInstallVersions(): Promise<void> {
  * （不再在向导一挂载时就联网取版本）。
  */
 watch(step, (s) => {
-    if (s === 1) {
+    if (s === 2) {
         void loadNodeVersions()
         void loadInstalledNode()
     }
-    if (s === 2) {
+    if (s === 3) {
         void loadNpmStatus()
         void loadNpmVersions()
     }
-    if (s === 3 && versionsLoadedFor.value !== versionsScope()) void loadInstallVersions()
+    // 第 4 步（DSH）：简易安装会自己先把标记写上并取版本，这里的判断因此会跳过、不重复请求。
+    if (s === 4 && versionsLoadedFor.value !== versionsScope()) void loadInstallVersions()
 })
 
-// 预发布开关 / 镜像源变化时，若正停留在第 3 步则重建版本列表。
+// 预发布开关 / 镜像源变化时，若正停留在第 4 步则重建版本列表。
 watch([installPrerelease, installReg], () => {
-    if (step.value === 3) void loadInstallVersions()
+    if (step.value === 4) void loadInstallVersions()
 })
 
 // 「包含非 LTS（Current）」/「包含预发布」切换后重新拉取对应版本列表。
@@ -450,7 +611,8 @@ let offNpm: (() => void) | null = null
 onMounted(() => {
     // 安装时把主进程的 stdout/stderr 追加到本页日志。
     offLog = window.api.on('dsh:log', (entry) => {
-        if (!installingDsh.value) return
+        // 简易安装全程自动，installingDsh 一直是 false —— 只判断它会让日志面板空白。
+        if (!installingDsh.value && !simpleRunning.value) return
         const line = (entry.k === 'e' ? '[err] ' : '') + entry.s
         installLog.value.push(line)
         if (installLog.value.length > 500) installLog.value.splice(0, installLog.value.length - 500)
@@ -511,12 +673,7 @@ onBeforeUnmount(() => {
             导航栏整条可拖动窗口，按钮与步骤条区域不可拖。
         -->
         <header class="wiz-navbar">
-            <el-steps :active="step" align-center finish-status="success" class="wiz-steps">
-                <el-step :title="$t('dshMissing.wiz.source')" />
-                <el-step :title="$t('dshMissing.wiz.node')" />
-                <el-step :title="$t('dshMissing.wiz.npm')" />
-                <el-step :title="$t('dshMissing.wiz.dsh')" />
-            </el-steps>
+            <WizardSteps :steps="wizardSteps" :active="step" :progress="stepProgress" />
 
             <div class="wiz-navbar__acts">
                 <el-button size="small" :icon="LinkOutlined" @click="proxyFull = true">{{ $t('dshMissing.proxySettings') }}</el-button>
@@ -537,7 +694,60 @@ onBeforeUnmount(() => {
                     <span>{{ $t('dshMissing.probeFailed', { err: envError }) }}</span>
                     <el-button size="small" :loading="probingEnv" @click="probeEnv">{{ $t('dshMissing.retry') }}</el-button>
                 </div>
+                <!-- 第 0 步：先问装法。简易安装会自动跑完后四步，自定义安装逐步选择 -->
                 <div v-if="step === 0" class="wiz-pane">
+                    <div class="wiz-field">
+                        <label class="wiz-label">{{ $t('dshMissing.modeTitle') }}</label>
+                        <div class="wiz-hint">{{ $t('dshMissing.modeIntro') }}</div>
+                    </div>
+                    <div class="mode-opts">
+                        <button
+                            type="button"
+                            class="mode-card"
+                            :class="{ on: mode === 'simple' }"
+                            @click="mode = 'simple'"
+                        >
+                            <span class="mode-card__head">
+                                <span class="mode-card__name">{{ $t('dshMissing.modeSimple') }}</span>
+                                <span v-if="mode === 'simple'" class="mode-card__badge">{{ $t('dshMissing.modeSimpleStart') }}</span>
+                            </span>
+                            <span class="mode-card__desc">{{ $t('dshMissing.modeSimpleDesc') }}</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="mode-card"
+                            :class="{ on: mode === 'custom' }"
+                            @click="mode = 'custom'"
+                        >
+                            <span class="mode-card__head">
+                                <span class="mode-card__name">{{ $t('dshMissing.modeCustom') }}</span>
+                            </span>
+                            <span class="mode-card__desc">{{ $t('dshMissing.modeCustomDesc') }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 第 1 步：镜像源（简易安装下自动测速选源，同时把测速结果展示出来） -->
+                <div v-else-if="step === 1" class="wiz-pane">
+                    <!-- 测速进行中 / 已出结果：简易安装的核心依据，必须让用户看得见 -->
+                    <div v-if="speedTesting || speedResult" class="speed-box">
+                        <div class="speed-box__head">
+                            <span class="wiz-label">{{ speedTesting ? $t('dshMissing.speedTitle') : speedFailed ? $t('dshMissing.speedFailed') : $t('dshMissing.speedPicked') }}</span>
+                            <el-button v-if="!speedTesting && !simpleRunning" size="small" :loading="speedTesting" @click="pickFastestRegistry">
+                                {{ $t('dshMissing.speedRetest') }}
+                            </el-button>
+                        </div>
+                        <div v-if="speedTesting || !speedResult || speedResult.samples.length === 0" class="wiz-hint">
+                            {{ $t('dshMissing.speedDesc') }}
+                        </div>
+                        <ul v-if="speedResult" class="speed-list">
+                            <li v-for="s in speedResult.samples" :key="s.registry" class="speed-list__row" :class="{ on: s.registry === speedResult.fastest }">
+                                <span class="speed-list__name">{{ s.registry === 'npmjs' ? $t('dshMissing.registryNpmjs') : $t('dshMissing.registryNpmmirror') }}</span>
+                                <span class="speed-list__ms">{{ s.ms === null ? $t('dshMissing.speedUnavailable') : $t('dshMissing.speedMs', { ms: s.ms }) }}</span>
+                            </li>
+                        </ul>
+                    </div>
+
                     <div class="wiz-field">
                         <label class="wiz-label">{{ $t('dshMissing.registry') }}</label>
                         <el-select v-model="installReg" class="missing-reg">
@@ -558,7 +768,7 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <div v-else-if="step === 1" class="wiz-pane">
+                <div v-else-if="step === 2" class="wiz-pane">
                     <div class="wiz-field">
                         <label class="wiz-label">{{ $t('dshMissing.node.pick') }}</label>
                         <el-radio-group v-model="nodeRuntimeChoice" class="nr-opts">
@@ -652,7 +862,7 @@ onBeforeUnmount(() => {
                     </p>
                 </div>
 
-                <div v-else-if="step === 2" class="wiz-pane">
+                <div v-else-if="step === 3" class="wiz-pane">
                     <div class="wiz-field">
                         <label class="wiz-label">{{ $t('dshMissing.npmSource') }}</label>
                         <el-radio-group v-model="installNpm" class="npm-opts">
@@ -757,6 +967,12 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
+            <!-- 简易安装：全程自动，这里说明正在跑以及最终会装哪个版本 -->
+            <div v-if="simpleRunning || (simpleVersion && step === 4)" class="simple-note">
+                <span class="simple-note__label">{{ simpleRunning ? $t('dshMissing.simpleRunning') : '' }}</span>
+                <span v-if="simplePlan" class="simple-note__plan">{{ simplePlan }}</span>
+            </div>
+
             <!-- 执行进度：仅在无专用进度条（Node / npm 下载）时显示，避免重复的加载动画 -->
             <div
                 v-if="installingDsh && !deployingNode && !installingNpm && !nodeExtracting && !npmExtracting"
@@ -769,11 +985,11 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="wiz-nav">
-                <el-button text :disabled="installingDsh" @click="quitShell">{{ $t('dshMissing.quit') }}</el-button>
+                <el-button text :disabled="busy" @click="quitShell">{{ $t('dshMissing.quit') }}</el-button>
                 <div class="wiz-nav__right">
-                    <el-button v-if="step > 0" :disabled="installingDsh" @click="back">{{ $t('dshMissing.prev') }}</el-button>
-                    <el-button type="primary" :disabled="installingDsh" @click="runCurrentStep">
-                        {{ step < 3 ? $t('dshMissing.runStep') : $t('dshMissing.install') }}
+                    <el-button v-if="step > 0" :disabled="busy" @click="back">{{ $t('dshMissing.prev') }}</el-button>
+                    <el-button type="primary" :disabled="busy || primaryDisabled" :loading="simpleRunning" @click="runCurrentStep">
+                        {{ primaryLabel }}
                     </el-button>
                 </div>
             </div>
@@ -918,12 +1134,7 @@ onBeforeUnmount(() => {
     -webkit-app-region: drag;
     user-select: none;
 }
-/* 步骤条靠左：可收缩，窄窗口下不与右侧按钮抢位置 */
-.wiz-steps {
-    flex: 0 1 560px;
-    min-width: 0;
-    --el-step-title-font-size: 12px;
-}
+/* 步骤条自带宽度与收缩策略（见 WizardSteps.vue），这里只保证它靠左不挤右侧按钮 */
 .wiz-navbar__acts {
     flex: 0 0 auto;
     display: flex;
@@ -962,6 +1173,118 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
+/* ---- 第 0 步：安装方式二选一 ---- */
+.mode-opts {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.mode-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    padding: 12px 14px;
+    text-align: left;
+    border: 1px solid var(--el-border-color);
+    border-radius: 10px;
+    background: var(--el-bg-color);
+    cursor: pointer;
+    transition:
+        border-color 0.18s ease,
+        background 0.18s ease;
+}
+.mode-card:hover {
+    border-color: var(--el-color-primary-light-5);
+    background: var(--el-fill-color-lighter);
+}
+/* 选中态：整张卡片高亮，而不是只给个小圆点 —— 后面四步的策略全靠这一次选择 */
+.mode-card.on {
+    border-color: var(--el-color-primary);
+    background: var(--el-color-primary-light-9);
+}
+.mode-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.mode-card__name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+}
+.mode-card.on .mode-card__name {
+    color: var(--el-color-primary);
+}
+.mode-card__badge {
+    font-size: 11px;
+    color: var(--el-color-primary);
+}
+.mode-card__desc {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--el-text-color-secondary);
+}
+/* ---- 镜像源测速结果 ---- */
+.speed-box {
+    padding: 10px 12px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 8px;
+    background: var(--el-fill-color-light);
+}
+.speed-box__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+.speed-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.speed-list__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+}
+/* 选中的源加粗高亮，用户能一眼看出「为什么装这个源」 */
+.speed-list__row.on {
+    color: var(--el-color-primary);
+    font-weight: 600;
+}
+.speed-list__ms {
+    font-family: var(--el-font-family-mono);
+}
+/* ---- 简易安装进度说明 ---- */
+.simple-note {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--el-color-primary-light-9);
+    font-size: 12px;
+    color: var(--el-color-primary);
+}
+.simple-note__label {
+    flex: 0 0 auto;
+    font-weight: 600;
+}
+.simple-note__plan {
+    flex: 1 1 auto;
+    text-align: right;
+    color: var(--el-text-color-regular);
 }
 .wiz-label {
     font-size: 13px;
