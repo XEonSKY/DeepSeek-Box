@@ -26,6 +26,24 @@ function usable(s: RegistrySpeedSample): boolean {
     return s.ms !== null && Number.isFinite(s.ms) && s.ms >= 0
 }
 
+/** 单轮结果 → 代表值：忽略失败轮（null），取最小值；全失败返回 null。 */
+export function bestOfRounds(rounds: readonly (number | null)[]): number | null {
+    const ok = rounds.filter((r): r is number => r !== null && Number.isFinite(r) && r >= 0)
+    return ok.length > 0 ? Math.min(...ok) : null
+}
+
+/** 由各轮明细汇总出一个样本。 */
+export function summarizeRounds(registry: NpmRegistry, rounds: readonly (number | null)[]): RegistrySpeedSample {
+    const okRounds = rounds.filter((r) => r !== null && Number.isFinite(r) && r >= 0).length
+    return {
+        registry,
+        ms: bestOfRounds(rounds),
+        rounds: [...rounds],
+        okRounds,
+        totalRounds: rounds.length
+    }
+}
+
 /**
  * 排序规则：**可用的在前按延迟升序，失败的（ms = null）排在最后**。
  *

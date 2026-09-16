@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CloseOutlined, FileTextOutlined, ReloadOutlined, SettingOutlined } from '@antdv-next/icons'
+import { ArrowLeftOutlined, CloseOutlined, DownloadOutlined, FileTextOutlined, ReloadOutlined, SettingOutlined, ThunderboltOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
 import type { ConfigDirInfo, EnvProbe, NodeRuntimeKind, NpmSource, ProxyProtocol, ProxyScope, RegistrySpeedResult } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
@@ -236,12 +236,22 @@ const busy = computed(() => installingDsh.value || simpleRunning.value || speedT
 /** 第 0 步还没选装法时，主按钮不可点（否则点了也没反应，像是坏了）。 */
 const primaryDisabled = computed(() => step.value === 0 && mode.value === null)
 
-/** 主按钮文案：第 0 步按装法区分，最后一步是「安装」，其余是「执行并下一步」。 */
+/**
+ * 主按钮文案：只留最短的动词 —— 「开始 / 下一步 / 安装」。
+ *
+ * 原先第 0 步在简易模式下显示「开始简易安装」（5 字）、其余步显示「执行并下一步」（5 字）。
+ * 这两个说法都在描述**按钮会怎么工作**，而用户只想知道「按下去会怎样」：
+ * 要么前进、要么开始、要么装上。图标再补一层语义（闪电=自动开始，下载=安装）。
+ */
 const primaryLabel = computed(() => {
-    if (step.value === 0) {
-        return mode.value === 'simple' ? t('dshMissing.modeSimpleStart') : t('dshMissing.next')
-    }
-    return step.value < 4 ? t('dshMissing.runStep') : t('dshMissing.install')
+    if (step.value === 0) return t('dshMissing.start')
+    return step.value < 4 ? t('dshMissing.next') : t('dshMissing.install')
+})
+
+/** 主按钮图标：开始=闪电（自动跑完），安装=下载，其余=无（「下一步」语义已足够清楚）。 */
+const primaryIcon = computed(() => {
+    if (step.value === 0) return ThunderboltOutlined
+    return step.value >= 4 ? DownloadOutlined : null
 })
 
 /** 简易安装期间显示的说明：最终会装哪个版本（含「没有正式版」的提示）。 */
@@ -858,16 +868,31 @@ onBeforeUnmount(() => {
                         <div class="speed-box__head">
                             <span class="wiz-label">{{ speedTesting ? $t('dshMissing.speedTitle') : speedFailed ? $t('dshMissing.speedFailed') : $t('dshMissing.speedPicked') }}</span>
                             <a-button v-if="!speedTesting && !simpleRunning" size="small" :loading="speedTesting" @click="pickFastestRegistry">
+                                <template #icon><ReloadOutlined /></template>
                                 {{ $t('dshMissing.speedRetest') }}
                             </a-button>
                         </div>
                         <div v-if="speedTesting || !speedResult || speedResult.samples.length === 0" class="wiz-hint">
                             {{ $t('dshMissing.speedDesc') }}
                         </div>
+                        <!-- 多轮测速的规则要说出来，否则「3 轮」这种数字看着像噪声 -->
+                        <div v-else class="wiz-hint">{{ $t('dshMissing.speedRoundsHint') }}</div>
                         <ul v-if="speedResult" class="speed-list">
                             <li v-for="s in speedResult.samples" :key="s.registry" class="speed-list__row" :class="{ on: s.registry === speedResult.fastest }">
                                 <span class="speed-list__name">{{ s.registry === 'npmjs' ? $t('dshMissing.registryNpmjs') : $t('dshMissing.registryNpmmirror') }}</span>
-                                <span class="speed-list__ms">{{ s.ms === null ? $t('dshMissing.speedUnavailable') : $t('dshMissing.speedMs', { ms: s.ms }) }}</span>
+                                <span class="speed-list__right">
+                                    <!-- 轮次明细：多轮测速的意义就在于此，把「最快那一轮」与失败轮都摆出来 -->
+                                    <span v-if="s.rounds.length > 1" class="speed-list__rounds">
+                                        {{
+                                            $t('dshMissing.speedRounds', {
+                                                ok: s.okRounds,
+                                                total: s.totalRounds,
+                                                list: s.rounds.map((r) => (r === null ? '—' : r)).join(' / ')
+                                            })
+                                        }}
+                                    </span>
+                                    <span class="speed-list__ms">{{ s.ms === null ? $t('dshMissing.speedUnavailable') : $t('dshMissing.speedMs', { ms: s.ms }) }}</span>
+                                </span>
                             </li>
                         </ul>
                     </div>
@@ -945,6 +970,7 @@ onBeforeUnmount(() => {
                                 </template>
                             </a-select>
                             <a-button :loading="nodeVersionsLoading" @click="recheckNode">
+                                <template #icon><ReloadOutlined /></template>
                                 {{ $t('dshMissing.node.checkVersion') }}
                             </a-button>
                         </div>
@@ -1106,11 +1132,23 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
+            <!-- 图标 + 极简文字：底部这三个按钮的功能由位置与图标就能说明，不必再用整句文案 -->
             <div class="wiz-nav">
-                <a-button text :disabled="busy" @click="quitShell">{{ $t('dshMissing.quit') }}</a-button>
+                <a-tooltip :title="$t('dshMissing.quitHint')" placement="top">
+                    <a-button :disabled="busy" :aria-label="$t('dshMissing.quitHint')" @click="quitShell">
+                        <template #icon><CloseOutlined /></template>
+                    </a-button>
+                </a-tooltip>
                 <div class="wiz-nav__right">
-                    <a-button v-if="step > 0" :disabled="busy" @click="back">{{ $t('dshMissing.prev') }}</a-button>
+                    <a-tooltip v-if="step > 0" :title="$t('dshMissing.prevHint')" placement="top">
+                        <a-button :disabled="busy" :aria-label="$t('dshMissing.prevHint')" @click="back">
+                            <template #icon><ArrowLeftOutlined /></template>
+                        </a-button>
+                    </a-tooltip>
                     <a-button type="primary" :disabled="busy || primaryDisabled" :loading="simpleRunning" @click="runCurrentStep">
+                        <template #icon>
+                            <component :is="primaryIcon" />
+                        </template>
                         {{ primaryLabel }}
                     </a-button>
                 </div>
@@ -1421,6 +1459,18 @@ onBeforeUnmount(() => {
 .speed-list__row.on {
     color: var(--el-color-primary);
     font-weight: 600;
+}
+.speed-list__right {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+/* 轮次明细比代表值弱一档：它是依据，不是结论 */
+.speed-list__rounds {
+    font-family: var(--el-font-family-mono);
+    font-size: 11px;
+    color: var(--el-text-color-placeholder);
 }
 .speed-list__ms {
     font-family: var(--el-font-family-mono);

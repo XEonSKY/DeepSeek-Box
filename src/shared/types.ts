@@ -171,11 +171,22 @@ export type NpmSource = 'system' | 'bundled' | 'localnode'
 /** Which npm registry to use for dsh version listing / install. */
 export type NpmRegistry = 'npmjs' | 'npmmirror'
 
-/** 单个 npm registry 的测速样本。 */
+/** 单个 npm registry 的测速样本（多轮实测的汇总）。 */
 export interface RegistrySpeedSample {
     registry: NpmRegistry
-    /** 实测往返毫秒数（取整）；请求失败或超时为 null。 */
+    /**
+     * 用于**排名**的代表值（取整毫秒）；请求全部失败或超时为 null。
+     *
+     * 取多轮里的**最小值**而不是平均值：单次 HTTPS 往返的抖动大多来自
+     * DNS、连接建立、TLS 握手这些一次性开销，这些恰好是「换一个源要不要重新付」
+     * 的成本；平均值会被偶发的网络毛刺抬高，而最小轮更接近该源的稳定能力。
+     */
     ms: number | null
+    /** 各轮实测毫秒数（按时间顺序，失败的轮记为 null）；仅用于展示。 */
+    rounds: (number | null)[]
+    /** 有效轮数 / 总轮数，供 UI 说明「测了几次」。 */
+    okRounds: number
+    totalRounds: number
 }
 
 /**
