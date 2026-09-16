@@ -7,6 +7,8 @@ import type { CurrentBalanceInfo } from '@shared/types'
 import { providerIcon } from '../lib/providerIcon'
 import type { VersionLine } from '../lib/update'
 import { checkAllUpdates, hasUpdate, refreshVersions, versionStatus } from '../lib/update'
+import type { StatusIndicatorState } from '../lib/versionIndicator'
+import { indicatorState } from '../lib/versionIndicator'
 import { tt } from '../lib/locales'
 
 /**
@@ -14,7 +16,9 @@ import { tt } from '../lib/locales'
  *
  * 右对齐一组只读信息：
  *  - **当前供应商余额**：未授权显示「点击授权」，已授权点击刷新；仅前台每 5 分钟自动刷新；
- *  - **程序版本 + dsh 版本**：点击就地弹出小浮层并检测更新；检测到新版本只在徽标上静默提示。
+ *  - **更新状态**：只说结论（已是最新 / 检测到新版本 / 正在安装 / 等待重启），
+ *    不显示版本号 —— 号在浮层与「关于」页里看；点击就地弹出小浮层并检测更新，
+ *    检测到新版本只在徽标上静默提示。
  *
  * 余额查询在主进程完成（`models:balance`），渲染层拿不到任何密钥。
  */
@@ -233,6 +237,28 @@ const balanceTitle = computed(() => {
     return parts.join(' · ')
 })
 
+/**
+ * 状态栏版本项的那一句话：只给结论，不给版本号。
+ *
+ * 版本号（程序 / dsh）在浮层和「关于」页里都能看到，状态栏这一格要保持短，
+ * 而且不能随版本号长度抖动。还没查过（idle）时留白。
+ */
+const versionIndicator = computed(() => indicatorState(versionStatus.app, versionStatus.dsh))
+
+/** 结论 → 文案 key。四种结局 + 两个瞬态；无结论时留空（模板用占位文案）。 */
+const INDICATOR_KEYS: Record<StatusIndicatorState, string> = {
+    latest: 'sv.version.latest',
+    available: 'sv.version.available',
+    installing: 'sv.version.installing',
+    downloaded: 'sv.version.downloaded',
+    checking: 'sv.version.checking',
+    error: 'sv.version.error'
+}
+const versionLabel = computed(() => {
+    const s = versionIndicator.value
+    return s ? tt(INDICATOR_KEYS[s]) : ''
+})
+
 /** 版本项悬停：有更新时说明有新版本，否则提示点击检查。 */
 const versionTitle = computed(() => (badge.value ? tt('sv.version.badge') : tt('sv.version.check')))
 
@@ -272,14 +298,21 @@ const BalanceIcon = computed(() => providerIcon(info.value?.provider, info.value
                 <span v-else class="statusbar__amount">{{ loading ? '…' : $t('sv.models.balanceUnknown') }}</span>
             </button>
 
-            <!-- 程序版本 + dsh 版本：点击就地检测更新；有新版本时显示徽标（静默） -->
+            <!-- 更新状态指示：点击就地检测更新；有新版本时显示徽标（静默） -->
             <el-popover placement="top-end" :width="320" trigger="click" @show="runCheck">
                 <template #reference>
-                    <button type="button" class="statusbar__item statusbar__version" :title="versionTitle">
-                        <span>v{{ versionStatus.app.current ?? '—' }}</span>
-                        <span class="statusbar__sep">·</span>
-                        <span>{{ $t('sv.version.dsh') }} {{ versionStatus.dsh.current ?? '—' }}</span>
+                    <button
+                        type="button"
+                        class="statusbar__item statusbar__version"
+                        :class="versionIndicator ? 'is-' + versionIndicator : ''"
+                        :title="versionTitle"
+                    >
+                        <span v-if="versionLabel">{{ versionLabel }}</span>
+                        <span v-else class="statusbar__placeholder">{{ $t('sv.version.check') }}</span>
                         <span v-if="badge" class="statusbar__dot" aria-hidden="true" />
+                        <el-icon v-if="versionIndicator === 'checking'" :size="12" class="is-spin">
+                            <LoadingOutlined />
+                        </el-icon>
                     </button>
                 </template>
 
@@ -374,8 +407,18 @@ const BalanceIcon = computed(() => providerIcon(info.value?.provider, info.value
 .statusbar__version {
     position: relative;
 }
-.statusbar__sep {
+/* 无结论时给一句「检查更新」占位：空按钮没有可点性暗示 */
+.statusbar__placeholder {
     color: var(--el-text-color-placeholder);
+}
+/* 结论的强调程度：等待重启 / 有更新可操作，已是最新纯告知，失败警示 */
+.statusbar__version.is-available,
+.statusbar__version.is-downloaded,
+.statusbar__version.is-installing {
+    color: var(--el-color-primary);
+}
+.statusbar__version.is-error {
+    color: var(--el-color-warning);
 }
 /* 更新徽标：VS Code 式小红点（静默提示，不弹通知） */
 .statusbar__dot {
