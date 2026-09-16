@@ -66,5 +66,5 @@ Just want to use the app? See the [User guide](/en/user/).
 - Docs content `docs/`, site logic `.vitepress/config.mts`.
 
 ::: info
-AI working rules live in `.dsh/README.md`; see its "docs site map" table for navigation.
+The AI development guide lives in `.agents/skills/deepseek-box/SKILL.md`.
 :::

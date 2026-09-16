@@ -66,5 +66,5 @@
 - 文档站内容 `docs/`，逻辑 `.vitepress/config.mts`。
 
 ::: info
-AI 工作规则见 `.dsh/README.md`；文档站导航见其中的「文档站导航」表。
+AI 开发指南见 `.agents/skills/deepseek-box/SKILL.md`。
 :::

@@ -16,13 +16,9 @@ Before changing code or documentation, please follow these conventions.
 
 ## Files and directories
 
-| Convention | Location |
-|---|---|
-| Temporary / intermediate files (logs, reports, drafts) | `.dsh/temp/`, deleted once used |
-| AI-assistance files (index, onboarding docs) | `.dsh/` at the workspace root |
-| Do not scatter temp files | No temp artifacts elsewhere in the workspace root or in `docs/` |
-
-`.dsh/` (including `.dsh/temp/`) is gitignored as a whole and is not under version control.
+- All agent-generated caches / temporary / intermediate files (logs, reports, drafts, script output) go to `.agents/temp/` and are deleted once used;
+- Never scatter them across the workspace root, `docs/`, or anywhere else;
+- `.agents/` (including `.agents/temp/`) is gitignored and not under version control.
 
 ## Git and remotes
 
