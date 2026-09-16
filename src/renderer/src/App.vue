@@ -226,7 +226,12 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .shell {
-    height: 100%;
+    /*
+     * 用 100vh 而不是 100%：.shell 的父级是 antdv <a-app> 渲染出的 .ant-app，
+     * 那层的高度不由我们控制（见 styles/base.css 的说明）。100% 会随父级塌成 0，
+     * 而窗口本身就是视口，100vh 与「撑满窗口」是同一件事。
+     */
+    height: 100vh;
     display: flex;
     flex-direction: column;
 }

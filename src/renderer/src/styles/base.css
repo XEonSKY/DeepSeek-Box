@@ -25,6 +25,25 @@ body,
     padding: 0;
 }
 
+/*
+ * ⚠️ antdv-next 的 <a-app>（AntdvRoot）默认会渲染一个真实的 <div class="ant-app"> 包住子树，
+ * 而它自己**没有任何 height / display 规则**（见 antdv-next 的 app 样式：只设字体与颜色）。
+ *
+ * 这个 div 插在 #app 与 .shell 之间，于是高度链断在这里：
+ *   #app(height:100%) → .ant-app(高度由内容决定) → .shell(height:100% 相对未定的父级 = 失效)
+ * 结果 .shell 撑不满窗口，内部的 .body（flex:1 1 auto）塌成 0 高，
+ * 表现为「标题栏和状态栏还在、中间的 webview 与设置内容区一片空白」。
+ *
+ * 两头一起修，避免只靠其中一处：
+ *  1. 这里把 .ant-app 补成撑满高度的 flex 列（容器端）；
+ *  2. .shell 用 height: 100vh 兜底（内容端），万一将来 antdv 改了包裹结构也不会再塌。
+ */
+.ant-app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
 body {
     font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
