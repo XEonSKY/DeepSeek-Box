@@ -25,6 +25,16 @@ export const i18n = createI18n({
     }
 })
 
+/**
+ * 把 catalogForLocale 产出的普通对象喂给 vue-i18n。
+ * `setLocaleMessage` 是带约束的泛型重载，直接传 `Record<string, unknown>` 会被拒；
+ * 这里收口成一个具体签名，既不用 `as any`，调用点也不必各自转型。
+ */
+const setLocaleMessages = i18n.global.setLocaleMessage as unknown as (
+    locale: string,
+    message: Record<string, unknown>
+) => void
+
 /** 把 vue-i18n 切到某语言（不写盘；持久化走 setUiLocale）。 */
 export function setLocale(locale: ResolvedLocale): void {
     i18n.global.locale.value = locale
@@ -61,13 +71,13 @@ function pingRefresh(): void {
 /** 把「扩展翻译」应用到对应语言的文案目录（off 还原 zh 与 en 两套）。 */
 export function applyExtTranslation(style: ExtStyle): void {
     if (style === 'off') {
-        i18n.global.setLocaleMessage('zh', catalogForLocale('zh', 'off') as any)
-        i18n.global.setLocaleMessage('en', catalogForLocale('en', 'off') as any)
+        setLocaleMessages('zh', catalogForLocale('zh', 'off'))
+        setLocaleMessages('en', catalogForLocale('en', 'off'))
         pingRefresh()
         return
     }
     const loc = styleLocaleOf(style)
-    i18n.global.setLocaleMessage(loc, catalogForLocale(loc, style) as any)
+    setLocaleMessages(loc, catalogForLocale(loc, style))
     if (i18n.global.locale.value === loc) pingRefresh()
 }
 
