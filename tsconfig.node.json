@@ -14,8 +14,10 @@
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true,
         "outDir": "out/ts-node",
+        "baseUrl": ".",
         "paths": {
             "@shared/*": ["./src/shared/*"],
+            "@main/*": ["./src/main/*"],
             "@/*": ["./src/renderer/src/*"]
         }
     },
@@ -24,9 +26,10 @@
         "src/main/**/*",
         "src/preload/**/*",
         "src/shared/**/*",
-        // 渲染层的纯函数测试（如 lib/format.test.ts）也跑在 node 环境，
-        // 由本工程负责类型检查；被测源码必须一并列出，否则 composite 工程会报 TS6307。
-        "src/renderer/src/lib/format.ts",
-        "src/renderer/src/**/*.test.ts"
+        // 单元测试独立在 tests/ 下，且全部跑在 node 环境，由本工程统一负责类型检查。
+        "tests/**/*",
+        // composite 工程要求列出所有被引用的文件：tests/renderer/ 里的用例 import 了渲染层源码，
+        // 而渲染层源码整体归 tsconfig.web.json，故这里单独补上被测试引用的那部分。
+        "src/renderer/src/lib/format.ts"
     ]
 }

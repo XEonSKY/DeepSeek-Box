@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { errorMessage } from './errors'
+import { errorMessage } from '@shared/errors'
 
 /**
  * 收敛前这段判断在 15 个文件里各写一遍，最容易出错的正是**非 Error** 分支：

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MIN_NODE_MAJOR, isPrerelease, nodeMajor, stripV, withV } from './version'
+import { MIN_NODE_MAJOR, isPrerelease, nodeMajor, stripV, withV } from '@shared/version'
 
 /**
  * shared/version.ts 是 main 与 renderer **两端共用**的版本判定，

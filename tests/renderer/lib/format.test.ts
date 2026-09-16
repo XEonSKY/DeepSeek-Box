@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatBytes, formatDownload, formatSpeed } from './format'
+import { formatBytes, formatDownload, formatSpeed } from '@/lib/format'
 
 /**
  * 下载进度的显示格式。换到 pretty-bytes 之后这里守着两件事：

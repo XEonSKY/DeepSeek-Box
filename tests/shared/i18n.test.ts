@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { localeCodeOf, messages, resolveLocale, t } from './i18n'
+import { localeCodeOf, messages, resolveLocale, t } from '@shared/i18n'
 
 /**
  * 主进程的翻译入口（mt → t）与渲染层的 vue-i18n 消费同一份目录。

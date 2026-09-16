@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildAccelerator, matchesAccelerator, prettyAccelerator } from './hotkeys'
-import type { HotkeyEvent } from './hotkeys'
+import { buildAccelerator, matchesAccelerator, prettyAccelerator } from '@shared/hotkeys'
+import type { HotkeyEvent } from '@shared/hotkeys'
 
 /**
  * hotkeys.ts 的解析规则必须两端一致：渲染层录制出的字符串，主进程要能匹配上。

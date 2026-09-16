@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { readPkgVersion, removeQuietly } from './fsutil'
+import { readPkgVersion, removeQuietly } from '@main/dsh/fsutil'
 
 /**
  * 这两个助手被下载 / 解压 / 安装链路共用，之前每个模块各写一份。

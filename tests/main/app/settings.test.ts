@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeDownloadThreads, normalizeNpmSource, normalizeProxyScope } from './settings'
+import { normalizeDownloadThreads, normalizeNpmSource, normalizeProxyScope } from '@main/app/settings'
 import { DEFAULT_SETTINGS, PROXY_SCOPE_IDS } from '@shared/types'
 import type { Settings } from '@shared/types'
 

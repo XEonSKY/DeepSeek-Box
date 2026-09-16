@@ -28,5 +28,5 @@
     ],
     // 单元测试跑在 node 环境（要读文件系统、用到 process），由 tsconfig.node.json 负责，
     // 这里排除掉，否则渲染层工程会因为缺 node 类型而报 TS2307。
-    "exclude": ["src/**/*.test.ts"]
+    "exclude": ["tests/**"]
 }

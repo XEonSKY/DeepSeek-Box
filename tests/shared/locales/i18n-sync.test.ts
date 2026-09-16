@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import zh from './zh'
-import en from './en'
-import hant from './zh/hant'
+import zh from '@shared/locales/zh'
+import en from '@shared/locales/en'
+import hant from '@shared/locales/zh/hant'
 
 /**
  * i18n **三处同步**是项目铁律之一：新增文案必须同时改 zh / en / hant。

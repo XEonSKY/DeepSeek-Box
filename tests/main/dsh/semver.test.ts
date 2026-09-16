@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareVersions, filterByPrerelease, pickLatest, sortVersionsDesc } from './semver'
+import { compareVersions, filterByPrerelease, pickLatest, sortVersionsDesc } from '@main/dsh/semver'
 
 /**
  * dsh / Node / npm 的「有没有新版本」判断全部经过这里。

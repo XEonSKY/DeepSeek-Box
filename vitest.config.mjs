@@ -14,19 +14,24 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
     resolve: {
         alias: {
+            // 与 electron.vite.config.ts 的解析结果保持一致，测试里统一走别名，
+            // 这样测试文件搬到 tests/ 之后 import 说明符与原地保持一致。
             '@': resolve('src/renderer/src'),
-            '@shared': resolve('src/shared')
+            '@shared': resolve('src/shared'),
+            '@main': resolve('src/main')
         }
     },
     test: {
         environment: 'node',
-        // 测试与源码同目录放置（*.test.ts）
-        include: ['src/**/*.test.ts'],
+        // 测试独立于源码目录，全部收在 tests/ 下，按被测模块所在层分目录。
+        root: resolve('.'),
+        include: ['tests/**/*.test.ts'],
         coverage: {
             provider: 'v8',
             reportsDirectory: '.agents/temp/coverage',
+            // 覆盖率看的是**源码**，不是测试文件本身。
             include: ['src/**/*.ts'],
-            exclude: ['src/**/*.test.ts', 'src/**/*.d.ts', 'src/preload/**', 'src/renderer/src/env.d.ts']
+            exclude: ['src/**/*.d.ts', 'src/preload/**', 'src/renderer/src/env.d.ts']
         }
     }
 })
