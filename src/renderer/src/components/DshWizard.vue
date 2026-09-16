@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CloseOutlined, FileTextOutlined, LinkOutlined, ReloadOutlined } from '@antdv-next/icons'
+import { CloseOutlined, FileTextOutlined, ReloadOutlined, SettingOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
 import type { ConfigDirInfo, EnvProbe, NodeRuntimeKind, NpmSource, ProxyProtocol, ProxyScope, RegistrySpeedResult } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
@@ -55,7 +55,14 @@ const step = ref(0)
 type InstallMode = 'simple' | 'custom'
 const mode = ref<InstallMode | null>(null)
 
-/** 步骤条的分段定义（与 step 下标一一对应）。 */
+/**
+ * 步骤定义（下标即 `step` 的取值，0–4）：
+ *   0 安装方式 · 1 安装设置 · 2 Node 环境 · 3 NPM 环境 · 4 DSH 环境
+ *
+ * 第 1 步的 key 仍叫 `source`：它最初只放镜像源，现在镜像源与配置目录都收进了
+ * 「安装设置」面板，这一步只展示测速结果与当前设置摘要。改名会牵动 i18n 键、
+ * watch 与各 v-if，收益只是个更贴切的名字，故保持不变。
+ */
 const STEP_KEYS = ['mode', 'source', 'node', 'npm', 'dsh'] as const
 
 /**
@@ -69,6 +76,7 @@ const registryOptions = computed(() => [
 ])
 const npmVersionOptions = computed(() => npmVersions.value.map((v) => ({ value: v, label: v })))
 const dshVersionOptions = computed(() => installVersions.value.map((v) => ({ value: v, label: v })))
+/** 步骤条的分段：文字取自 i18n，与 STEP_KEYS 一一对应。 */
 const wizardSteps = computed(() => STEP_KEYS.map((k) => ({ key: k, label: t(`dshMissing.wiz.${k}`) })))
 
 /**
@@ -434,25 +442,29 @@ async function pickConfigDir(): Promise<void> {
 async function resetConfigDir(): Promise<void> {
     applyConfigDir(await window.api.put('/config-dir', { body: { dir: null } }))
 }
-// ---- 代理设置（右上角入口 → 全屏面板）----
-// 向导本身**不铺开网络表单**，只在右上角留一个入口，点开才是全屏的代理设置。
-// 为什么必须能在这里配：Node / npm / dsh 都要在线下载，「必须先能出网才能装、装完才能配代理」
-// 是个死锁；而每步执行前都会 persistWizard()，所以这里改完立刻作用于本次安装。
+// ---- 安装设置（导航栏入口 → 全屏面板）----
+// 面板里收三样「装之前要定下来、且不必逐步选择」的东西：
+//   镜像源 · 配置目录（原先占满整个步骤，现已并入）· 代理。
+// 向导本身不铺开这些表单，只留一个入口 —— 大多数用户用默认值即可，
+// 需要改的人点开就是全部相关设置，不用在步骤之间来回找。
+// 代理为什么必须能在这里配：Node / npm / dsh 都要在线下载，
+// 「必须先能出网才能装、装完才能配代理」是个死锁；
+// 而每步执行前都会 persistWizard()，所以这里改完立刻作用于本次安装。
 const proxyEnabled = ref(DEFAULT_SETTINGS.proxyEnabled)
 const proxyProtocol = ref<ProxyProtocol>(DEFAULT_SETTINGS.proxyProtocol)
 const proxyHost = ref(DEFAULT_SETTINGS.proxyHost)
 const proxyPort = ref<number | null>(DEFAULT_SETTINGS.proxyPort)
 const proxyScope = ref<ProxyScope[]>([...DEFAULT_SETTINGS.proxyScope])
-/** 是否打开全屏代理设置。 */
-const proxyFull = ref(false)
+/** 是否打开全屏安装设置（镜像源 + 配置目录 + 代理）。 */
+const settingsFull = ref(false)
 
 const back = (): void => {
     if (step.value > 0) step.value = step.value - 1
 }
 
-/** 关闭全屏代理设置：顺手落盘，避免用户「设置了却忘了按下一步」。 */
-async function closeProxySettings(): Promise<void> {
-    proxyFull.value = false
+/** 关闭全屏安装设置：顺手落盘，避免用户「设置了却忘了按下一步」。 */
+async function closeInstallSettings(): Promise<void> {
+    settingsFull.value = false
     await persistWizard()
 }
 
@@ -774,9 +786,18 @@ onBeforeUnmount(() => {
         <header class="wiz-navbar">
             <WizardSteps :steps="wizardSteps" :active="step" :percent="overallProgress" />
 
+            <!-- 只放图标按钮：文字按钮在窄窗口下会把步骤条挤扁 -->
             <div class="wiz-navbar__acts">
-                <a-button size="small" :icon="LinkOutlined" @click="proxyFull = true">{{ $t('dshMissing.proxySettings') }}</a-button>
-                <a-button size="small" :icon="FileTextOutlined" @click="logFullscreen = true">{{ $t('dshMissing.viewLog') }}</a-button>
+                <a-tooltip :title="$t('dshMissing.installSettings')" placement="bottom">
+                    <a-button type="text" class="nav-icon-btn" :aria-label="$t('dshMissing.installSettings')" @click="settingsFull = true">
+                        <template #icon><SettingOutlined /></template>
+                    </a-button>
+                </a-tooltip>
+                <a-tooltip :title="$t('dshMissing.viewLog')" placement="bottom">
+                    <a-button type="text" class="nav-icon-btn" :aria-label="$t('dshMissing.viewLog')" @click="logFullscreen = true">
+                        <template #icon><FileTextOutlined /></template>
+                    </a-button>
+                </a-tooltip>
                 <span class="divider" />
                 <WindowControls />
             </div>
@@ -826,10 +847,14 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <!-- 第 1 步：镜像源（简易安装下自动测速选源，同时把测速结果展示出来） -->
+                <!--
+                    第 1 步：安装设置。
+                    镜像源与配置目录已移入「安装设置」面板（导航栏图标进入），这一步只负责
+                    把**自动测速的结果**摆出来 —— 它是简易安装选源的依据，用户有权看到为什么选它。
+                    需要手动改源或配置目录时，点导航栏的设置图标。
+                -->
                 <div v-else-if="step === 1" class="wiz-pane">
-                    <!-- 测速进行中 / 已出结果：简易安装的核心依据，必须让用户看得见 -->
-                    <div v-if="speedTesting || speedResult" class="speed-box">
+                    <div class="speed-box">
                         <div class="speed-box__head">
                             <span class="wiz-label">{{ speedTesting ? $t('dshMissing.speedTitle') : speedFailed ? $t('dshMissing.speedFailed') : $t('dshMissing.speedPicked') }}</span>
                             <a-button v-if="!speedTesting && !simpleRunning" size="small" :loading="speedTesting" @click="pickFastestRegistry">
@@ -847,20 +872,19 @@ onBeforeUnmount(() => {
                         </ul>
                     </div>
 
-                    <div class="wiz-field">
-                        <label class="wiz-label">{{ $t('dshMissing.registry') }}</label>
-                        <a-select v-model:value="installReg" :options="registryOptions" class="missing-reg" />
-                        <div class="wiz-hint">{{ $t('dshMissing.registryHint') }}</div>
-                    </div>
-
-                    <div class="wiz-field">
-                        <label class="wiz-label">{{ $t('dshMissing.configDir') }}</label>
-                        <div class="cfg-row">
-                            <a-input :value="cfgDir" readonly :placeholder="cfgDefaultDir" />
-                            <a-button type="primary" @click="pickConfigDir">{{ $t('dshMissing.choose') }}</a-button>
-                            <a-button v-if="cfgDir !== cfgDefaultDir" @click="resetConfigDir">{{ $t('dshMissing.restoreDefault') }}</a-button>
+                    <!-- 当前生效的设置摘要：不必开面板也看得到这次会用什么源、装到哪 -->
+                    <div class="cfg-summary">
+                        <div class="cfg-summary__row">
+                            <span class="cfg-summary__k">{{ $t('dshMissing.registry') }}</span>
+                            <span class="cfg-summary__v">{{ installReg === 'npmjs' ? $t('dshMissing.registryNpmjs') : $t('dshMissing.registryNpmmirror') }}</span>
                         </div>
-                        <div class="wiz-hint">{{ $t('dshMissing.configDirHint') }}</div>
+                        <div class="cfg-summary__row">
+                            <span class="cfg-summary__k">{{ $t('dshMissing.configDir') }}</span>
+                            <span class="cfg-summary__v" :title="cfgDir">{{ cfgDir || cfgDefaultDir }}</span>
+                        </div>
+                        <a-button type="link" size="small" class="cfg-summary__edit" @click="settingsFull = true">
+                            {{ $t('dshMissing.installSettings') }}
+                        </a-button>
                     </div>
                 </div>
 
@@ -1092,15 +1116,36 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <!-- 全屏代理设置：与「设置 → 网络 → 代理」同一批字段（共用 ProxyFields） -->
+            <!--
+                全屏安装设置：镜像源 + 配置目录 + 代理。
+                代理字段与「设置 → 网络 → 代理」是同一批（共用 ProxyFields）。
+            -->
             <transition name="fade">
-                <div v-if="proxyFull" class="net-full">
+                <div v-if="settingsFull" class="net-full">
                     <div class="net-full__head">
-                        <span class="net-full__title">{{ $t('dshMissing.proxySettings') }}</span>
-                        <a-button :icon="CloseOutlined" text @click="closeProxySettings">{{ $t('dshMissing.closeLog') }}</a-button>
+                        <span class="net-full__title">{{ $t('dshMissing.installSettings') }}</span>
+                        <a-button :icon="CloseOutlined" text @click="closeInstallSettings">{{ $t('dshMissing.closeLog') }}</a-button>
                     </div>
                     <div class="net-full__body">
+                        <div class="wiz-hint net-full__intro">{{ $t('dshMissing.installSettingsHint') }}</div>
                         <a-form layout="vertical">
+                            <!-- 镜像源 / 配置目录：从原来的「镜像源」步骤搬进来 -->
+                            <a-form-item :label="$t('dshMissing.registry')">
+                                <a-select v-model:value="installReg" :options="registryOptions" />
+                                <div class="nf-hint">{{ $t('dshMissing.registryHint') }}</div>
+                            </a-form-item>
+
+                            <a-form-item :label="$t('dshMissing.configDir')">
+                                <div class="cfg-row">
+                                    <a-input :value="cfgDir" readonly :placeholder="cfgDefaultDir" />
+                                    <a-button type="primary" @click="pickConfigDir">{{ $t('dshMissing.choose') }}</a-button>
+                                    <a-button v-if="cfgDir !== cfgDefaultDir" @click="resetConfigDir">{{ $t('dshMissing.restoreDefault') }}</a-button>
+                                </div>
+                                <div class="nf-hint">{{ $t('dshMissing.configDirHint') }}</div>
+                            </a-form-item>
+
+                            <a-divider class="net-full__sep">{{ $t('dshMissing.proxySettings') }}</a-divider>
+
                             <ProxyFields
                                 v-model:enabled="proxyEnabled"
                                 v-model:protocol="proxyProtocol"
@@ -1119,7 +1164,8 @@ onBeforeUnmount(() => {
                     <div class="log-full__head">
                         <span class="log-full__title">{{ $t('dshMissing.installLog') }}</span>
                         <div class="log-full__acts">
-                            <div v-if="installingDsh" class="log-full__mini">
+                            <!-- 简易安装全程 installingDsh 为 false，只看它会导致安装中却没有指示 -->
+                            <div v-if="busy" class="log-full__mini">
                                 <div class="activity-bar" />
                             </div>
                             <a-button :icon="CloseOutlined" text @click="logFullscreen = false">{{ $t('dshMissing.closeLog') }}</a-button>
@@ -1221,23 +1267,39 @@ onBeforeUnmount(() => {
     z-index: 2001;
     height: var(--titlebar-h, 52px);
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    align-items: stretch;
     /* 右侧不留内边距：窗口按钮像系统标题栏那样贴住窗口右边缘 */
-    padding: 0 10px 0 14px;
+    padding: 0 10px 0 0;
     /* 下边框用 inset 阴影画，不占布局高度（与 TitleBar 一致） */
     box-shadow: inset 0 -1px 0 var(--el-border-color-light);
     background: var(--el-bg-color);
     -webkit-app-region: drag;
     user-select: none;
+    overflow: hidden;
 }
 /* 步骤条自带宽度与收缩策略（见 WizardSteps.vue），这里只保证它靠左不挤右侧按钮 */
+/* 按钮区浮在进度填充之上，自身不参与进度宽度的计算 */
 .wiz-navbar__acts {
+    position: relative;
+    z-index: 2;
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 2px;
+    padding-left: 12px;
+}
+/* 导航栏图标按钮：方形、无边框，悬停给一层浅底 */
+.nav-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+    color: var(--el-text-color-regular);
+}
+.nav-icon-btn:hover {
+    color: var(--el-color-primary);
 }
 /* 导航栏里的按钮可点不可拖 */
 .wiz-navbar__acts :deep(.ant-btn) {
@@ -1362,6 +1424,53 @@ onBeforeUnmount(() => {
 }
 .speed-list__ms {
     font-family: var(--el-font-family-mono);
+}
+/* ---- 第 1 步：当前设置摘要 ---- */
+.cfg-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 8px;
+    background: var(--el-fill-color-light);
+}
+.cfg-summary__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+}
+.cfg-summary__k {
+    flex: 0 0 auto;
+    color: var(--el-text-color-secondary);
+}
+.cfg-summary__v {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-align: right;
+    color: var(--el-text-color-regular);
+}
+/* 「安装设置」入口：右对齐，不抢摘要本身的视觉重量 */
+.cfg-summary__edit {
+    align-self: flex-end;
+    height: auto;
+    padding: 0;
+    font-size: 12px;
+}
+/* 安装设置面板顶部的说明 */
+.net-full__intro {
+    margin: 0 0 16px;
+}
+/* 安装设置面板里的分区标题 */
+.net-full__sep {
+    margin: 4px 0 16px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
 }
 /* ---- 简易安装进度说明 ---- */
 .simple-note {

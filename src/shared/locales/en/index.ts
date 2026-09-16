@@ -71,6 +71,8 @@ export default {
         modeSimpleStart: 'Start express install',
         modeCustom: 'Custom install',
         modeCustomDesc: 'Choose the registry, Node runtime, npm source and DeepSeek Harness version step by step',
+        installSettings: 'Install settings',
+        installSettingsHint: 'Registry, config directory and proxy; changes apply to this install immediately.',
         speedTitle: 'Checking registry speed',
         speedDesc: 'Requests the official registry and npmmirror in parallel and uses whichever is faster.',
         speedPicked: 'Fastest registry selected',
@@ -83,7 +85,7 @@ export default {
         simplePlanPrerelease: 'No stable release found; installing the latest test build {version}',
         wiz: {
             mode: 'Install mode',
-            source: 'Registry',
+            source: 'Install settings',
             node: 'Node runtime',
             npm: 'npm runtime',
             dsh: 'DeepSeek Harness'
@@ -110,7 +112,7 @@ export default {
         installLog: 'Install log',
         logWaiting: 'Installing — waiting for output…',
         progressDsh: 'Installing DeepSeek Harness',
-        viewLog: 'View log',
+        viewLog: 'Install log',
         closeLog: 'Close',
         preLabel: 'Include pre-releases',
         versionPlaceholder: 'Choose a version to install (latest by default)',
