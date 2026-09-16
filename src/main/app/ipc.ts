@@ -18,6 +18,7 @@ import { listAppIcons, currentAppIcon, saveUserIcon, deleteUserIcon, applyAppIco
 import { findSystemNode, findSystemNpm, nodeVersionOf, localNodeExecPath } from '../dsh/tools'
 import { deployLocalNode, listNodeVersions, nodeStatus, listInstalledNodeVersions, useNodeVersion, removeInstalledNodeVersion } from '../dsh/nodeenv'
 import { listNpmVersions, npmStatus, updateNpm, ensureBundledNpmReady, listInstalledNpmVersions, useNpmVersion, removeInstalledNpmVersion } from '../dsh/npmRunner'
+import { measureRegistrySpeed } from '../dsh/speed'
 import { cancelActive } from '../dsh/cancel'
 import { APP_TITLE } from './const'
 import { Router } from './router'
@@ -185,6 +186,7 @@ export function registerIpc(): void {
         })
 
         // ---- npm ----
+        .post('/registries/speed', () => measureRegistrySpeed())
         .get('/npm/status', () => npmStatus())
         .get('/npm/versions', ({ query }) => listNpmVersions(loadSettings(), query?.prerelease === true))
         .post('/npm/update', ({ body }) =>

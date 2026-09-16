@@ -16,6 +16,8 @@ import { httpFetch } from './http'
 import { proxyEnv, npmProxyArgs } from './net'
 import { beginCancelable, CANCELED_MESSAGE } from './cancel'
 import { activeVersion, installRoot, listInstalled, prepareVersionDir, removeVersion, setActiveVersion, versionDir } from './installs'
+// registry 基址搬去 registry.ts（纯模块，可单测）；本文件只作为使用方引入。
+import { registryBase } from './registry'
 
 /**
  * npm / 外部工具的调用层：如何按所选来源（系统 npm、内置 npm、本地 Node 自带 npm）
@@ -26,11 +28,6 @@ import { activeVersion, installRoot, listInstalled, prepareVersionDir, removeVer
  */
 
 export type ToolResult = { ok: boolean; stderrTail: string; canceled?: boolean }
-
-/** npm registry 的 URL 基址（安装/查询都走这里）。 */
-export function registryBase(r: 'npmjs' | 'npmmirror'): string {
-    return r === 'npmmirror' ? 'https://registry.npmmirror.com' : 'https://registry.npmjs.org'
-}
 
 /**
  * 把 npm 的缓存目录钉到 `<工作目录>/temp/npm`：所有 npm 调用（dsh 安装、npm 自更新、

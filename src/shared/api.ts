@@ -33,6 +33,7 @@ import type {
     NpmRegistry,
     NpmSource,
     NpmStatus,
+    RegistrySpeedResult,
     ResolvedLocale,
     Settings,
     Theme,
@@ -128,6 +129,8 @@ export interface ApiRoutes {
     'POST /node/deploy': { body?: { version?: string }; result: NodeDeployResult }
 
     // ---- npm ----
+    /** 实测各 npm registry 的速度，供向导「简易安装」挑最快的源。 */
+    'POST /registries/speed': { result: RegistrySpeedResult }
     'GET /npm/status': { result: NpmStatus }
     'GET /npm/versions': { query: { prerelease?: boolean }; result: string[] }
     'POST /npm/update': { body?: { source?: NpmSource; version?: string }; result: ToolActionResult }

@@ -171,6 +171,23 @@ export type NpmSource = 'system' | 'bundled' | 'localnode'
 /** Which npm registry to use for dsh version listing / install. */
 export type NpmRegistry = 'npmjs' | 'npmmirror'
 
+/** 单个 npm registry 的测速样本。 */
+export interface RegistrySpeedSample {
+    registry: NpmRegistry
+    /** 实测往返毫秒数（取整）；请求失败或超时为 null。 */
+    ms: number | null
+}
+
+/**
+ * registry 测速汇总，供向导的「简易安装」自动挑最快的源。
+ * `samples` 已按「可用的在前、延迟升序」排好，`fastest` 就是其中第一项。
+ */
+export interface RegistrySpeedResult {
+    samples: RegistrySpeedSample[]
+    /** 最快且可用的 registry；两个都不可用时为 null（此时沿用用户当前设置）。 */
+    fastest: NpmRegistry | null
+}
+
 export type Theme = 'system' | 'light' | 'dark'
 
 /** 支持的搜索引擎。 */
