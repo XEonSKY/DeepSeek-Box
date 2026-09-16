@@ -16,6 +16,17 @@ export function isPrerelease(v: string): boolean {
     return /^\d+\.\d+\.\d+-/.test(stripV(v))
 }
 
+/**
+ * 统一补上 `v` 前缀供界面展示：`process.versions.node` 不带 v，`node --version` 带，
+ * 同一列里混着两种写法很难看；空值统一显示占位符。
+ *
+ * 此前 DshPanel / EnvPanel 各写了一份（其中一份还用了模板字符串），展示层合并为一处。
+ */
+export function withV(v: string | null | undefined, placeholder = '—'): string {
+    if (!v) return placeholder
+    return /^[vV]/.test(v) ? v : `v${v}`
+}
+
 /** dsh 可用的 Node 最低主版本 —— 低于它的 Node 装了也跑不起 dsh。 */
 export const MIN_NODE_MAJOR = 20
 

@@ -3,7 +3,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { setTimeout as delay } from 'node:timers/promises'
 import type { DownloadThreads } from '@shared/types'
+import { errorMessage } from '@shared/errors'
+import { removeQuietly } from './fsutil'
 import { httpFetch } from './http'
 import type { HttpScope } from './http'
 
@@ -114,10 +117,6 @@ function fileNameFromUrl(url: string): string {
     } catch {
         return 'download-' + Date.now()
     }
-}
-
-function delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /** node:stream 的 web ReadableStream 参数类型（避免 any）。 */
@@ -280,15 +279,6 @@ function preallocate(file: string, size: number): void {
     }
 }
 
-/** 尽力删除文件。 */
-function removeQuietly(file: string): void {
-    try {
-        fs.rmSync(file, { force: true })
-    } catch {
-        /* ignore */
-    }
-}
-
 /** 把临时文件搬到最终位置；跨盘时 rename 会失败，退回拷贝再删源。 */
 function moveFile(from: string, to: string): void {
     try {
@@ -362,7 +352,7 @@ async function runDownload(
         removeQuietly(tmpPath)
         removeQuietly(finalPath)
         if (ctrl.signal.aborted) return { ok: false, canceled: true, message: '操作已取消' }
-        return { ok: false, message: err instanceof Error ? err.message : String(err) }
+        return { ok: false, message: errorMessage(err) }
     }
 }
 

@@ -1,4 +1,5 @@
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useEventListener } from '@vueuse/core'
 import type { Ref } from 'vue'
 import { webTabs, closeTab } from './tabs'
 import type { WebTab } from './tabs'
@@ -165,7 +166,7 @@ export function useTabDrag(): TabDragApi {
 
     function endLocal(opts: { reorder?: boolean; dropTarget?: number | null }): void {
         const id = draggingTabId.value
-        cleanupSourceListeners()
+        stopPointerWatch()
         ghost.visible = false
         draggingTabId.value = null
         slotBeforeId.value = null
@@ -183,7 +184,7 @@ export function useTabDrag(): TabDragApi {
 
     function onSourceUp(e: PointerEvent): void {
         if (!started) {
-            cleanupSourceListeners()
+            stopPointerWatch()
             return
         }
         const target = hoverTarget(e.screenX, e.screenY)
@@ -209,11 +210,25 @@ export function useTabDrag(): TabDragApi {
         slotBeforeId.value = null
     }
 
-    function cleanupSourceListeners(): void {
-        window.removeEventListener('pointermove', onSourceMove)
-        window.removeEventListener('pointerup', onSourceUp)
-        window.removeEventListener('pointercancel', onSourceCancel)
-        window.removeEventListener('pointerleave', onSourceLeave)
+    /**
+     * 拖动期间的 window 指针监听（仅拖拽时挂载）。
+     *
+     * 用 useEventListener 而不是裸 addEventListener：返回值就是解绑函数，
+     * 全部指针类型一次挂/一次解，不会出现「加了 4 个只解了 3 个」的遗漏。
+     */
+    let stopPointerWatch: () => void = () => {}
+    function startPointerWatch(): void {
+        stopPointerWatch()
+        const stopMove = useEventListener(window, 'pointermove', onSourceMove)
+        const stopUp = useEventListener(window, 'pointerup', onSourceUp)
+        const stopCancel = useEventListener(window, 'pointercancel', onSourceCancel)
+        const stopLeave = useEventListener(window, 'pointerleave', onSourceLeave)
+        stopPointerWatch = () => {
+            stopMove()
+            stopUp()
+            stopCancel()
+            stopLeave()
+        }
     }
 
     function onTabPointerDown(tab: WebTab, e: PointerEvent): void {
@@ -227,16 +242,15 @@ export function useTabDrag(): TabDragApi {
         started = false
         draggingTabId.value = null
         slotBeforeId.value = null
-        window.addEventListener('pointermove', onSourceMove)
-        window.addEventListener('pointerup', onSourceUp)
-        window.addEventListener('pointercancel', onSourceCancel)
-        window.addEventListener('pointerleave', onSourceLeave)
+        // 拖动期间才挂监听：指针事件由 window 统一收口，避免鼠标移出标签条就丢事件。
+        // 解绑统一走 stopPointerWatch（useEventListener 的返回值），不再成对写 add/remove。
+        startPointerWatch()
     }
 
     function onSourceMovedAway(): void {
     // 被拖标签已移入其它窗口：主进程会先对目标发 hover false，这里移除本地该标签并清状态。
         const id = draggingTabId.value
-        cleanupSourceListeners()
+        stopPointerWatch()
         ghost.visible = false
         draggingTabId.value = null
         slotBeforeId.value = null
@@ -259,7 +273,7 @@ export function useTabDrag(): TabDragApi {
     onBeforeUnmount(() => {
         offMoved?.()
         offHover?.()
-        cleanupSourceListeners()
+        stopPointerWatch()
     })
 
     return {

@@ -4,6 +4,7 @@ import { IS_WIN } from '../app/runtime'
 import { configDir } from '../app/settings'
 import type { InstallKind } from '@shared/types'
 import { sortVersionsDesc } from './semver'
+import { readPkgVersion } from './fsutil'
 
 /**
  * 版本化安装目录：Node / npm / dsh 各自装到 `<configDir>/<kind>/<版本>/` 下，允许多版本并存；
@@ -190,15 +191,6 @@ function moveFlatInto(kind: InstallKind, version: string): boolean {
         }
     }
     return fs.existsSync(path.join(dest, keyRel))
-}
-
-function readPkgVersion(file: string): string | null {
-    try {
-        const v = (JSON.parse(fs.readFileSync(file, 'utf8')) as { version?: unknown }).version
-        return typeof v === 'string' && v ? v : null
-    } catch {
-        return null
-    }
 }
 
 /**

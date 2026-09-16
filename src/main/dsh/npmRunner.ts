@@ -1,15 +1,16 @@
-import { spawn } from 'node:child_process'
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
-import { createInterface } from 'node:readline'
 import type { InstalledVersions, NodeDeployProgress, NodeRuntimeKind, NpmRuntimeStatus, NpmSource, NpmStatus, Settings, ToolActionResult } from '@shared/types'
+import { errorMessage } from '@shared/errors'
 import { IS_WIN } from '../app/runtime'
 import { loadSettings, mt, bundledNpmDir, tempDownloadDir, tempNpmDir } from '../app/settings'
 import { nodeRuntimeFor, localNodeNpmCli, findSystemNpm, pathEnv, findInDirs } from './tools'
 import { localNodeDir } from './nodeenv'
+import { probeVersion, runChild } from './child'
+import { removeQuietly } from './fsutil'
 import { compareVersions, stripV, sortVersionsDesc } from './semver'
-import { pushLog, rememberChild } from './dsh'
+import { pushLog } from './logbus'
 import { downloadFile } from './downloader'
 import { httpFetch } from './http'
 import { proxyEnv, npmProxyArgs } from './net'
@@ -45,62 +46,31 @@ function npmCacheEnv(): NodeJS.ProcessEnv {
     return { npm_config_cache: dir }
 }
 
-/** Spawn any process and stream stdout/stderr into the log view. */
-function runTool(exec: string, argv: string[], label: string, opts: { shell: boolean; env?: NodeJS.ProcessEnv }, signal?: AbortSignal): Promise<ToolResult> {
-    return new Promise((resolve) => {
-        pushLog('o', `[Manager] ${label} …`)
-        let stderrTail = ''
-        let settled = false
-        const child = rememberChild(
-            spawn(exec, argv, {
-                shell: opts.shell,
-                windowsHide: true,
-                cwd: os.homedir(),
-                env: opts.env ?? process.env,
-                stdio: ['ignore', 'pipe', 'pipe']
-            })
-        )
-        const rl = createInterface({ input: child.stdout! })
-        rl.on('line', (line) => {
-            pushLog('o', line)
-            console.log('[Manager]', line)
-        })
-        child.stderr!.on('data', (d: Buffer) => {
-            const s = d.toString()
-            stderrTail = (stderrTail + s).slice(-3000)
-            pushLog('e', s)
-            console.error('[Manager]', s.replace(/\n/g, '\n[Manager]'))
-        })
-        let canceled = false
-        function onAbort(): void {
-            canceled = true
-            try {
-                child.kill('SIGKILL')
-            } catch {
-                /* ignore */
+/** 跑一个命令并把 stdout/stderr 接进日志视图（转义与尾部诊断交给 runChild）。 */
+async function runTool(exec: string, argv: string[], label: string, opts: { shell: boolean; env?: NodeJS.ProcessEnv }, signal?: AbortSignal): Promise<ToolResult> {
+    pushLog('o', `[Manager] ${label} …`)
+    const r = await runChild(
+        exec,
+        {
+            argv,
+            cwd: os.homedir(),
+            env: opts.env ?? process.env,
+            shell: opts.shell,
+            stderrTailLimit: 3000,
+            onStdoutLine: (line) => {
+                pushLog('o', line)
+                console.log('[Manager]', line)
+            },
+            onStderr: (s) => {
+                pushLog('e', s)
+                console.error('[Manager]', s.replace(/\n/g, '\n[Manager]'))
             }
-        }
-        if (signal) {
-            if (signal.aborted) onAbort()
-            else signal.addEventListener('abort', onAbort, { once: true })
-        }
-        const done = (ok: boolean): void => {
-            if (settled) return
-            settled = true
-            signal?.removeEventListener('abort', onAbort)
-            resolve({ ok, stderrTail, canceled })
-        }
-        child.on('error', () => done(false))
-        child.on('exit', (code) => {
-            if (code === 0) {
-                pushLog('o', `[Manager] ${label} completed.`)
-                done(true)
-            } else {
-                pushLog('e', `[Manager] ${label} failed (code=${code}).`)
-                done(false)
-            }
-        })
-    })
+        },
+        signal
+    )
+    if (r.ok) pushLog('o', `[Manager] ${label} completed.`)
+    else pushLog('e', `[Manager] ${label} failed (code=${r.code}).`)
+    return { ok: r.ok, stderrTail: r.stderrTail, canceled: r.canceled }
 }
 
 /** Run the system `npm` (npm.cmd on Windows). */
@@ -142,23 +112,6 @@ function bundledNpmCli(): string {
 // ---- 版本探测 / 列表（安静：不写日志视图）----------------------------------
 // 环境页每次进入都要问版本，**绝不能**走 runTool（它把输出推进终端日志，会刷屏）。
 
-/** 安静地跑一次命令取版本号。 */
-function quietVersion(exec: string, argv: string[], shell: boolean, env?: NodeJS.ProcessEnv): Promise<string | null> {
-    return new Promise((resolve) => {
-        let out = ''
-        try {
-            const child = spawn(exec, argv, { shell, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'], env: env ?? process.env })
-            child.stdout!.on('data', (d: Buffer) => {
-                if (out.length < 64) out += d.toString()
-            })
-            child.on('error', () => resolve(null))
-            child.on('exit', (code) => resolve(code === 0 && out.trim() ? out.trim() : null))
-        } catch {
-            resolve(null)
-        }
-    })
-}
-
 /** 内置 npm 跑在 Electron 自带的 Node 上（与 chooseLocalNpm 的 runtime: 'electron' 一致）。 */
 function electronNode(): { exec: string; env: NodeJS.ProcessEnv } {
     return { exec: process.execPath, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ...npmCacheEnv() } }
@@ -170,7 +123,7 @@ function systemNpmVersion(): Promise<string | null> {
     if (!p) return Promise.resolve(null)
     // Windows 上 .cmd 必须经 shell 启动，而 shell 模式下**带空格的路径**会被拆成两段，
     // 所以显式加引号（npm 常装在 C:\Program Files\nodejs 下）。
-    return quietVersion(IS_WIN ? `"${p}"` : p, ['--version'], IS_WIN, { ...process.env, ...npmCacheEnv() })
+    return probeVersion(IS_WIN ? `"${p}"` : p, ['--version'], { ...process.env, ...npmCacheEnv() }, IS_WIN)
 }
 
 /** 内置 npm 的版本（尚未下载到配置目录 → null）。 */
@@ -178,7 +131,7 @@ function bundledNpmVersion(): Promise<string | null> {
     const cli = bundledNpmCli()
     if (!fs.existsSync(cli)) return Promise.resolve(null)
     const n = electronNode()
-    return quietVersion(n.exec, [cli, '--version'], false, n.env)
+    return probeVersion(n.exec, [cli, '--version'], n.env)
 }
 
 /** 本地部署 Node 自带 npm 的版本（未部署本地 Node → null）。 */
@@ -187,7 +140,7 @@ function localNodeNpmVersion(): Promise<string | null> {
     if (!cli) return Promise.resolve(null)
     try {
         const rt = nodeRuntimeFor('local')
-        return quietVersion(rt.exec, [cli, '--version'], false, { ...process.env, ...rt.env, ...npmCacheEnv() })
+        return probeVersion(rt.exec, [cli, '--version'], { ...process.env, ...rt.env, ...npmCacheEnv() })
     } catch {
         return Promise.resolve(null)
     }
@@ -289,46 +242,10 @@ function findSystemTar(): string | null {
  */
 /** 解压 tar.gz 到目标目录；取消时杀掉子进程。 */
 function extractTar(tgz: string, dest: string, signal?: AbortSignal): Promise<boolean> {
-    return new Promise((resolve) => {
-        const tar = findSystemTar()
-        if (!tar) {
-            resolve(false)
-            return
-        }
-        pushLog('o', '[Manager] 解压 npm 压缩包…')
-        const child = rememberChild(spawn(tar, ['-xzf', tgz, '-C', dest], { windowsHide: true, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }))
-        let settled = false
-        function finish(ok: boolean): void {
-            if (settled) return
-            settled = true
-            signal?.removeEventListener('abort', onAbort)
-            resolve(ok)
-        }
-        function onAbort(): void {
-            try {
-                child.kill('SIGKILL')
-            } catch {
-                /* ignore */
-            }
-            finish(false)
-        }
-        if (signal) {
-            if (signal.aborted) onAbort()
-            else signal.addEventListener('abort', onAbort, { once: true })
-        }
-        child.stderr!.on('data', (d: Buffer) => pushLog('e', d.toString()))
-        child.on('error', () => finish(false))
-        child.on('exit', (code) => finish(code === 0))
-    })
-}
-
-/** 清理目录（尽力而为）。 */
-function removeQuietly(target: string): void {
-    try {
-        fs.rmSync(target, { recursive: true, force: true })
-    } catch {
-        /* ignore */
-    }
+    const tar = findSystemTar()
+    if (!tar) return Promise.resolve(false)
+    pushLog('o', '[Manager] 解压 npm 压缩包…')
+    return runChild(tar, { argv: ['-xzf', tgz, '-C', dest], onStderr: (s) => pushLog('e', s) }, signal).then((r) => r.ok)
 }
 
 async function ensureBundledNpm(
@@ -357,7 +274,7 @@ async function ensureBundledNpm(
         fs.rmSync(stage, { recursive: true, force: true })
         fs.mkdirSync(stage, { recursive: true })
     } catch (err) {
-        return { ok: false, message: err instanceof Error ? err.message : String(err) }
+        return { ok: false, message: errorMessage(err) }
     }
     const tgz = path.join(stage, `npm-${target}.tgz`)
     const dl = await downloadFile({
@@ -390,7 +307,7 @@ async function ensureBundledNpm(
         destDir = prepareVersionDir('npm', target)
     } catch (err) {
         removeQuietly(stage)
-        return { ok: false, message: err instanceof Error ? err.message : String(err) }
+        return { ok: false, message: errorMessage(err) }
     }
     const okExtract = await extractTar(tgz, destDir, signal)
     removeQuietly(stage)
@@ -482,7 +399,7 @@ export async function runLocalNpmInstall(target: string, cfg: Settings, prefix: 
             fs.writeFileSync(pkgFile, JSON.stringify({ name: 'dsbox-dsh', private: true, version: '0.0.0' }, null, 2))
         }
     } catch (err) {
-        return { ok: false, stderrTail: '', fatal: err instanceof Error ? err.message : String(err) }
+        return { ok: false, stderrTail: '', fatal: errorMessage(err) }
     }
     const args = ['install', '--prefix', prefix, '--no-audit', '--no-fund', target]
     if (cfg.npmRegistry) args.push(`--registry=${registryBase(cfg.npmRegistry)}`)

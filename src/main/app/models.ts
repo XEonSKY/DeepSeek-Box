@@ -3,6 +3,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { parse } from 'yaml'
 import type { CurrentBalanceInfo, ModelBalanceInfo, ModelsInfo, ProviderEntryInfo } from '@shared/types'
+import { errorMessage } from '@shared/errors'
 import { httpFetch } from '../dsh/http'
 
 /**
@@ -255,7 +256,7 @@ function sanitizeMessage(raw: string): string {
 
 /** 把异常收成可展示的错误状态（HTTP 码 / 超时 / DNS）；不含任何请求内容。 */
 function balanceError(err: unknown): ModelBalanceInfo {
-    const raw = err instanceof Error ? err.message : String(err)
+    const raw = errorMessage(err)
     return { state: 'error', currency: null, total: null, granted: null, toppedUp: null, message: sanitizeMessage(raw) }
 }
 

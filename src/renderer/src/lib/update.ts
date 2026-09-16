@@ -3,6 +3,7 @@ import { ElTag, ElNotification } from 'element-plus'
 import type { VNode } from 'vue'
 import type { AppUpdateEvent, Settings, UpdateResult } from '@shared/types'
 import { isPrerelease } from '@shared/version'
+import { errorMessage } from '@shared/errors'
 import { tt } from './locales'
 
 const TYPE: Record<UpdateResult['status'], 'success' | 'warning' | 'error'> = {
@@ -169,7 +170,7 @@ export async function checkDsh(opts?: {
     } catch (err) {
         dshCheck.checked = true
         dsh.state = 'error'
-        dsh.message = err instanceof Error ? err.message : String(err)
+        dsh.message = errorMessage(err)
         return null
     }
 }
@@ -225,7 +226,7 @@ export async function checkAllUpdates(): Promise<void> {
         })
         .catch((err) => {
             versionStatus.app.state = 'error'
-            versionStatus.app.message = err instanceof Error ? err.message : String(err)
+            versionStatus.app.message = errorMessage(err)
         })
 
     await Promise.all([app, checkDsh({ prerelease: cfg?.checkPrerelease, registry: cfg?.npmRegistry })])

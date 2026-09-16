@@ -9,7 +9,8 @@ import { applyAutoLaunch } from './app/autolaunch'
 import { resolveInstall } from './dsh/manage'
 import { migrateLegacyInstalls } from './dsh/installs'
 import { nodeVersionOf } from './dsh/tools'
-import { restart, killServer, killAllChildren, stopDshGracefully } from './dsh/dsh'
+import { restart, killServer, stopDshGracefully } from './dsh/dsh'
+import { killAllChildren } from './dsh/logbus'
 import { getTray, setQuitting, destroyTray } from './app/runtime'
 
 // ---------------------------------------------------------------------------

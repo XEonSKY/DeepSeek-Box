@@ -1,9 +1,10 @@
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
-import { spawn } from 'node:child_process'
 import { IS_WIN } from '../app/runtime'
 import { installRoot, listInstalled, resolveActive, versionDir } from './installs'
+import { probeVersion } from './child'
+import { readPkgVersion } from './fsutil'
 import type { NodeRuntimeKind } from '@shared/types'
 
 /**
@@ -40,17 +41,6 @@ function localDshModuleDir(): string {
     const active = resolveActive('dsh')
     const base = active ? versionDir('dsh', active) : installRoot('dsh')
     return path.join(base, 'node_modules', '@deepseek-ai', 'dsh')
-}
-
-function readPkgVersion(moduleDir: string): string | null {
-    try {
-        const v = (
-            JSON.parse(fs.readFileSync(path.join(moduleDir, 'package.json'), 'utf8')) as { version?: string }
-        ).version
-        return v || null
-    } catch {
-        return null
-    }
 }
 
 /**
@@ -93,12 +83,12 @@ function findDshModule(startPath: string): { dir: string; version: string } | nu
     for (let i = 0; i < 5; i++) {
         const moduleDir = path.join(d, 'node_modules', '@deepseek-ai', 'dsh')
         if (fs.existsSync(path.join(moduleDir, 'package.json'))) {
-            const version = readPkgVersion(moduleDir)
+            const version = readPkgVersion(path.join(moduleDir, 'package.json'))
             if (version) return { dir: moduleDir, version }
         }
         // The resolved path might itself point inside the module (e.g. .../bin.js).
         if (path.basename(d) === 'dsh' && fs.existsSync(path.join(d, 'package.json'))) {
-            const version = readPkgVersion(d)
+            const version = readPkgVersion(path.join(d, 'package.json'))
             if (version) return { dir: d, version }
         }
         d = path.dirname(d)
@@ -149,7 +139,7 @@ export function resolveDshModule(cfg: { dshSource?: 'local' | 'global'; dshBin?:
     }
     const moduleDir = localDshModuleDir()
     const present = fs.existsSync(path.join(moduleDir, 'package.json'))
-    const version = present ? readPkgVersion(moduleDir) : null
+    const version = present ? readPkgVersion(path.join(moduleDir, 'package.json')) : null
     const entry = present ? resolveModuleBin(moduleDir) : null
     return { kind: 'local', present, moduleDir, version, entry }
 }
@@ -172,21 +162,7 @@ export function findSystemNpm(): string | null {
 
 /** Ask a node binary for its version (`node --version`), best effort. */
 export function nodeVersionOf(nodePath: string): Promise<string | null> {
-    return new Promise((resolve) => {
-        let out = ''
-        try {
-            const p = spawn(nodePath, ['--version'], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
-            p.stdout!.on('data', (d: Buffer) => {
-                if (out.length < 64) out += d.toString()
-            })
-            p.on('error', () => resolve(null))
-            p.on('exit', (code) => {
-                resolve(code === 0 && out.trim() ? out.trim() : null)
-            })
-        } catch {
-            resolve(null)
-        }
-    })
+    return probeVersion(nodePath)
 }
 
 /**

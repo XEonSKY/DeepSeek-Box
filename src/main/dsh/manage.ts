@@ -2,10 +2,12 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 import type { InstalledVersions, DshActionResult, Settings, UpdateResult } from '@shared/types'
+import { errorMessage } from '@shared/errors'
 import { IS_WIN, broadcast } from '../app/runtime'
 import { resolveDshModule } from './tools'
 import { loadSettings, mt, localDshDir } from '../app/settings'
-import { rememberChild, isDshRunning, stopAllDsh, restart } from './dsh'
+import { isDshRunning, stopAllDsh, restart } from './dsh'
+import { rememberChild } from './logbus'
 import { isPrerelease, compareVersions, filterByPrerelease, pickLatest, sortVersionsDesc } from './semver'
 import { registryBase, runNpm, runNpmInstallGlobal, runLocalNpmInstall } from './npmRunner'
 import { httpFetch } from './http'
@@ -220,7 +222,7 @@ async function installTo(local: boolean, target: string, registry: 'npmjs' | 'np
         if (wasRunning) void restart()
         const message =
             result.fatal ??
-      (local ? mt('m.dsh.localInstallFail', { tail: result.stderrTail.trim() || '...' }) : mt('m.dsh.installFail', { tail: result.stderrTail.trim() || '...' }))
+        (local ? mt('m.dsh.localInstallFail', { tail: result.stderrTail.trim() || '...' }) : mt('m.dsh.installFail', { tail: result.stderrTail.trim() || '...' }))
         return { ok: false, message, version: null }
     }
     if (local) setActiveVersion('dsh', target)
@@ -259,7 +261,7 @@ export async function installDsh(opts?: { version?: string | null; registry?: 'n
         try {
             target = await resolveTargetVersion(cfg, registry)
         } catch (err) {
-            return { ok: false, message: err instanceof Error ? err.message : String(err), version: null }
+            return { ok: false, message: errorMessage(err), version: null }
         }
     }
     dshBusy = true
@@ -287,7 +289,7 @@ export async function uninstallDsh(): Promise<DshActionResult> {
                 if (active) removeVersion('dsh', active)
                 else fs.rmSync(path.join(localDshDir(), 'node_modules'), { recursive: true, force: true })
             } catch (err) {
-                return { ok: false, message: err instanceof Error ? err.message : String(err), version: null }
+                return { ok: false, message: errorMessage(err), version: null }
             }
             broadcast('dsh:missing')
             return { ok: true, message: mt('m.dsh.uninstallOk'), version: null }

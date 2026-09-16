@@ -1,9 +1,11 @@
 import path from 'node:path'
 import fs from 'node:fs'
-import { spawn } from 'node:child_process'
 import type { InstalledVersions, NodeDeployProgress, NodeDeployResult, NodeRuntimeStatus, NodeStatus } from '@shared/types'
 import { loadSettings, tempDownloadDir } from '../app/settings'
-import { isDshRunning, pushLog, rememberChild } from './dsh'
+import { isDshRunning } from './dsh'
+import { runChild } from './child'
+import { removeQuietly } from './fsutil'
+import { pushLog } from './logbus'
 import { findSystemNode, localNodeExecPath, nodeVersionOf } from './tools'
 import { compareVersions, stripV } from './semver'
 import { downloadFile } from './downloader'
@@ -111,47 +113,15 @@ export async function nodeStatus(): Promise<NodeStatus> {
     return { latest, system: mk(systemVersion, !!sysPath), local: mk(localVersion, !!localPath) }
 }
 
-/** 尽力删除文件 / 目录。 */
-function removeQuietly(target: string): void {
-    try {
-        fs.rmSync(target, { recursive: true, force: true })
-    } catch {
-        /* ignore */
-    }
-}
-
 /** 解压发行包；取消时杀掉子进程并返回 false。 */
 function extract(stage: string, file: string, signal: AbortSignal): Promise<boolean> {
-    return new Promise((resolve) => {
-        const win = nodeOs() === 'win'
-        const exec = win ? 'powershell.exe' : 'tar'
-        const argv = win
-            ? ['-NoProfile', '-NonInteractive', '-Command', "Expand-Archive -Path '" + file + "' -DestinationPath '" + stage + "' -Force"]
-            : ['-xzf', file, '-C', stage]
-        pushLog('o', '[Manager] 解压 Node 压缩包…')
-        const child = rememberChild(spawn(exec, argv, { windowsHide: true, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }))
-        let settled = false
-        function finish(ok: boolean): void {
-            if (settled) return
-            settled = true
-            signal.removeEventListener('abort', onAbort)
-            resolve(ok)
-        }
-        function onAbort(): void {
-            try {
-                child.kill('SIGKILL')
-            } catch {
-                /* ignore */
-            }
-            finish(false)
-        }
-        if (signal.aborted) onAbort()
-        else signal.addEventListener('abort', onAbort, { once: true })
-        child.stdout!.on('data', (d: Buffer) => pushLog('o', d.toString()))
-        child.stderr!.on('data', (d: Buffer) => pushLog('e', d.toString()))
-        child.on('error', () => finish(false))
-        child.on('exit', (code) => finish(code === 0))
-    })
+    const win = nodeOs() === 'win'
+    const exec = win ? 'powershell.exe' : 'tar'
+    const argv = win
+        ? ['-NoProfile', '-NonInteractive', '-Command', "Expand-Archive -Path '" + file + "' -DestinationPath '" + stage + "' -Force"]
+        : ['-xzf', file, '-C', stage]
+    pushLog('o', '[Manager] 解压 Node 压缩包…')
+    return runChild(exec, { argv, onStdoutLine: (s) => pushLog('o', s), onStderr: (s) => pushLog('e', s) }, signal).then((r) => r.ok)
 }
 
 /** 已安装 / 生效的本地 Node 版本。 */

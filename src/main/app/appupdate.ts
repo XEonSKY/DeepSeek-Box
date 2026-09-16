@@ -5,6 +5,7 @@ import type { UpdateDownloadedEvent } from 'electron-updater'
 import semver from 'semver'
 import type { AppMeta, AppUpdateEvent, Settings } from '@shared/types'
 import { isPrerelease, stripV } from '@shared/version'
+import { errorMessage } from '@shared/errors'
 import { proxyActive, proxyUrl } from '../dsh/net'
 import { proxyConfigFor } from '../dsh/http'
 import { broadcast } from './runtime'
@@ -157,11 +158,6 @@ function pinFeed(tag: string): void {
     pinnedTag = tag
 }
 
-/** 统一取错误文案。 */
-function messageOf(err: unknown): string {
-    return err instanceof Error ? err.message : String(err)
-}
-
 // ---------------------------------------------------------------------------
 
 /** 惰性初始化：注册 electron-updater 事件到广播。 */
@@ -298,7 +294,7 @@ export async function triggerAppUpdate(opts: { prerelease: boolean }): Promise<{
             await autoUpdater.checkForUpdates()
             return { ok: true, message: '' }
         } catch (err) {
-            return { ok: false, message: messageOf(err) }
+            return { ok: false, message: errorMessage(err) }
         }
     }
 
@@ -312,7 +308,7 @@ export async function triggerAppUpdate(opts: { prerelease: boolean }): Promise<{
         await autoUpdater.checkForUpdates()
         return { ok: true, message: '' }
     } catch (err) {
-        return { ok: false, message: messageOf(err) }
+        return { ok: false, message: errorMessage(err) }
     }
 }
 

@@ -1,18 +1,20 @@
 import { app, dialog, shell } from 'electron'
-import { spawn, spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import net from 'node:net'
 import os from 'node:os'
 import fs from 'node:fs'
 import { createInterface } from 'node:readline'
-import type { LogEntry, Settings } from '@shared/types'
-import { IS_WIN, broadcast, sendCore, setCurrentUrl } from '../app/runtime'
+import type { Settings } from '@shared/types'
+import { errorMessage } from '@shared/errors'
+import { sendCore, setCurrentUrl } from '../app/runtime'
 import { listWindows } from '../app/windowreg'
 import type { NodeRuntime } from './tools'
 import { resolveDshModule, nodeRuntimeForCfg } from './tools'
 import { loadSettings, mt } from '../app/settings'
 import { proxyEnv } from './net'
 import { WATCHDOG_CODE } from './watchdog'
+import { killAllChildren, killTree, pushLog, rememberChild } from './logbus'
 
 /** Build the CLI args passed to the @deepseek-ai/dsh bin entry. */
 function dshArgs(host: string, port: number): string[] {
@@ -23,68 +25,12 @@ function dshArgs(host: string, port: number): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Log ring buffer + child registry
+// dsh server process state（日志缓冲 / 子进程登记表已移到 logbus.ts）
 // ---------------------------------------------------------------------------
 
 let serverProcess: ChildProcess | null = null
 let childKilled = false
 let serverGeneration = 0
-const logBuf: LogEntry[] = []
-const LOG_CAP = 5000
-
-export function getLogHistory(): LogEntry[] {
-    return logBuf.slice()
-}
-
-export function pushLog(k: LogEntry['k'], s: string): void {
-    if (!s) return
-    logBuf.push({ k, s })
-    if (logBuf.length > LOG_CAP) logBuf.splice(0, logBuf.length - LOG_CAP)
-    broadcast('dsh:log', { k, s })
-}
-
-/**
- * Every child this process spawns (the watchdog node, and any in-flight npm)
- * is registered here so a real quit / force-exit can kill the whole batch —
- * not just the latest watchdog. This prevents orphaned node/npm processes from
- * piling up (e.g. an npm install that was still running when the app closed).
- */
-const liveChildren = new Set<ChildProcess>()
-export function rememberChild(child: ChildProcess): ChildProcess {
-    liveChildren.add(child)
-    const drop = (): void => {
-        liveChildren.delete(child)
-    }
-    child.once('exit', drop)
-    child.once('error', drop)
-    return child
-}
-
-export function killTree(pid: number): void {
-    try {
-        if (IS_WIN) spawnSync('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' })
-        else {
-            try {
-                process.kill(-pid, 'SIGTERM')
-            } catch {
-                process.kill(pid, 'SIGTERM')
-            }
-        }
-    } catch {
-    /* already gone */
-    }
-}
-
-/** taskkill /T the tree of every still-registered child (best effort). */
-export function killAllChildren(): void {
-    for (const c of [...liveChildren]) {
-        try {
-            if (c.pid) killTree(c.pid)
-        } catch {
-            /* already gone */
-        }
-    }
-}
 
 export function killServer(): void {
     if (!serverProcess) return
@@ -337,7 +283,7 @@ async function runOneRestart(): Promise<void> {
             })
         }
     } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = errorMessage(err)
         dialog.showErrorBox(mt('m.dialogs.startFailedTitle'), msg)
         if (listWindows().length === 0) app.quit()
     }
