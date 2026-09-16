@@ -133,8 +133,8 @@ const systemNodeOk = computed(() => {
     return major !== null && major >= MIN_NODE_MAJOR
 })
 
-// 所选 Node 运行时（安装时随设置持久化）。
-const nodeRuntimeChoice = ref<NodeRuntimeKind>('electron')
+// 所选 Node 运行时（安装时随设置持久化）。默认本地部署（初始化时自动选最新 LTS）。
+const nodeRuntimeChoice = ref<NodeRuntimeKind>('local')
 const deployingNode = ref(false)
 const deployPercent = ref(0)
 const deployDownloaded = ref(0)
@@ -263,10 +263,9 @@ const simplePlan = computed(() => {
 })
 
 const runtimeHint = computed(() => {
-    const c = nodeRuntimeChoice.value
-    if (c === 'system') return t('dshMissing.node.hintSystem')
-    if (c === 'local') return t('dshMissing.node.hintLocal')
-    return t('dshMissing.node.hintElectron')
+    return nodeRuntimeChoice.value === 'system'
+        ? t('dshMissing.node.hintSystem')
+        : t('dshMissing.node.hintLocal')
 })
 
 async function deployOnce(version?: string): Promise<boolean> {
@@ -326,6 +325,17 @@ async function activateNode(version: string): Promise<boolean> {
     }
 }
 
+/**
+ * 确保「本地 Node」就绪：选中的版本已安装就切为生效版本（不重下），
+ * 否则按选中版本部署；未选版本时由主进程默认部署最新 LTS。
+ */
+async function ensureLocalNode(): Promise<boolean> {
+    if (nodeVersion.value && selectedNodeInstalled.value) {
+        return selectedNodeIsActive.value || activateNode(nodeVersion.value)
+    }
+    return deployOnce(nodeVersion.value || undefined)
+}
+
 /** 确保「程序内置」npm 就绪：已缓存直接通过，未缓存 / 指定版本则先下载（带进度）再进入下一步。 */
 async function ensureNpmOnce(version?: string): Promise<boolean> {
     canceling.value = false
@@ -362,19 +372,31 @@ async function loadNpmStatus(): Promise<void> {
     }
 }
 
-/** 拉取可部署的 Node 版本（新 → 旧）；默认只 LTS，勾选后含 Current，默认选中最新一项。 */
+/**
+ * 拉取可部署的 Node 版本（新 → 旧）；默认只 LTS，勾选后含 Current，默认选中最新一项。
+ *
+ * 这里用共享 promise 去重：watch(step) 与调用方可能几乎同时请求，早退会让
+ * 「简易安装」拿到还没填好的版本列表。并发调用共享同一次请求、都能等到结果。
+ */
+let nodeVersionsPromise: Promise<void> | null = null
 async function loadNodeVersions(): Promise<void> {
-    if (nodeVersionsLoading.value) return
-    nodeVersionsLoading.value = true
-    try {
-        const list = await window.api.get('/node/versions', { query: { includeNonLts: nodeIncludeNonLts.value } })
-        nodeVersions.value = list
-        if (!list.includes(nodeVersion.value)) nodeVersion.value = list[0] ?? ''
-    } catch {
-        nodeVersions.value = []
-    } finally {
-        nodeVersionsLoading.value = false
-    }
+    if (nodeVersionsPromise) return nodeVersionsPromise
+    const p = (async () => {
+        nodeVersionsLoading.value = true
+        try {
+            const list = await window.api.get('/node/versions', { query: { includeNonLts: nodeIncludeNonLts.value } })
+            nodeVersions.value = list
+            if (!list.includes(nodeVersion.value)) nodeVersion.value = list[0] ?? ''
+        } catch {
+            nodeVersions.value = []
+        } finally {
+            nodeVersionsLoading.value = false
+        }
+    })().finally(() => {
+        if (nodeVersionsPromise === p) nodeVersionsPromise = null
+    })
+    nodeVersionsPromise = p
+    return p
 }
 
 /** 拉取可下载的 npm 版本（新 → 旧）；是否含预发布由开关决定，默认选中最新一项。 */
@@ -413,9 +435,9 @@ async function probeEnv(): Promise<void> {
             if (installNpm.value === 'system' && !envProbe.value.npm) installNpm.value = 'bundled'
             else if (installNpm.value === 'localnode' && !envProbe.value.local.present) installNpm.value = 'bundled'
         }
-        // 选了系统 Node 但实际不可用（<20 / 缺失）时回退到 Electron。
+        // 选了系统 Node 但实际不可用（<20 / 缺失）时回退到默认的本地部署。
         if (envProbe.value && nodeRuntimeChoice.value === 'system' && !systemNodeOk.value) {
-            nodeRuntimeChoice.value = 'electron'
+            nodeRuntimeChoice.value = 'local'
         }
     } catch (err) {
         // 探测失败不能静默：否则界面表现为「系统 Node / 系统 npm 全部灰掉」却给不出任何原因。
@@ -549,8 +571,8 @@ async function runCurrentStep(): Promise<void> {
             // 本地 Node：这一步的提交就是「把它安排好」——
             // 选中的版本已装过就只切成生效版本（不重新下载），没装过才真的去部署。
             // 合并前用户得先按「下载并部署」再按「下一步」，同一件事分两步做。
-            if (ok && nodeRuntimeChoice.value === 'local' && nodeVersion.value) {
-                ok = selectedNodeInstalled.value ? await activateNode(nodeVersion.value) : await deployOnce(nodeVersion.value)
+            if (ok && nodeRuntimeChoice.value === 'local') {
+                ok = await ensureLocalNode()
             }
         } else if (step.value === 3) {
             ok = await persistWizard()
@@ -625,7 +647,7 @@ async function pickLatestDsh(): Promise<boolean> {
  *
  * 策略（用户选定，见 modeSimpleDesc）：
  *  1. 镜像源：实测两个源，取最快（都失败则沿用当前设置）；
- *  2. Node：用 Electron 自带的 Node —— 不需要下载任何东西，是唯一「零等待」的选项；
+ *  2. Node：本地部署最新 LTS（已装则只切换生效版本）；
  *  3. npm：用内置 npm，未缓存时由主进程下载；
  *  4. dsh：装最新正式版，没有正式版则装最新测试版。
  *
@@ -642,12 +664,15 @@ async function runSimpleInstall(): Promise<void> {
         speedResult.value = null
         await pickFastestRegistry()
 
-        // 2) Node：用 Electron 自带（无需部署）
+        // 2) Node：部署最新 LTS（LTS 列表首项即最新；已装则只切换生效版本）
         step.value = 2
-        nodeRuntimeChoice.value = 'electron'
+        nodeRuntimeChoice.value = 'local'
         // dsh 装进配置目录（应用默认），全程不碰用户的全局 npm。
         installSource.value = 'local'
+        await loadNodeVersions()
+        await loadInstalledNode()
         if (!(await persistWizard())) return
+        if (!(await ensureLocalNode())) return
 
         // 3) npm：内置（未缓存则先下载）
         step.value = 3
@@ -761,7 +786,7 @@ onMounted(() => {
             installPrerelease.value = s.checkPrerelease === true
             installSource.value = s.dshSource ?? 'local'
             installNpm.value = s.npmSource ?? 'system'
-            nodeRuntimeChoice.value = s.nodeRuntime ?? 'electron'
+            nodeRuntimeChoice.value = s.nodeRuntime ?? 'local'
             proxyEnabled.value = s.proxyEnabled === true
             proxyProtocol.value = s.proxyProtocol ?? DEFAULT_SETTINGS.proxyProtocol
             proxyHost.value = s.proxyHost ?? DEFAULT_SETTINGS.proxyHost
@@ -915,7 +940,7 @@ onBeforeUnmount(() => {
 
                 <!--
                     第 2 步：Node 环境。
-                    三种运行时统一成一组标签，不再单独铺一块「部署本地 Node」的表单：
+                    两种运行时（系统自带 / 本地部署，默认后者）统一成一组单选：
                     版本选择、已装标记、生效标记都收进同一个选择器，按钮只剩「检查版本」。
                 -->
                 <div v-else-if="step === 2" class="wiz-pane">
@@ -927,11 +952,10 @@ onBeforeUnmount(() => {
                                 <span v-if="!envProbe || !envProbe.node.present" class="muted">（{{ $t('dshMissing.node.notFound') }}）</span>
                                 <span v-else-if="!systemNodeOk" class="muted">（{{ $t('dshMissing.node.need20') }}）</span>
                             </a-radio>
-                            <a-radio value="electron">
-                                {{ $t('dshMissing.node.runtimeElectron') }}
+                            <a-radio value="local">
+                                {{ $t('dshMissing.node.runtimeLocal') }}
                                 <a-tag class="rt-tag" color="blue">{{ $t('dshMissing.node.rtDefault') }}</a-tag>
                             </a-radio>
-                            <a-radio value="local">{{ $t('dshMissing.node.runtimeLocal') }}</a-radio>
                         </a-radio-group>
                         <div class="wiz-hint">{{ runtimeHint }}</div>
                     </div>

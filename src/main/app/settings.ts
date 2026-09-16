@@ -389,6 +389,18 @@ export function normalizeNpmSource(v: unknown): Settings['npmSource'] {
     return 'system'
 }
 
+/**
+ * 归一化 Node 运行时：只认 'system'，其余（含旧版的 'electron'、脏值、缺失）
+ * 一律落到默认的 'local'。
+ *
+ * 旧版允许 'electron'（用 Electron 自带 Node 冒充）。该能力已整体移除，
+ * 因此这里对它**无条件**迁移到 'local' —— 这不是「改默认值」，而是删掉一个枚举值，
+ * 保留旧值会让类型与运行期都不成立。'system' 是用户显式选的，原样保留。
+ */
+export function normalizeNodeRuntime(v: unknown): Settings['nodeRuntime'] {
+    return v === 'system' ? 'system' : 'local'
+}
+
 /** 旧版默认并发数。存量配置里几乎人人都是这个值（自动保存会把默认值一起写盘）。 */
 const LEGACY_DEFAULT_DOWNLOAD_THREADS = 4
 
@@ -488,6 +500,7 @@ export function loadSettings(): Settings {
         // kernelSource 是 dshSource 的旧键名，只在迁移时读一次
         dshSource: merged.dshSource ?? (disk as { kernelSource?: Settings['dshSource'] }).kernelSource,
         downloadThreads: normalizeDownloadThreads(disk.downloadThreads, legacy),
+        nodeRuntime: normalizeNodeRuntime(merged.nodeRuntime),
         npmSource: normalizeNpmSource(merged.npmSource),
         proxyScope: normalizeProxyScope(disk.proxyScope, legacy),
         shortcuts: Array.isArray(merged.shortcuts) ? merged.shortcuts : DEFAULT_SETTINGS.shortcuts,

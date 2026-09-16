@@ -35,7 +35,7 @@ export interface SettingsState {
     devMode: boolean
     /** dsh 来源：'local'（内置/默认）｜ 'global'（使用全局安装）。 */
     dshSource: 'local' | 'global'
-    /** Node 运行时：'system' ｜ 'electron'(默认) ｜ 'local'。 */
+    /** Node 运行时：'system' ｜ 'local'（默认，本地部署最新 LTS）。 */
     nodeRuntime: NodeRuntimeKind
     /** 本地安装用的 npm：'system' ｜ 'bundled'(内置) ｜ 'localnode'(本地 Node 自带)。 */
     npmSource: NpmSource

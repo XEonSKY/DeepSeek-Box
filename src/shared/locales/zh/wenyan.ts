@@ -110,10 +110,9 @@ export default {
         },
         env: {
             nodeRuntime: 'Node 行境',
-            nodeElectron: '程序内携',
             nodeSystem: '系统自具',
             nodeLocal: '本机部署',
-            nodeRuntimeHint: '程序内携最便；系统自具须 ≥20；本机部署须先为之。改后重启乃效。'
+            nodeRuntimeHint: '本机部署最新 LTS 最便；系统自具须 ≥20。改后重启乃效。'
         },
         about: {
             appVersion: '应用之版',

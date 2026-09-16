@@ -1,25 +1,25 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AppstoreOutlined, DeploymentUnitOutlined, DownloadOutlined, LinkOutlined, ReloadOutlined } from '@antdv-next/icons'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { InstalledVersions, NodeRuntimeKind, NodeStatus, NpmRuntimeStatus, NpmSource, NpmStatus } from '@shared/types'
 import { MIN_NODE_MAJOR, nodeMajor, withV } from '@shared/version'
 import { errorMessage } from '@shared/errors'
 import { tt } from '../../lib/locales'
+import { confirmDialog } from '../../lib/confirm'
 import { formatDownload } from '../../lib/format'
 import { useSettingsStore } from './useSettingsStore'
 import { useInstallCancel } from './useInstallCancel'
 
 /**
- * 「环境」页：Node 运行时（三个来源）与各自的版本情况。
+ * 「环境」页：Node 运行时（系统自带 / 本地部署）与各自的版本情况。
  *
- * 结构：一个 Collapse 面板（与其它设置页一致的折叠卡片）→ 里面三个标签，
+ * 结构：一个 Collapse 面板（与其它设置页一致的折叠卡片）→ 里面两个标签，
  * **标签本身就是选项** —— 点「系统自带」即把 `nodeRuntime` 切成 system（原来的下拉框已去掉）。
+ * 默认是「本地部署」（按当前架构下载最新 LTS 到配置目录）。
  *
- * 数据来自两处：
- *   - `window.api.versions`：Electron 自带 Node / Chromium（preload 里读 `process.versions`，不需要 IPC）；
- *   - `window.api.get('/node/status')`：系统 / 本地部署 Node 的当前版本 + 最新 LTS 及「是否落后」。
- *     ⚠️ 它**会联网**取 nodejs.org/dist/index.json（主进程侧有 10 分钟缓存），所以只在进入本页时调一次。
+ * 数据来自 `window.api.get('/node/status')`：系统 / 本地部署 Node 的当前版本 + 最新 LTS 及「是否落后」。
+ * ⚠️ 它**会联网**取 nodejs.org/dist/index.json（主进程侧有 10 分钟缓存），所以只在进入本页时调一次。
  */
 
 const { state, actions } = useSettingsStore()
@@ -31,7 +31,7 @@ const open = ref(['env-node', 'env-npm'])
  * `NodeRuntimeKind`：直接把联合类型交给 el-tabs 的 v-model 会在 vue-tsc 下报类型不匹配。
  * 反向 watch 是为了让外部改动（settings:changed 广播）也能反映到标签上。
  */
-const RUNTIMES: readonly string[] = ['electron', 'system', 'local']
+const RUNTIMES: readonly string[] = ['system', 'local']
 const tab = ref<string | number>(state.nodeRuntime)
 watch(tab, (v) => {
     if (typeof v === 'string' && RUNTIMES.includes(v)) state.nodeRuntime = v as NodeRuntimeKind
@@ -42,9 +42,6 @@ watch(
         if (tab.value !== v) tab.value = v
     }
 )
-
-/** Electron 自带 Node / Chromium 版本（preload 注入的 process.versions，恒定不会变）。 */
-const versions = window.api.versions
 
 /** 系统 / 本地部署的实际版本由主进程探测（会跑 `node --version`，并联网取最新 LTS）。 */
 const status = ref<NodeStatus | null>(null)
@@ -196,7 +193,6 @@ const selectedTooOld = computed(() => {
  */
 const runtimeUsable = computed(() => {
     if (!probed.value) return true
-    if (state.nodeRuntime === 'electron') return true
     if (state.nodeRuntime === 'system') {
         const s = status.value?.system
         const major = nodeMajor(s?.version)
@@ -218,15 +214,14 @@ async function stopDshForNode(): Promise<'ok' | 'stopped' | 'cancelled'> {
         running = false
     }
     if (!running) return 'ok'
-    try {
-        await ElMessageBox.confirm(tt('msg.nodeStopText'), tt('msg.dshRunningTitle'), {
-            confirmButtonText: tt('msg.continueBtn'),
-            cancelButtonText: tt('msg.cancelBtn'),
-            type: 'warning'
-        })
-    } catch {
-        return 'cancelled'
-    }
+    const ok = await confirmDialog({
+        title: tt('msg.dshRunningTitle'),
+        message: tt('msg.nodeStopText'),
+        confirmText: tt('msg.continueBtn'),
+        cancelText: tt('msg.cancelBtn'),
+        danger: true
+    })
+    if (!ok) return 'cancelled'
     await actions.stopDsh()
     return 'stopped'
 }
@@ -317,15 +312,14 @@ async function switchInstalled(kind: 'node' | 'npm', version: string): Promise<v
 
 /** 删除已安装版本；删除前确认，删除生效版本时主进程会自动切到剩余最新版。 */
 async function removeInstalled(kind: 'node' | 'npm', version: string): Promise<void> {
-    try {
-        await ElMessageBox.confirm(tt('sv.env.removeVersionConfirm', { version: withV(version) }), tt('sv.env.removeVersion'), {
-            confirmButtonText: tt('sv.env.removeVersion'),
-            cancelButtonText: tt('msg.cancelBtn'),
-            type: 'warning'
-        })
-    } catch {
-        return // 用户取消
-    }
+    const ok = await confirmDialog({
+        title: tt('sv.env.removeVersion'),
+        message: tt('sv.env.removeVersionConfirm', { version: withV(version) }),
+        confirmText: tt('sv.env.removeVersion'),
+        cancelText: tt('msg.cancelBtn'),
+        danger: true
+    })
+    if (!ok) return // 用户取消
     try {
         const r = await window.api.delete('/versions/:kind/:version', { params: { kind, version } })
         if (r.ok) {
@@ -487,19 +481,6 @@ async function installNpm(version?: string): Promise<void> {
                 </template>
 
                 <el-tabs v-model="tab">
-                    <!-- 程序内置：随应用升级，没有「更新」按钮 -->
-                    <el-tab-pane :label="$t('sv.env.nodeElectron')" name="electron">
-                        <div class="kv">
-                            <span class="kv__k">{{ $t('sv.env.currentVersion') }}</span>
-                            <code class="kv__v">{{ withV(versions.node) }}</code>
-                        </div>
-                        <div class="kv">
-                            <span class="kv__k">{{ $t('sv.env.builtinChrome') }}</span>
-                            <code class="kv__v">{{ withV(versions.chrome) }}</code>
-                        </div>
-                        <div class="hint">{{ $t('sv.env.builtinHint') }}</div>
-                    </el-tab-pane>
-
                     <!-- 系统自带：只比较版本，升级动作交给用户 -->
                     <el-tab-pane :label="$t('sv.env.nodeSystem')" name="system">
                         <div class="kv">

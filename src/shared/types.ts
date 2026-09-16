@@ -51,9 +51,12 @@ export interface Settings {
     dshSource: 'local' | 'global'
     /**
    * 运行 dsh / npm 的 Node 运行时：
-   *  - 'electron'（默认）：Electron 自带 Node（ELECTRON_RUN_AS_NODE）。
+   *  - 'local'（默认）：应用按架构下载解压到配置目录的 Node（<configDir>/node），
+   *    初始化向导默认选中最新 LTS。
    *  - 'system'：系统 Node（要求 ≥ 20）。
-   *  - 'local'：应用按架构下载解压到配置目录的 Node（<configDir>/node）。
+   *
+   * 旧版的 'electron'（用 Electron 自带 Node 冒充）已移除，老配置由
+   * loadSettings 的归一化迁移为 'local'（见 normalizeNodeRuntime）。
    */
     nodeRuntime: NodeRuntimeKind
     /**
@@ -139,8 +142,8 @@ export interface WebviewInfo {
  *  或中文区域文本变体（hant=繁体中文，文本文件覆盖）。 */
 export type FunLocale = 'off' | 'anime' | 'wenyan' | 'hant' | 'pirate' | 'shakespeare'
 
-/** Node 运行时选择：'system'(≥20) ｜ 'electron'(自带) ｜ 'local'(下载部署)。 */
-export type NodeRuntimeKind = 'system' | 'electron' | 'local'
+/** Node 运行时选择：'system'(≥20) ｜ 'local'(按架构下载部署，默认)。 */
+export type NodeRuntimeKind = 'system' | 'local'
 
 /** 代理协议。 */
 export type ProxyProtocol = 'http' | 'socks5'
@@ -226,7 +229,7 @@ export type ResolvedLocale = 'zh' | 'en'
  * 设置结构版本：2 = 代理范围拆出 'app' / 'dsh' / 'registry'，下载并发数默认 'auto'。
  * 每次做「改键名 / 改默认值」的迁移时 +1，见 settings.ts 的 loadSettings。
  */
-export const SETTINGS_VERSION = 2
+export const SETTINGS_VERSION = 3
 
 export const DEFAULT_SETTINGS: Settings = {
     settingsVersion: SETTINGS_VERSION,
@@ -245,7 +248,7 @@ export const DEFAULT_SETTINGS: Settings = {
     downloadThreads: 'auto',
     devMode: false,
     dshSource: 'local',
-    nodeRuntime: 'electron',
+    nodeRuntime: 'local',
     npmSource: 'system',
     proxyEnabled: false,
     proxyProtocol: 'http',
@@ -384,6 +387,25 @@ export interface EnvProbe {
     npm: boolean
     /** 应用已部署到配置目录的 Node（nodeRuntime='local' 用）。 */
     local: { present: boolean; version: string | null }
+}
+
+/**
+ * 独立确认子窗口的请求载荷。
+ *
+ * 文案由渲染层调用方先 i18n（`tt()`）再传入；主进程只负责开窗与回传结果，
+ * 不做任何翻译，也不感知业务语义。
+ */
+export interface ConfirmDialogRequest {
+    title: string
+    message: string
+    /** 可选的补充说明，以更弱的次要文字展示。 */
+    detail?: string
+    /** 确认按钮文案；缺省时由界面兜底。 */
+    confirmText?: string
+    /** 取消按钮文案；缺省时由界面兜底。 */
+    cancelText?: string
+    /** 危险操作：确认按钮用警示色。 */
+    danger?: boolean
 }
 
 /** 下载部署本地 Node 的结果。 */

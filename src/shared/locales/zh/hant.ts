@@ -1,6 +1,6 @@
 /**
- * 繁体中文（繁體中文）——文本覆盖扩展语言（完整覆盖简体→繁体）。
- * 本文件为全量覆盖：与 zh/index.ts 同构、逐键提供繁体文本，运行时深合并到简体基座之上。
+ * 繁体中文（繁體中文）——差异覆盖的扩展语言。
+ * **无需与 zh/index.ts 同步**：只写需要繁体化的键，其余自动沿用简体基座（见 shared/locales/ext.ts）。
  */
 export default {
     app: {
@@ -70,7 +70,7 @@ export default {
         modeTitle: '選擇安裝方式',
         modeIntro: '簡易安裝會自動完成全部步驟；自訂安裝可以逐步選擇每一項。',
         modeSimple: '簡易安裝',
-        modeSimpleDesc: '自動測速選最快的鏡像源；Node 用 Electron 內建、npm 用內置、DeepSeek Harness 裝最新版',
+        modeSimpleDesc: '自動測速選最快的鏡像源；Node 部署最新 LTS、npm 用內置、DeepSeek Harness 裝最新版',
         modeSimpleStart: '開始簡易安裝',
         modeCustom: '自訂安裝',
         modeCustomDesc: '逐步選擇鏡像源、Node 執行環境、npm 來源與 DeepSeek Harness 版本',
@@ -97,12 +97,10 @@ export default {
             notFound: '未偵測到系統 Node',
             pick: '選擇執行 dsh / npm 的 Node 環境',
             runtimeSystem: '使用全域系統 Node（≥ 20）',
-            runtimeElectron: '使用程式內建的 Node',
             runtimeLocal: '使用本機 Node（依目前架構下載到設定目錄）',
             rtDefault: '預設',
             need20: '需 Node ≥ 20',
             hintSystem: '使用系統 PATH 上的 Node。僅在偵測到 ≥ 20 時可用；版本過低或缺少時該選項會停用。',
-            hintElectron: '使用程式內建的 Node，無需額外安裝，開箱即用。',
             hintLocal: '把 Node LTS 發行套件依目前系統/架構下載並解壓縮到設定目錄，離線可重複使用，不依賴系統。選一個尚未安裝的版本，點「下一步」即開始下載。',
             deploying: '正在下載並部署 Node LTS…',
             systemNote: '將使用系統 Node {ver} 執行 DeepSeek Harness 與 npm。',
@@ -342,10 +340,9 @@ export default {
         },
         env: {
             nodeRuntime: 'Node 執行階段',
-            nodeElectron: '程式內建',
             nodeSystem: '系統自帶',
             nodeLocal: '本機部署',
-            nodeRuntimeHint: '程式內建最省事；系統自帶需 ≥20；本機部署需先部署。改動後重啟生效。',
+            nodeRuntimeHint: '預設本機部署最新 LTS，也可改用系統自帶的 Node（≥ 20）。改動後重啟生效。',
             installedVersions: '已安裝版本',
             colVersion: '版本',
             colStatus: '狀態',
@@ -362,8 +359,6 @@ export default {
             applyTxt: '改完 Node 執行環境後，點右側立即重啟 dsh 生效。',
             applyBtn: '立即套用',
             runtimeUnusable: '目前選取的執行階段無法使用：未偵測到可用的 Node（系統來源需 ≥ {major}，本機來源需先部署）。套用後 dsh 無法啟動。',
-            builtinChrome: 'Chromium',
-            builtinHint: '兩者都隨應用程式一起升級，不能單獨更新。',
             currentVersion: '目前版本',
             latestLts: '最新 LTS',
             notDetected: '未偵測到',
@@ -443,8 +438,10 @@ export default {
             check: '檢查更新',
             restart: '重啟安裝',
             checking: '檢查中…',
-            available: '有新版本',
-            downloaded: '已下載，待重啟',
+            available: '偵測到新版本',
+            downloaded: '等待重啟',
+            installing: '正在安裝',
+            latest: '已是最新',
             upToDate: '已是最新',
             error: '檢查失敗',
             badge: '有新版本可用',

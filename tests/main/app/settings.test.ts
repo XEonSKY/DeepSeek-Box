@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeDownloadThreads, normalizeNpmSource, normalizeProxyScope } from '@main/app/settings'
+import { normalizeDownloadThreads, normalizeNodeRuntime, normalizeNpmSource, normalizeProxyScope } from '@main/app/settings'
 import { DEFAULT_SETTINGS, PROXY_SCOPE_IDS } from '@shared/types'
 import type { Settings } from '@shared/types'
 
@@ -26,6 +26,32 @@ describe('normalizeNpmSource', () => {
         expect(normalizeNpmSource(undefined)).toBe('system')
         expect(normalizeNpmSource(null)).toBe('system')
         expect(normalizeNpmSource(42)).toBe('system')
+    })
+})
+
+describe('normalizeNodeRuntime', () => {
+    it('system 是用户显式选择，原样保留', () => {
+        expect(normalizeNodeRuntime('system')).toBe('system')
+    })
+
+    it('local 原样保留', () => {
+        expect(normalizeNodeRuntime('local')).toBe('local')
+    })
+
+    it("旧值 'electron' 已移除，无条件迁移到默认的 local", () => {
+        // 这不是「改默认值」而是删枚举值：保留旧值会让类型与运行期都不成立。
+        expect(normalizeNodeRuntime('electron')).toBe('local')
+    })
+
+    it('缺失 / 非法值回落 local', () => {
+        expect(normalizeNodeRuntime(undefined)).toBe('local')
+        expect(normalizeNodeRuntime(null)).toBe('local')
+        expect(normalizeNodeRuntime(42)).toBe('local')
+        expect(normalizeNodeRuntime('')).toBe('local')
+    })
+
+    it('默认设置就是 local（初始化向导据此默认选中）', () => {
+        expect(DEFAULT_SETTINGS.nodeRuntime).toBe('local')
     })
 })
 

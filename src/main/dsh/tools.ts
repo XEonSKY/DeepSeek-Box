@@ -12,12 +12,11 @@ import type { NodeRuntimeKind } from '@shared/types'
  *
  * @deepseek-ai/dsh may be installed in two ways:
  *   - local ('local', default): installed by this app into <configDir>/dsh
- *     and run with Electron's own bundled Node (no system node needed).
+ *     and run with the Node deployed under the config directory.
  *   - global ('global'): the system `npm install -g @deepseek-ai/dsh`, found on PATH.
  *
  * Either way we launch dsh by running its real JS bin entry under a Node
- * runtime we pick, instead of a shell `.cmd` shim, so the whole lifecycle can run
- * under Electron's Node.
+ * runtime we pick, instead of a shell `.cmd` shim.
  */
 
 /** PATH 上的目录列表（去掉空项）。供各处定位系统工具复用。 */
@@ -216,12 +215,9 @@ export function nodeRuntimeFor(kind: NodeRuntimeKind): NodeRuntime {
         if (!p) throw new Error('System Node is required but was not found on PATH.')
         return { exec: p, env: {} }
     }
-    if (kind === 'local') {
-        const p = localNodeExecPath()
-        if (!p) throw new Error('No locally deployed Node found. Deploy one under the config directory first.')
-        return { exec: p, env: {} }
-    }
-    return { exec: process.execPath, env: { ELECTRON_RUN_AS_NODE: '1' } }
+    const p = localNodeExecPath()
+    if (!p) throw new Error('No locally deployed Node found. Deploy one under the config directory first.')
+    return { exec: p, env: {} }
 }
 
 /** 依据设置（可选 DSH_NODE 环境覆盖）解析运行 dsh/npm 的 Node。 */
@@ -231,5 +227,5 @@ export function nodeRuntimeForCfg(cfg?: { nodeRuntime?: NodeRuntimeKind }): Node
         if (!fs.existsSync(override)) throw new Error(`DSH_NODE points at a missing file: ${override}`)
         return { exec: override, env: {} }
     }
-    return nodeRuntimeFor(cfg?.nodeRuntime ?? 'electron')
+    return nodeRuntimeFor(cfg?.nodeRuntime ?? 'local')
 }

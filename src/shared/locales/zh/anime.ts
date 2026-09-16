@@ -110,10 +110,9 @@ export default {
         },
         env: {
             nodeRuntime: 'Node 运行环境',
-            nodeElectron: '程序内置',
             nodeSystem: '系统自带',
             nodeLocal: '本机部署',
-            nodeRuntimeHint: '程序内置最省事；系统自带要 ≥20；本机部署要先部署。改完重启才生效。'
+            nodeRuntimeHint: '本机部署最新 LTS 最省事；系统自带要 ≥20；改完重启才生效。'
         },
         about: {
             appVersion: '应用版本',

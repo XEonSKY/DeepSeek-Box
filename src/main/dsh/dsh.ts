@@ -13,6 +13,7 @@ import type { NodeRuntime } from './tools'
 import { resolveDshModule, nodeRuntimeForCfg } from './tools'
 import { loadSettings, mt } from '../app/settings'
 import { proxyEnv } from './net'
+import { describePtcNode, syncPtcNode } from './ptcNodeSync'
 import { WATCHDOG_CODE } from './watchdog'
 import { killAllChildren, killTree, pushLog, rememberChild } from './logbus'
 
@@ -272,6 +273,10 @@ async function runOneRestart(): Promise<void> {
         await stopDshGracefully()
         const effective = { ...loadSettings() }
         effective.port = await resolvePort(effective)
+        // PTC（run_code）worker 启动时会清空环境变量，必须用真 node；每次启动前
+        // 按当前档位重算并写入 dsh 的 home 级 patch（幂等）。
+        const ptc = syncPtcNode(effective.nodeRuntime)
+        console.log('[Manager]', describePtcNode(ptc))
         const url = await launchServer(effective)
         setCurrentUrl(url)
         sendCore('dsh:url', url) // 只通知核心窗口：dsh UI 由核心窗口承载

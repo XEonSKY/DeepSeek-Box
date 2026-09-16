@@ -5,7 +5,7 @@ import type { InstalledVersions, NodeDeployProgress, NodeRuntimeKind, NpmRuntime
 import { errorMessage } from '@shared/errors'
 import { IS_WIN } from '../app/runtime'
 import { loadSettings, mt, bundledNpmDir, tempDownloadDir, tempNpmDir } from '../app/settings'
-import { nodeRuntimeFor, localNodeNpmCli, findSystemNpm, pathEnv, findInDirs } from './tools'
+import { nodeRuntimeFor, nodeRuntimeForCfg, localNodeNpmCli, findSystemNpm, pathEnv, findInDirs } from './tools'
 import { localNodeDir } from './nodeenv'
 import { probeVersion, runChild } from './child'
 import { removeQuietly } from './fsutil'
@@ -80,7 +80,8 @@ export function runNpm(args: string[], label: string, signal?: AbortSignal): Pro
 /** Run an npm-cli.js under a Node runtime (used for the bundled / localnode npm). */
 function runNpmCli(cli: string, args: string[], label: string, runtime?: NodeRuntimeKind, signal?: AbortSignal): Promise<ToolResult> {
     const cfg = loadSettings()
-    const rt = nodeRuntimeFor(runtime ?? 'electron')
+    // 默认用与 dsh 相同的 Node 运行时（DSH_NODE 覆盖同样生效）。
+    const rt = runtime ? nodeRuntimeFor(runtime) : nodeRuntimeForCfg(cfg)
     const env = { ...process.env, ...rt.env, ...proxyEnv(cfg, 'npm'), ...npmCacheEnv() }
     return runTool(rt.exec, [cli, ...args, ...npmProxyArgs(cfg)], label, { shell: false, env }, signal)
 }
@@ -109,9 +110,14 @@ function bundledNpmCli(): string {
 // ---- 版本探测 / 列表（安静：不写日志视图）----------------------------------
 // 环境页每次进入都要问版本，**绝不能**走 runTool（它把输出推进终端日志，会刷屏）。
 
-/** 内置 npm 跑在 Electron 自带的 Node 上（与 chooseLocalNpm 的 runtime: 'electron' 一致）。 */
-function electronNode(): { exec: string; env: NodeJS.ProcessEnv } {
-    return { exec: process.execPath, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ...npmCacheEnv() } }
+/** 内置 npm 跑在所选 Node 运行时上（与 dsh 同一个 Node）；取不到运行时返回 null。 */
+function npmNode(): { exec: string; env: NodeJS.ProcessEnv } | null {
+    try {
+        const rt = nodeRuntimeForCfg()
+        return { exec: rt.exec, env: { ...process.env, ...rt.env, ...npmCacheEnv() } }
+    } catch {
+        return null
+    }
 }
 
 /** 系统 npm 的版本（没有系统 npm → null）。 */
@@ -127,8 +133,8 @@ function systemNpmVersion(): Promise<string | null> {
 function bundledNpmVersion(): Promise<string | null> {
     const cli = bundledNpmCli()
     if (!fs.existsSync(cli)) return Promise.resolve(null)
-    const n = electronNode()
-    return probeVersion(n.exec, [cli, '--version'], n.env)
+    const n = npmNode()
+    return n ? probeVersion(n.exec, [cli, '--version'], n.env) : Promise.resolve(null)
 }
 
 /** 本地部署 Node 自带 npm 的版本（未部署本地 Node → null）。 */
@@ -331,7 +337,8 @@ async function ensureBundledNpm(
 async function chooseLocalNpm(cfg: Settings, signal?: AbortSignal): Promise<{ ok: boolean; cli: string | null; runtime?: NodeRuntimeKind; message?: string; canceled?: boolean }> {
     if (cfg.npmSource === 'bundled') {
         const b = await ensureBundledNpm(cfg, undefined, undefined, signal)
-        return b.ok && b.cli ? { ok: true, cli: b.cli, runtime: 'electron' } : { ok: false, cli: null, message: b.message, canceled: b.canceled }
+        // runtime 留空：由 runNpmCli 取当前设置的 nodeRuntime（默认 local）。
+        return b.ok && b.cli ? { ok: true, cli: b.cli } : { ok: false, cli: null, message: b.message, canceled: b.canceled }
     }
     if (cfg.npmSource === 'localnode') {
         const cli = localNodeNpmCli()
@@ -401,7 +408,7 @@ export async function runLocalNpmInstall(target: string, cfg: Settings, prefix: 
     const args = ['install', '--prefix', prefix, '--no-audit', '--no-fund', target]
     if (cfg.npmRegistry) args.push(`--registry=${registryBase(cfg.npmRegistry)}`)
     const label = `npm install ${target} (local)`
-    return npm.cli ? runNpmCli(npm.cli, args, label, npm.runtime ?? 'electron', signal) : runNpm(args, label, signal)
+    return npm.cli ? runNpmCli(npm.cli, args, label, npm.runtime, signal) : runNpm(args, label, signal)
 }
 
 /**
