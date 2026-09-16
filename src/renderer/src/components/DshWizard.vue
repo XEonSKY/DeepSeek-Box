@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CloseOutlined, FileTextOutlined, DownloadOutlined, LinkOutlined, ReloadOutlined } from '@antdv-next/icons'
+import { CloseOutlined, FileTextOutlined, LinkOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
 import type { ConfigDirInfo, EnvProbe, NodeRuntimeKind, NpmSource, ProxyProtocol, ProxyScope, RegistrySpeedResult } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
@@ -57,6 +57,18 @@ const mode = ref<InstallMode | null>(null)
 
 /** 步骤条的分段定义（与 step 下标一一对应）。 */
 const STEP_KEYS = ['mode', 'source', 'node', 'npm', 'dsh'] as const
+
+/**
+ * 各下拉框的选项。
+ * antdv-next 的 `a-select` 用 `:options` 而不是子组件 `<a-option>`：
+ * 选项少且是纯数据时，一个数组比一层嵌套模板好读，也省掉每个选项一行 `$t`。
+ */
+const registryOptions = computed(() => [
+    { value: 'npmjs', label: t('dshMissing.registryNpmjs') },
+    { value: 'npmmirror', label: t('dshMissing.registryNpmmirror') }
+])
+const npmVersionOptions = computed(() => npmVersions.value.map((v) => ({ value: v, label: v })))
+const dshVersionOptions = computed(() => installVersions.value.map((v) => ({ value: v, label: v })))
 const wizardSteps = computed(() => STEP_KEYS.map((k) => ({ key: k, label: t(`dshMissing.wiz.${k}`) })))
 
 /**
@@ -132,15 +144,69 @@ const npmSpeed = ref(0)
 const npmBundledPresent = ref(false)
 const npmInfo = computed(() => formatDownload(npmTotal.value, npmDownloaded.value, npmSpeed.value))
 
-// ---- Node 版本选择（第 1 步「部署并使用本地 Node」）----
+// ---- Node 版本选择（第 2 步）------------------------------------------------
+// 合并前的三处信息（可下载版本 / 已装版本 / 当前生效版本）现在都进同一个选择器：
+// 每个选项自带「已安装」「当前使用」标记，用户不必再对照另一块表单看状态。
 const nodeVersions = ref<string[]>([])
 const nodeVersionsLoading = ref(false)
 const nodeIncludeNonLts = ref(false)
 const nodeVersion = ref('')
-// 「当前生效」的兜底来源：envProbe.local.version 读不到时用已安装版本列表的 active。
+/** 已下载到配置目录的本地 Node 版本（来自 /versions/node）。 */
+const nodeInstalled = ref<string[]>([])
+/** 当前生效的本地 Node 版本。 */
 const nodeActiveVersion = ref<string | null>(null)
 /** 当前生效的本地 Node 版本：优先环境探测，其次已安装版本列表。 */
 const localNodeActive = computed(() => envProbe.value?.local.version ?? nodeActiveVersion.value)
+
+/** 选中项是否已经装在本地（决定下一步是「部署」还是「切换生效版本」）。 */
+const selectedNodeInstalled = computed(() => !!nodeVersion.value && nodeInstalled.value.includes(nodeVersion.value))
+/** 选中项是否就是当前生效的版本。 */
+const selectedNodeIsActive = computed(() => !!nodeVersion.value && nodeVersion.value === localNodeActive.value)
+
+/**
+ * 选择器的选项：可下载版本 ∪ 已安装版本，按 semver 降序，逐个打标记。
+ *
+ * 必须**并集**而不是只用远端列表：用户可能处于离线状态、或某个已装版本的发布条目
+ * 已经不在远端列表里 —— 只列远端会让「已安装且正在用」的版本在选择器里找不到，
+ * 一打开这一步看起来就像什么都没装。
+ */
+const nodeVersionOptions = computed(() => {
+    const tagsOf = (v: string): { label: string; color: string }[] => {
+        const tags: { label: string; color: string }[] = []
+        if (v === localNodeActive.value) tags.push({ label: t('dshMissing.node.tagActive'), color: 'green' })
+        else if (nodeInstalled.value.includes(v)) tags.push({ label: t('dshMissing.node.tagInstalled'), color: 'blue' })
+        return tags
+    }
+    // 已装的版本可能不在远端列表里（离线、或发布条目已撤），这些也要排进去。
+    // 远端列表本身已是 semver 降序，这里只做稳定合并：远端在前，补上它没覆盖到的已装版本。
+    const ordered = [
+        ...nodeVersions.value,
+        ...nodeInstalled.value.filter((v) => !nodeVersions.value.includes(v)).sort().reverse()
+    ]
+    return ordered.map((v) => ({ value: v, label: v, tags: tagsOf(v) }))
+})
+
+/**
+ * 检查版本：把主进程的版本列表、已装版本、当前生效版本一次全刷一遍。
+ *
+ * 合并了原来分开的两个动作 —— 「重新检测」（只刷环境探测）与版本下拉旁的刷新按钮
+ * （只刷远端列表）。两者用户根本分不清，且总是想同时要最新结果。
+ */
+async function recheckNode(): Promise<void> {
+    await Promise.all([loadNodeVersions(), loadInstalledNode(), probeEnv()])
+}
+
+/** 拉取已安装 / 生效的本地 Node 版本。 */
+async function loadInstalledNode(): Promise<void> {
+    try {
+        const r = await window.api.get('/versions/:kind', { params: { kind: 'node' } })
+        nodeInstalled.value = r.installed
+        nodeActiveVersion.value = r.active
+    } catch {
+        nodeInstalled.value = []
+        nodeActiveVersion.value = null
+    }
+}
 
 // ---- npm 版本选择（第 2 步「程序内置」）----
 const npmVersions = ref<string[]>([])
@@ -203,6 +269,9 @@ async function deployOnce(version?: string): Promise<boolean> {
         }
         if (r.ok) {
             deployPercent.value = 100
+            // 装完把选择器定到刚装好的版本：否则列表刷新后它可能停在别处，
+            // 「已安装 / 当前使用」标记看起来就像打错了地方。
+            if (version) nodeVersion.value = version
             ElMessage.success(r.message)
             return true
         }
@@ -215,12 +284,29 @@ async function deployOnce(version?: string): Promise<boolean> {
         deployingNode.value = false
         nodeExtracting.value = false
         canceling.value = false
-        await probeEnv()
-        await loadInstalledNode()
+        // 部署完要同时刷新「环境探测」与「已装 / 生效列表」—— 选择器上的标记依赖后者。
+        await Promise.all([probeEnv(), loadInstalledNode()])
     }
 }
-/** 下载并部署本地 Node：默认最新 LTS，选定版本时装指定版本。 */
-const deployNode = (): Promise<void> => deployOnce(nodeVersion.value || undefined).then(() => undefined)
+/**
+ * 把已安装的本地 Node 版本切成「当前生效」。
+ * 已装过的版本不该再走一遍下载 —— 那既慢又没必要，用户想要的只是切过去。
+ */
+async function activateNode(version: string): Promise<boolean> {
+    try {
+        const r = await window.api.put('/versions/:kind/active', { params: { kind: 'node' }, body: { version } })
+        if (!r.ok) {
+            ElMessage.error(r.message)
+            return false
+        }
+        ElMessage.success(r.message)
+        await Promise.all([loadInstalledNode(), probeEnv()])
+        return true
+    } catch (err) {
+        ElMessage.error(errorMessage(err))
+        return false
+    }
+}
 
 /** 确保「程序内置」npm 就绪：已缓存直接通过，未缓存 / 指定版本则先下载（带进度）再进入下一步。 */
 async function ensureNpmOnce(version?: string): Promise<boolean> {
@@ -285,15 +371,6 @@ async function loadNpmVersions(): Promise<void> {
         npmVersions.value = []
     } finally {
         npmVersionsLoading.value = false
-    }
-}
-
-/** 读取本地 Node 已安装版本的生效项（envProbe 读不到时的兜底）。 */
-async function loadInstalledNode(): Promise<void> {
-    try {
-        nodeActiveVersion.value = (await window.api.get('/versions/:kind', { params: { kind: 'node' } })).active
-    } catch {
-        nodeActiveVersion.value = null
     }
 }
 
@@ -447,9 +524,11 @@ async function runCurrentStep(): Promise<void> {
             ok = await persistWizard()
         } else if (step.value === 2) {
             ok = await persistWizard()
-            // 选了本地 Node 但尚未部署 → 自动按所选版本下载部署（带进度）。
-            if (ok && nodeRuntimeChoice.value === 'local' && envProbe.value && !envProbe.value.local.present) {
-                ok = await deployOnce(nodeVersion.value || undefined)
+            // 本地 Node：这一步的提交就是「把它安排好」——
+            // 选中的版本已装过就只切成生效版本（不重新下载），没装过才真的去部署。
+            // 合并前用户得先按「下载并部署」再按「下一步」，同一件事分两步做。
+            if (ok && nodeRuntimeChoice.value === 'local' && nodeVersion.value) {
+                ok = selectedNodeInstalled.value ? await activateNode(nodeVersion.value) : await deployOnce(nodeVersion.value)
             }
         } else if (step.value === 3) {
             ok = await persistWizard()
@@ -696,8 +775,8 @@ onBeforeUnmount(() => {
             <WizardSteps :steps="wizardSteps" :active="step" :percent="overallProgress" />
 
             <div class="wiz-navbar__acts">
-                <el-button size="small" :icon="LinkOutlined" @click="proxyFull = true">{{ $t('dshMissing.proxySettings') }}</el-button>
-                <el-button size="small" :icon="FileTextOutlined" @click="logFullscreen = true">{{ $t('dshMissing.viewLog') }}</el-button>
+                <a-button size="small" :icon="LinkOutlined" @click="proxyFull = true">{{ $t('dshMissing.proxySettings') }}</a-button>
+                <a-button size="small" :icon="FileTextOutlined" @click="logFullscreen = true">{{ $t('dshMissing.viewLog') }}</a-button>
                 <span class="divider" />
                 <WindowControls />
             </div>
@@ -712,7 +791,7 @@ onBeforeUnmount(() => {
                 <!-- 探测/初始化失败：明确告知原因并提供重试，避免「选项全都不可用」的无解释界面 -->
                 <div v-if="envError" class="wiz-err">
                     <span>{{ $t('dshMissing.probeFailed', { err: envError }) }}</span>
-                    <el-button size="small" :loading="probingEnv" @click="probeEnv">{{ $t('dshMissing.retry') }}</el-button>
+                    <a-button size="small" :loading="probingEnv" @click="probeEnv">{{ $t('dshMissing.retry') }}</a-button>
                 </div>
                 <!-- 第 0 步：先问装法。简易安装会自动跑完后四步，自定义安装逐步选择 -->
                 <div v-if="step === 0" class="wiz-pane">
@@ -753,9 +832,9 @@ onBeforeUnmount(() => {
                     <div v-if="speedTesting || speedResult" class="speed-box">
                         <div class="speed-box__head">
                             <span class="wiz-label">{{ speedTesting ? $t('dshMissing.speedTitle') : speedFailed ? $t('dshMissing.speedFailed') : $t('dshMissing.speedPicked') }}</span>
-                            <el-button v-if="!speedTesting && !simpleRunning" size="small" :loading="speedTesting" @click="pickFastestRegistry">
+                            <a-button v-if="!speedTesting && !simpleRunning" size="small" :loading="speedTesting" @click="pickFastestRegistry">
                                 {{ $t('dshMissing.speedRetest') }}
-                            </el-button>
+                            </a-button>
                         </div>
                         <div v-if="speedTesting || !speedResult || speedResult.samples.length === 0" class="wiz-hint">
                             {{ $t('dshMissing.speedDesc') }}
@@ -770,129 +849,130 @@ onBeforeUnmount(() => {
 
                     <div class="wiz-field">
                         <label class="wiz-label">{{ $t('dshMissing.registry') }}</label>
-                        <el-select v-model="installReg" class="missing-reg">
-                            <el-option :label="$t('dshMissing.registryNpmjs')" value="npmjs" />
-                            <el-option :label="$t('dshMissing.registryNpmmirror')" value="npmmirror" />
-                        </el-select>
+                        <a-select v-model:value="installReg" :options="registryOptions" class="missing-reg" />
                         <div class="wiz-hint">{{ $t('dshMissing.registryHint') }}</div>
                     </div>
 
                     <div class="wiz-field">
                         <label class="wiz-label">{{ $t('dshMissing.configDir') }}</label>
                         <div class="cfg-row">
-                            <el-input :model-value="cfgDir" readonly :placeholder="cfgDefaultDir" />
-                            <el-button type="primary" @click="pickConfigDir">{{ $t('dshMissing.choose') }}</el-button>
-                            <el-button v-if="cfgDir !== cfgDefaultDir" @click="resetConfigDir">{{ $t('dshMissing.restoreDefault') }}</el-button>
+                            <a-input :value="cfgDir" readonly :placeholder="cfgDefaultDir" />
+                            <a-button type="primary" @click="pickConfigDir">{{ $t('dshMissing.choose') }}</a-button>
+                            <a-button v-if="cfgDir !== cfgDefaultDir" @click="resetConfigDir">{{ $t('dshMissing.restoreDefault') }}</a-button>
                         </div>
                         <div class="wiz-hint">{{ $t('dshMissing.configDirHint') }}</div>
                     </div>
                 </div>
 
+                <!--
+                    第 2 步：Node 环境。
+                    三种运行时统一成一组标签，不再单独铺一块「部署本地 Node」的表单：
+                    版本选择、已装标记、生效标记都收进同一个选择器，按钮只剩「检查版本」。
+                -->
                 <div v-else-if="step === 2" class="wiz-pane">
                     <div class="wiz-field">
                         <label class="wiz-label">{{ $t('dshMissing.node.pick') }}</label>
-                        <el-radio-group v-model="nodeRuntimeChoice" class="nr-opts">
-                            <el-radio :value="'system'" :disabled="!systemNodeOk">
+                        <a-radio-group v-model:value="nodeRuntimeChoice" class="nr-opts">
+                            <a-radio value="system" :disabled="!systemNodeOk">
                                 {{ $t('dshMissing.node.runtimeSystem') }}
                                 <span v-if="!envProbe || !envProbe.node.present" class="muted">（{{ $t('dshMissing.node.notFound') }}）</span>
                                 <span v-else-if="!systemNodeOk" class="muted">（{{ $t('dshMissing.node.need20') }}）</span>
-                                <code v-else class="node-ver">{{ envProbe?.node.version }}</code>
-                            </el-radio>
-                            <el-radio :value="'electron'">
+                            </a-radio>
+                            <a-radio value="electron">
                                 {{ $t('dshMissing.node.runtimeElectron') }}
-                                <span class="muted">（{{ $t('dshMissing.node.rtDefault') }}）</span>
-                            </el-radio>
-                            <el-radio :value="'local'">{{ $t('dshMissing.node.runtimeLocal') }}</el-radio>
-                        </el-radio-group>
+                                <a-tag class="rt-tag" color="blue">{{ $t('dshMissing.node.rtDefault') }}</a-tag>
+                            </a-radio>
+                            <a-radio value="local">{{ $t('dshMissing.node.runtimeLocal') }}</a-radio>
+                        </a-radio-group>
                         <div class="wiz-hint">{{ runtimeHint }}</div>
                     </div>
 
-                    <div v-if="nodeRuntimeChoice === 'local'" class="wiz-field nr-local">
-                        <div class="wiz-active">
-                            <span class="wiz-hint">{{ $t('sv.env.activeVersion') }}：</span>
-                            <code v-if="localNodeActive" class="node-ver">{{ localNodeActive }}</code>
-                            <span v-else class="muted">{{ $t('dshMissing.node.notFound') }}</span>
+                    <!-- 系统 Node 的版本：只在选中系统运行时时展示，避免和本地版本选择器重复 -->
+                    <p v-if="nodeRuntimeChoice === 'system'" class="wiz-note">
+                        {{ $t('dshMissing.node.systemNote', { ver: envProbe?.node.version || '' }) }}
+                    </p>
+
+                    <!-- 本地 Node：版本列表 + 「已安装 / 当前使用」标记 + 检查版本，全部收在一处 -->
+                    <div v-else-if="nodeRuntimeChoice === 'local'" class="wiz-field">
+                        <label class="wiz-label">{{ $t('dshMissing.pickNodeVersion') }}</label>
+                        <div class="missing-vrow">
+                            <a-select
+                                v-model:value="nodeVersion"
+                                :options="nodeVersionOptions"
+                                :loading="nodeVersionsLoading"
+                                :disabled="deployingNode"
+                                :placeholder="$t('dshMissing.nodeVersionDefault')"
+                                class="missing-reg"
+                                show-search
+                                allow-clear
+                            >
+                                <!--
+                                    自定义选项渲染：版本号 + 「已安装 / 当前使用」标签。
+                                    ⚠️ 必须是 #optionRender（入参 { option, info }），不是 #option ——
+                                    antdv-next 的 SelectSlots 里没有 option 这个槽，写错了不报错、只是静默不生效。
+                                -->
+                                <template #optionRender="{ option }">
+                                    <span class="node-opt">
+                                        <span class="node-opt__ver">{{ option.label }}</span>
+                                        <a-tag v-for="tg in option.tags" :key="tg.label" :color="tg.color" class="node-opt__tag">
+                                            {{ tg.label }}
+                                        </a-tag>
+                                    </span>
+                                </template>
+                            </a-select>
+                            <a-button :loading="nodeVersionsLoading" @click="recheckNode">
+                                {{ $t('dshMissing.node.checkVersion') }}
+                            </a-button>
                         </div>
-                        <el-tag v-if="envProbe?.local.present" type="success" size="small" effect="plain">
-                            {{ $t('dshMissing.node.localReady') }}&nbsp;{{ envProbe.local.version }}
-                        </el-tag>
-                        <p v-else class="wiz-hint">{{ $t('dshMissing.node.deployHint') }}</p>
-
-                        <div class="wiz-field">
-                            <label class="wiz-label">{{ $t('dshMissing.pickNodeVersion') }}</label>
-                            <div class="missing-vrow">
-                                <el-select
-                                    v-model="nodeVersion"
-                                    filterable
-                                    clearable
-                                    :loading="nodeVersionsLoading"
-                                    :disabled="deployingNode"
-                                    :placeholder="$t('dshMissing.nodeVersionDefault')"
-                                    class="missing-reg"
-                                >
-                                    <el-option v-for="v in nodeVersions" :key="v" :value="v" :label="v" />
-                                </el-select>
-                                <el-button :icon="ReloadOutlined" circle :loading="nodeVersionsLoading" @click="loadNodeVersions" />
-                            </div>
-                            <div class="missing-opt">
-                                <span>{{ $t('dshMissing.includeNonLts') }}</span>
-                                <el-switch v-model="nodeIncludeNonLts" :disabled="deployingNode" />
-                            </div>
+                        <div class="missing-opt">
+                            <span>{{ $t('dshMissing.includeNonLts') }}</span>
+                            <a-switch v-model:checked="nodeIncludeNonLts" :disabled="deployingNode" />
                         </div>
-
-                        <!-- 下载 / 解压进度：同一时刻只保留一个动画，解压时用不确定动画 -->
-                        <template v-if="deployingNode">
-                            <template v-if="nodeExtracting">
-                                <div class="wiz-hint">{{ $t('dshMissing.extractingNode') }}</div>
-                                <div class="activity-bar" />
-                            </template>
-                            <template v-else>
-                                <div class="wiz-hint">{{ $t('dshMissing.node.deploying') }}</div>
-                                <el-progress
-                                    :percentage="deployPercent"
-                                    :status="deployPercent >= 100 ? 'success' : undefined"
-                                    :stroke-width="8"
-                                    class="deploy-progress"
-                                />
-                                <div class="wiz-hint deploy-info">{{ deployInfo }}</div>
-                            </template>
-                            <div class="wiz-btn-row">
-                                <el-button size="small" :disabled="canceling" @click="cancelCurrentInstall">
-                                    {{ canceling ? $t('dshMissing.canceling') : $t('dshMissing.cancel') }}
-                                </el-button>
-                            </div>
-                        </template>
-
-                        <!-- 部署按钮始终可用：已部署过也允许再装其它版本 -->
-                        <div class="wiz-btn-row">
-                            <el-button type="primary" :icon="DownloadOutlined" :disabled="deployingNode" @click="deployNode">
-                                {{ $t('dshMissing.node.deploy') }}
-                            </el-button>
-                            <el-button v-if="envProbe?.local.present" size="small" :disabled="deployingNode" @click="deployNode">
-                                {{ $t('dshMissing.node.redeploy') }}
-                            </el-button>
-                            <el-button :icon="ReloadOutlined" :loading="probingEnv" @click="probeEnv">
-                                {{ $t('dshMissing.node.rescan') }}
-                            </el-button>
+                        <!-- 已装数量：把「这台机器上有什么」说清楚，避免用户以为要重新下载 -->
+                        <div v-if="nodeInstalled.length" class="wiz-hint">
+                            {{ $t('dshMissing.node.installedCount', { n: nodeInstalled.length }) }}
+                        </div>
+                        <!-- 选中项是「已安装但非当前生效」时，说明下一步会把它切成生效版本 -->
+                        <div v-if="selectedNodeInstalled && !selectedNodeIsActive" class="wiz-hint">
+                            {{ $t('dshMissing.node.willSwitch') }}
                         </div>
                     </div>
 
-                    <p v-else-if="nodeRuntimeChoice === 'system'" class="wiz-note">
-                        {{ $t('dshMissing.node.systemNote', { ver: envProbe?.node.version || '' }) }}
-                    </p>
+                    <!-- 下载 / 解压进度：同一时刻只保留一个，解压阶段没有百分比 -->
+                    <template v-if="deployingNode">
+                        <template v-if="nodeExtracting">
+                            <div class="wiz-hint">{{ $t('dshMissing.extractingNode') }}</div>
+                            <div class="activity-bar" />
+                        </template>
+                        <template v-else>
+                            <div class="wiz-hint">{{ $t('dshMissing.node.deploying') }}</div>
+                            <a-progress
+                                :percent="deployPercent"
+                                :status="deployPercent >= 100 ? 'success' : 'active'"
+                                :stroke-width="8"
+                                class="deploy-progress"
+                            />
+                            <div class="wiz-hint deploy-info">{{ deployInfo }}</div>
+                        </template>
+                        <div class="wiz-btn-row">
+                            <a-button size="small" :disabled="canceling" @click="cancelCurrentInstall">
+                                {{ canceling ? $t('dshMissing.canceling') : $t('dshMissing.cancel') }}
+                            </a-button>
+                        </div>
+                    </template>
                 </div>
 
                 <div v-else-if="step === 3" class="wiz-pane">
                     <div class="wiz-field">
                         <label class="wiz-label">{{ $t('dshMissing.npmSource') }}</label>
-                        <el-radio-group v-model="installNpm" class="npm-opts">
-                            <el-radio :value="'system'" :disabled="!envProbe?.npm">
+                        <a-radio-group v-model="installNpm" class="npm-opts">
+                            <a-radio :value="'system'" :disabled="!envProbe?.npm">
                                 {{ $t('dshMissing.npmSystem') }}
                                 <span v-if="!envProbe?.npm" class="muted">（{{ $t('dshMissing.unavailable') }}）</span>
-                            </el-radio>
-                            <el-radio :value="'bundled'">{{ $t('dshMissing.npmBundled') }}</el-radio>
-                            <el-radio v-if="envProbe?.local.present" :value="'localnode'">{{ $t('dshMissing.npmLocalNode') }}</el-radio>
-                        </el-radio-group>
+                            </a-radio>
+                            <a-radio :value="'bundled'">{{ $t('dshMissing.npmBundled') }}</a-radio>
+                            <a-radio v-if="envProbe?.local.present" :value="'localnode'">{{ $t('dshMissing.npmLocalNode') }}</a-radio>
+                        </a-radio-group>
                         <div class="wiz-hint">{{ $t('dshMissing.npmHint') }}</div>
                     </div>
 
@@ -905,7 +985,7 @@ onBeforeUnmount(() => {
                             </template>
                             <template v-else>
                                 <div class="wiz-hint">{{ $t('dshMissing.npmPreparing') }}</div>
-                                <el-progress
+                                <a-progress
                                     :percentage="npmPercent"
                                     :status="npmPercent >= 100 ? 'success' : undefined"
                                     :stroke-width="8"
@@ -914,30 +994,29 @@ onBeforeUnmount(() => {
                                 <div class="wiz-hint deploy-info">{{ npmInfo }}</div>
                             </template>
                             <div class="wiz-btn-row">
-                                <el-button size="small" :disabled="canceling" @click="cancelCurrentInstall">
+                                <a-button size="small" :disabled="canceling" @click="cancelCurrentInstall">
                                     {{ canceling ? $t('dshMissing.canceling') : $t('dshMissing.cancel') }}
-                                </el-button>
+                                </a-button>
                             </div>
                         </template>
                         <template v-else>
                             <div class="wiz-field">
                                 <label class="wiz-label">{{ $t('dshMissing.pickNpmVersion') }}</label>
                                 <div class="missing-vrow">
-                                    <el-select
-                                        v-model="npmVersion"
-                                        filterable
-                                        clearable
+                                    <a-select
+                                        v-model:value="npmVersion"
+                                        :options="npmVersionOptions"
                                         :loading="npmVersionsLoading"
                                         :placeholder="$t('dshMissing.npmVersionDefault')"
                                         class="missing-reg"
-                                    >
-                                        <el-option v-for="v in npmVersions" :key="v" :value="v" :label="v" />
-                                    </el-select>
-                                    <el-button :icon="ReloadOutlined" circle :loading="npmVersionsLoading" @click="loadNpmVersions" />
+                                        show-search
+                                        allow-clear
+                                    />
+                                    <a-button :icon="ReloadOutlined" circle :loading="npmVersionsLoading" @click="loadNpmVersions" />
                                 </div>
                                 <div class="missing-opt">
                                     <span>{{ $t('sv.env.includePrerelease') }}</span>
-                                    <el-switch v-model="npmIncludePre" />
+                                    <a-switch v-model:checked="npmIncludePre" />
                                 </div>
                             </div>
                             <!-- 未选版本且已缓存才算现成，否则下一步会先下载 -->
@@ -955,30 +1034,29 @@ onBeforeUnmount(() => {
                 <div v-else class="wiz-pane">
                     <div class="wiz-field">
                         <label class="wiz-label">{{ $t('dshMissing.source') }}</label>
-                        <el-radio-group v-model="installSource">
-                            <el-radio :value="'local'">{{ $t('dshMissing.local') }}</el-radio>
-                            <el-radio :value="'global'">{{ $t('dshMissing.global') }}</el-radio>
-                        </el-radio-group>
+                        <a-radio-group v-model="installSource">
+                            <a-radio :value="'local'">{{ $t('dshMissing.local') }}</a-radio>
+                            <a-radio :value="'global'">{{ $t('dshMissing.global') }}</a-radio>
+                        </a-radio-group>
                     </div>
                     <div class="wiz-field">
                         <div class="missing-opt">
                             <span>{{ $t('dshMissing.preLabel') }}</span>
-                            <el-switch v-model="installPrerelease" />
+                            <a-switch v-model:checked="installPrerelease" />
                         </div>
                     </div>
                     <div class="wiz-field">
                         <label class="wiz-label">{{ $t('dshMissing.version') }}</label>
                         <div class="missing-vrow">
-                            <el-select
-                                v-model="installVersion"
-                                filterable
+                            <a-select
+                                v-model:value="installVersion"
+                                :options="dshVersionOptions"
                                 :loading="versionsLoading"
                                 class="missing-reg"
                                 :placeholder="$t('dshMissing.versionPlaceholder')"
-                            >
-                                <el-option v-for="v in installVersions" :key="v" :value="v" :label="v" />
-                            </el-select>
-                            <el-button :icon="ReloadOutlined" circle :loading="versionsLoading" @click="loadInstallVersions" />
+                                show-search
+                            />
+                            <a-button :icon="ReloadOutlined" circle :loading="versionsLoading" @click="loadInstallVersions" />
                         </div>
                         <div class="wiz-hint">{{ $t('dshMissing.versionHint') }}</div>
                     </div>
@@ -1005,12 +1083,12 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="wiz-nav">
-                <el-button text :disabled="busy" @click="quitShell">{{ $t('dshMissing.quit') }}</el-button>
+                <a-button text :disabled="busy" @click="quitShell">{{ $t('dshMissing.quit') }}</a-button>
                 <div class="wiz-nav__right">
-                    <el-button v-if="step > 0" :disabled="busy" @click="back">{{ $t('dshMissing.prev') }}</el-button>
-                    <el-button type="primary" :disabled="busy || primaryDisabled" :loading="simpleRunning" @click="runCurrentStep">
+                    <a-button v-if="step > 0" :disabled="busy" @click="back">{{ $t('dshMissing.prev') }}</a-button>
+                    <a-button type="primary" :disabled="busy || primaryDisabled" :loading="simpleRunning" @click="runCurrentStep">
                         {{ primaryLabel }}
-                    </el-button>
+                    </a-button>
                 </div>
             </div>
 
@@ -1019,10 +1097,10 @@ onBeforeUnmount(() => {
                 <div v-if="proxyFull" class="net-full">
                     <div class="net-full__head">
                         <span class="net-full__title">{{ $t('dshMissing.proxySettings') }}</span>
-                        <el-button :icon="CloseOutlined" text @click="closeProxySettings">{{ $t('dshMissing.closeLog') }}</el-button>
+                        <a-button :icon="CloseOutlined" text @click="closeProxySettings">{{ $t('dshMissing.closeLog') }}</a-button>
                     </div>
                     <div class="net-full__body">
-                        <el-form label-position="top">
+                        <a-form layout="vertical">
                             <ProxyFields
                                 v-model:enabled="proxyEnabled"
                                 v-model:protocol="proxyProtocol"
@@ -1030,7 +1108,7 @@ onBeforeUnmount(() => {
                                 v-model:port="proxyPort"
                                 v-model:scope="proxyScope"
                             />
-                        </el-form>
+                        </a-form>
                         <div class="wiz-hint">{{ $t('dshMissing.netHint') }}</div>
                     </div>
                 </div>
@@ -1044,7 +1122,7 @@ onBeforeUnmount(() => {
                             <div v-if="installingDsh" class="log-full__mini">
                                 <div class="activity-bar" />
                             </div>
-                            <el-button :icon="CloseOutlined" text @click="logFullscreen = false">{{ $t('dshMissing.closeLog') }}</el-button>
+                            <a-button :icon="CloseOutlined" text @click="logFullscreen = false">{{ $t('dshMissing.closeLog') }}</a-button>
                         </div>
                     </div>
                     <pre class="log-full__body">{{ installLog.length ? installLog.join('\n') : $t('dshMissing.logWaiting') }}</pre>
@@ -1162,7 +1240,7 @@ onBeforeUnmount(() => {
     gap: 8px;
 }
 /* 导航栏里的按钮可点不可拖 */
-.wiz-navbar__acts :deep(.el-button) {
+.wiz-navbar__acts :deep(.ant-btn) {
     -webkit-app-region: no-drag;
 }
 .wiz-body {
@@ -1316,6 +1394,25 @@ onBeforeUnmount(() => {
     line-height: 1.6;
     color: var(--el-text-color-secondary);
 }
+/* ---- Node 版本选项（版本号 + 已安装 / 当前使用标签） ---- */
+.node-opt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+/* 版本号等宽：数位对齐后一列版本读起来更快 */
+.node-opt__ver {
+    font-family: var(--el-font-family-mono);
+    font-size: 12.5px;
+}
+/* 标签不参与换行，也不把选项行撑高 */
+.node-opt__tag {
+    margin: 0;
+    font-size: 11px;
+    line-height: 16px;
+    flex: 0 0 auto;
+}
 .wiz-note {
     margin: 10px 0 0;
     font-size: 12px;
@@ -1340,7 +1437,13 @@ onBeforeUnmount(() => {
     align-items: flex-start;
     gap: 8px;
 }
-.nr-opts .el-radio {
+/* 「默认」标签跟在「程序内置」文字后面，与文字基线对齐，不要撑高整行 */
+.rt-tag {
+    margin-left: 6px;
+    font-size: 11px;
+    line-height: 18px;
+}
+.nr-opts :deep(.ant-radio-wrapper) {
     height: auto;
     white-space: normal;
     margin-right: 0;
@@ -1379,7 +1482,7 @@ onBeforeUnmount(() => {
     display: flex;
     gap: 8px;
 }
-.cfg-row .el-input {
+.cfg-row :deep(.ant-input) {
     flex: 1 1 auto;
 }
 .node-ver {
@@ -1466,10 +1569,10 @@ onBeforeUnmount(() => {
     margin: 0 auto;
     padding: 20px 24px 28px;
 }
-.net-full__body :deep(.el-form-item) {
+.net-full__body :deep(.ant-form-item) {
     margin-bottom: 14px;
 }
-.net-full__body :deep(.el-form-item__label) {
+.net-full__body :deep(.ant-form-item-label > label) {
     font-size: 13px;
     font-weight: 600;
     color: var(--el-text-color-regular);
