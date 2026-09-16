@@ -14,11 +14,12 @@ import './styles/settings.css'
 import { i18n } from './lib/locales'
 import { router } from './shell/router'
 import { loadShellMeta } from './shell/shellmeta'
+import { setupAntdv } from './lib/antdv'
 import type { ResolvedLocale } from '@shared/types'
 
 /**
  * 启动：读取本窗口元信息(是否核心窗口)与界面语言（dsh settings.yaml 的 locale.preference），
- * 据此挂载 vue-i18n 与 Element Plus。
+ * 据此挂载 vue-i18n、Element Plus 与 antdv-next。
  */
 async function bootstrap(): Promise<void> {
     await loadShellMeta()
@@ -32,6 +33,9 @@ async function bootstrap(): Promise<void> {
 
     const app = createApp(App)
     app.use(createPinia())
+    // antdv-next：组件与样式由 unplugin-vue-components 按需注入，这里只装全局运行时配置
+    setupAntdv(app, resolved)
+    // Element Plus 仍在全量注册（迁移期共存），随组件逐个替换后移除
     app.use(ElementPlus, { locale: resolved === 'zh' ? zhCn : en })
     app.use(i18n)
     app.use(router)
