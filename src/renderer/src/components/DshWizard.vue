@@ -60,14 +60,34 @@ const STEP_KEYS = ['mode', 'source', 'node', 'npm', 'dsh'] as const
 const wizardSteps = computed(() => STEP_KEYS.map((k) => ({ key: k, label: t(`dshMissing.wiz.${k}`) })))
 
 /**
- * 当前步的整体进度（0–100），`null` 表示不确定（显示动画）。
- * 只有真正能给出百分比的阶段才报数：解压、测速、装 dsh 都拿不到准确百分比。
+ * 整体进度（0–100）：把「走到第几步」与「当前步做了多少」合成**一条**进度。
+ *
+ * 为什么不按步分段画：分段进度要求每一步都报得出百分比，而简单安装里
+ * 测速、装 dsh 这类阶段根本拿不到百分比 —— 结果就是有的段满、有的段空、
+ * 有的段在跑动画，反而更难一眼看出「装到哪了」。合成一条后：
+ *
+ *   整体进度 = (已完成步数 + 当前步完成比例) / 总步数
+ *
+ * 于是它必定单调不减，且任何时刻都读得出一个确切的百分比 ——
+ * 不需要「不确定进度」那种滑动动画。
  */
-const stepProgress = computed<number | null>(() => {
-    if (deployingNode.value) return nodeExtracting.value ? null : deployPercent.value
-    if (installingNpm.value) return npmExtracting.value ? null : npmPercent.value
-    return null
+const overallProgress = computed(() => {
+    // 当前步完成了多少（0–1）。拿不到百分比的阶段按 0 处理：进度条停在这一步的起点，
+    // 由下方的文字说明「正在做什么」，而不是用动画假装有进度。
+    const within = deployingNode.value
+        ? (nodeExtracting.value ? 0 : clamp01(deployPercent.value / 100))
+        : installingNpm.value
+            ? (npmExtracting.value ? 0 : clamp01(npmPercent.value / 100))
+            : 0
+    const total = STEP_KEYS.length
+    return Math.round(((step.value + within) / total) * 100)
 })
+
+/** 把比例夹到 0–1：下载进度偶有越界或 NaN。 */
+function clamp01(n: number): number {
+    if (!Number.isFinite(n)) return 0
+    return Math.max(0, Math.min(1, n))
+}
 
 // ---- 镜像源测速（简易安装用来自动选源）----
 const speedTesting = ref(false)
@@ -673,7 +693,7 @@ onBeforeUnmount(() => {
             导航栏整条可拖动窗口，按钮与步骤条区域不可拖。
         -->
         <header class="wiz-navbar">
-            <WizardSteps :steps="wizardSteps" :active="step" :progress="stepProgress" />
+            <WizardSteps :steps="wizardSteps" :active="step" :percent="overallProgress" />
 
             <div class="wiz-navbar__acts">
                 <el-button size="small" :icon="LinkOutlined" @click="proxyFull = true">{{ $t('dshMissing.proxySettings') }}</el-button>
