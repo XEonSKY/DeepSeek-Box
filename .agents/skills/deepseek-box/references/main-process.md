@@ -35,6 +35,9 @@
 | `installs.ts` | 版本化目录 | 见下 |
 | `tools.ts` | 路径解析 | `localNodeExecPath` / `nodeRuntimeFor` / `resolveDshModule` / `findSystemNode` |
 | `semver.ts` | 版本工具 | `sortVersionsDesc` / `filterByPrerelease` / `pickLatest` |
+| `registry.ts` | npm 源定义与挑选（**纯逻辑**） | `REGISTRY_IDS` / `registryBase` / `rankRegistries` / `pickFastestRegistry` |
+| `speed.ts` | 镜像源测速（走 `httpFetch`） | `measureRegistrySpeed` |
+| `http.ts` | 主进程 HTTP 出口（代理生效点） | `httpFetch(scope, url, init)` / `proxyConfigFor` |
 | `net.ts` | 代理辅助 | 代理配置相关 |
 
 ## settings.ts 关键导出（改设置必看）

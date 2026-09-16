@@ -13,7 +13,7 @@
 | `views/settings/*.vue` | 设置面板：General / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / Webview / About |
 | `views/settings/actions/` | `dshActions.ts`（启停 / 向导）、`dshManageActions.ts`（版本管理） |
 | `views/settings/useSettingsStore.ts`、`settingsStore.ts` | Pinia 设置镜像与写回 |
-| `components/` | `DshWizard.vue`（四步向导）、`StatusBar.vue`、`TitleBar.vue`、`WindowControls.vue`、`ProxyFields.vue`、`ThreadsField.vue` |
+| `components/` | `DshWizard.vue`（安装向导）、`WizardSteps.vue`（自绘步骤条）、`StatusBar.vue`、`TitleBar.vue`、`WindowControls.vue`、`ProxyFields.vue`、`ThreadsField.vue` |
 | `lib/` | 主题、格式化、更新状态、locale、图标等工具 |
 | `lib/update.ts` | 版本状态中心：`versionStatus` / `checkDsh` / `checkAllUpdates` / `applyAppUpdateEvent` |
 | `shell/` | 路由、标签、窗口元信息、标签拖拽（`router` / `tabs` / `shellmeta` / `useTabDrag` / `viewnav`） |
@@ -28,6 +28,19 @@
 |---|---|---|
 | `TitleBar.vue` | 常规界面 | 标题栏：品牌、固定站、标签条、设置入口、窗口控制 |
 | `DshWizard.vue` 的 `.wiz-navbar` | dsh 缺失时的安装向导 | 专属导航栏：**步骤条在左**，向导入口 + 窗口控制在右 |
+
+### 安装向导的步骤条是自绘的
+
+`WizardSteps.vue` 用**圆角矩形 + 底沿进度条**表示进度，**不要改用 `el-steps` / `a-steps`**：
+
+- 那两种组件把状态表达为「圆圈 + 连接线」，没有「当前这一步完成了多少」的位置；
+  而安装是长耗时流程（测速、下载 npm、装 dsh），用户最需要看到的正是当前步的进度；
+- 底沿细条让进度**不额外占高度**，整条导航栏高度不变；
+- `progress` 传 `null` 表示不确定进度（解压、测速这类拿不到百分比的阶段），组件会跑滑动动画。
+
+向导共 **5 步**：`0 安装方式 · 1 镜像源 · 2 Node · 3 NPM · 4 DSH`。
+第 0 步选「简易安装」后由 `runSimpleInstall()` 自动跑完 1–4（测速选源 → Electron Node → 内置 npm → dsh 最新版），
+选「自定义安装」则回到逐步选择。改动步骤顺序时，`watch(step)`、各 `v-if="step === n"` 与主按钮文案要一起改。
 
 安装向导是覆盖整窗口的遮罩（`z-index` 高于标题栏），会把标题栏连同其窗口按钮一起挡住 ——
 所以向导必须自备一条导航栏，否则安装期间窗口既不能拖动也不能最小化 / 关闭。
