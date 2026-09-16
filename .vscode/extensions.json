@@ -1,8 +1,18 @@
 {
-  "recommendations": [
-    "Vue.volar",
-    "dbaeumer.vscode-eslint",
-    "EditorConfig.EditorConfig",
-    "redhat.vscode-yaml"
-  ]
+    // 推荐扩展：Vue 3 + TypeScript + ESLint 扁平配置 + VitePress 文档站
+    "recommendations": [
+        "Vue.volar",
+        "dbaeumer.vscode-eslint",
+        "EditorConfig.EditorConfig",
+        "redhat.vscode-yaml"
+    ],
+
+    // 不推荐扩展：Vetur 会接管 .vue 语言服务与 Volar 冲突；
+    // 独立 TS 插件（Vue.vscode-typescript-vue-plugin）自 Volar 2 起已内置；
+    // johnsoncodehk.volar 是 Volar 的旧标识，已迁移为 Vue.volar。
+    "unwantedRecommendations": [
+        "octref.vetur",
+        "johnsoncodehk.volar",
+        "Vue.vscode-typescript-vue-plugin"
+    ]
 }

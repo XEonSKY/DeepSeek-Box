@@ -3,9 +3,12 @@ import { onMounted, ref } from 'vue'
 import { ClusterOutlined, FolderOutlined, SendOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { InstalledVersions } from '@shared/types'
+import { errorMessage } from '@shared/errors'
+import { withV } from '@shared/version'
 import { dshCheck } from '../../lib/update'
 import { tt } from '../../lib/locales'
 import { useSettingsStore } from './useSettingsStore'
+import { useInstallCancel } from './useInstallCancel'
 
 const { state, actions } = useSettingsStore()
 
@@ -16,14 +19,7 @@ const installed = ref<InstalledVersions>({ installed: [], active: null })
 const installedLoading = ref(false)
 /** 正在切换的已安装版本（按钮 loading；空串表示没有）。 */
 const switchingInstalled = ref('')
-/** 取消按钮的进行中状态。 */
-const canceling = ref(false)
-
-/** dsh 版本号不带 v 前缀，展示时统一补上。 */
-function withV(v: string | null | undefined): string {
-    if (!v) return '—'
-    return v.startsWith('v') ? v : 'v' + v
-}
+const { canceling, cancelInstall } = useInstallCancel()
 
 async function loadInstalled(): Promise<void> {
     if (installedLoading.value) return
@@ -34,19 +30,6 @@ async function loadInstalled(): Promise<void> {
         installed.value = { installed: [], active: null }
     } finally {
         installedLoading.value = false
-    }
-}
-
-/** 取消正在进行的安装 / 更新 / 切换。 */
-async function cancelInstall(): Promise<void> {
-    if (canceling.value) return
-    canceling.value = true
-    try {
-        await window.api.post('/installs/cancel')
-    } catch {
-        /* 取消失败无需打扰用户 */
-    } finally {
-        canceling.value = false
     }
 }
 
@@ -75,7 +58,7 @@ async function useInstalled(version: string): Promise<void> {
             ElMessage.error(r.message || '')
         }
     } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : String(err))
+        ElMessage.error(errorMessage(err))
     } finally {
         switchingInstalled.value = ''
         await loadInstalled()
@@ -102,7 +85,7 @@ async function removeInstalled(version: string): Promise<void> {
             ElMessage.error(r.message || '')
         }
     } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : String(err))
+        ElMessage.error(errorMessage(err))
     }
 }
 

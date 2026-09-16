@@ -12,7 +12,7 @@
  * 纯 CSS 里没有 :deep()，等价写法就是普通后代选择器。
  */
 .pill-input .el-input__wrapper {
-  border-radius: 999px;
+    border-radius: 999px;
 }
 
 /*
@@ -21,9 +21,9 @@
  * 所以样式必须跟着组件走，而不是依赖设置页的容器类。
  */
 .nf-hint {
-  width: 100%;
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--el-text-color-secondary);
+    width: 100%;
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-text-color-secondary);
 }

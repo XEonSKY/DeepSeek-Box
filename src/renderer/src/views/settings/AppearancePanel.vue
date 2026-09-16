@@ -264,141 +264,141 @@ async function removeIcon(it: AppIconInfo): Promise<void> {
 
 <style scoped>
 .zoom-sel {
-  width: 220px;
+    width: 220px;
 }
 .lang-casc {
-  width: 100%;
+    width: 100%;
 }
 
 /* ---- 配色方案色板 ---- */
 .schemes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: 100%;
 }
 .scheme {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 10px;
-  background: var(--el-fill-color-blank);
-  color: var(--el-text-color-regular);
-  font-size: 12px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 10px;
+    background: var(--el-fill-color-blank);
+    color: var(--el-text-color-regular);
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
 }
 .scheme:hover {
-  border-color: var(--el-color-primary);
+    border-color: var(--el-color-primary);
 }
 .scheme--on {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-  font-weight: 600;
+    border-color: var(--el-color-primary);
+    background: var(--el-color-primary-light-9);
+    color: var(--el-color-primary);
+    font-weight: 600;
 }
 .scheme:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
 }
 /* 三个色块并排：页面底 / 侧栏底 / 主色 */
 .scheme__chips {
-  display: flex;
-  border-radius: 6px;
-  overflow: hidden;
-  box-shadow: inset 0 0 0 1px var(--el-border-color-lighter);
+    display: flex;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px var(--el-border-color-lighter);
 }
 .scheme__chip {
-  width: 16px;
-  height: 16px;
-  display: block;
+    width: 16px;
+    height: 16px;
+    display: block;
 }
 .scheme__name {
-  white-space: nowrap;
+    white-space: nowrap;
 }
 
 /* ---- 程序图标选择器 ---- */
 .icons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
 }
 .icon-cell {
-  position: relative;
-  width: 88px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 10px;
-  background: var(--el-fill-color-blank);
-  color: var(--el-text-color-regular);
-  font-size: 11px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+    position: relative;
+    width: 88px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 10px;
+    background: var(--el-fill-color-blank);
+    color: var(--el-text-color-regular);
+    font-size: 11px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
 }
 .icon-cell:hover {
-  border-color: var(--el-color-primary);
+    border-color: var(--el-color-primary);
 }
 .icon-cell--on {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-  font-weight: 600;
+    border-color: var(--el-color-primary);
+    background: var(--el-color-primary-light-9);
+    color: var(--el-color-primary);
+    font-weight: 600;
 }
 .icon-cell:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
 }
 .icon-cell__img {
-  width: 44px;
-  height: 44px;
-  object-fit: contain;
-  border-radius: 8px;
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    border-radius: 8px;
 }
 .icon-cell__name {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 /* 删除按钮只在悬停该图标时出现；只对用户上传的图标渲染 */
 .icon-cell__del {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--el-color-danger);
-  color: #fff;
-  font-size: 10px;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--el-color-danger);
+    color: #fff;
+    font-size: 10px;
 }
 .icon-cell:hover .icon-cell__del {
-  display: flex;
+    display: flex;
 }
 .icon-cell--add {
-  border-style: dashed;
-  color: var(--el-text-color-secondary);
+    border-style: dashed;
+    color: var(--el-text-color-secondary);
 }
 .icon-cell__add {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
 }
 .icon-file {
-  display: none;
+    display: none;
 }
 </style>

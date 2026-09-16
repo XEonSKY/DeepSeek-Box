@@ -203,26 +203,26 @@ async function cancelPendingMigration(): Promise<void> {
 
 <style scoped>
 .sh-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
 }
 .sh-row {
-  display: flex;
-  gap: 6px;
-  width: 100%;
+    display: flex;
+    gap: 6px;
+    width: 100%;
 }
 .sh-row .el-input {
-  flex: 1 1 auto;
+    flex: 1 1 auto;
 }
 .cfg-pending {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--el-color-warning);
-  word-break: break-all;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--el-color-warning);
+    word-break: break-all;
 }
 </style>

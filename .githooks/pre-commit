@@ -1,0 +1,5 @@
+#!/bin/sh
+# 提交前质量门禁：typecheck + lint + 单元测试（由 scripts/install-hooks.mjs 设置 core.hooksPath 启用）。
+# 与 CI 的 quality.yml 跑的是同一条命令，避免「本地过了 CI 红」。
+# 紧急情况可用 git commit --no-verify 跳过。
+npm run check

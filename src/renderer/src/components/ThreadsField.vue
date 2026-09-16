@@ -46,9 +46,9 @@ const count = computed({
 
 <style scoped>
 .tf__row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
 }
 </style>

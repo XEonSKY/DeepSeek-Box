@@ -9,6 +9,7 @@ import { applyAppUpdateEvent, checkAndNotify } from './lib/update'
 import { applyTheme, applyColorScheme } from './lib/theme'
 import { initAppIcon } from './lib/appIcon'
 import { applyExtTranslation, applyLocaleChange, currentLocale, tt } from './lib/locales'
+import { AntdvRoot } from './lib/antdv'
 import { useView, useGoView, useToggleTerminal } from './shell/viewnav'
 import { webTabs, activeTab, activateTab, openTarget, setCoreRole, tabLabel } from './shell/tabs'
 import WebHost from './views/WebHost.vue'
@@ -192,102 +193,105 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="shell" :style="chromeStyle">
-        <TitleBar />
+    <!-- AntdvRoot：ConfigProvider + antdv App 上下文，供按需组件与 message/Modal 使用 -->
+    <AntdvRoot :locale="currentLocale()">
+        <div class="shell" :style="chromeStyle">
+            <TitleBar />
 
-        <main class="body">
-            <!-- 常驻 web 宿主：进入日志/设置也不卸载，标签页 webview 保持保活 -->
-            <div class="web-base"><WebHost /></div>
-            <div v-if="view !== 'web'" class="web-overlay"><router-view /></div>
-        </main>
+            <main class="body">
+                <!-- 常驻 web 宿主：进入日志/设置也不卸载，标签页 webview 保持保活 -->
+                <div class="web-base"><WebHost /></div>
+                <div v-if="view !== 'web'" class="web-overlay"><router-view /></div>
+            </main>
 
-        <!-- 底部状态栏（类似 VS Code）：空白占位，高度不计入内容区 16:9 -->
-        <StatusBar />
+            <!-- 底部状态栏（类似 VS Code）：空白占位，高度不计入内容区 16:9 -->
+            <StatusBar />
 
-        <DshWizard v-if="showMissing && !migration" @done="showMissing = false" />
+            <DshWizard v-if="showMissing && !migration" @done="showMissing = false" />
 
-        <div v-if="migration" class="migrate">
-            <div class="migrate__card">
-                <div class="migrate__title">{{ $t('configMigration.title') }}</div>
-                <div class="migrate__desc">{{ $t('configMigration.desc', { from: migration?.from, to: migration?.to }) }}</div>
-                <el-progress :percentage="migPercent" :stroke-width="14" />
-                <div class="migrate__label">{{ migTotal > 0 ? $t('configMigration.moving') : $t('configMigration.preparing') }}</div>
-                <div class="migrate__path" :title="migCurrent">{{ migCurrent }}</div>
-                <div class="migrate__count">{{ $t('configMigration.count', { moved: migMoved, total: migTotal }) }}</div>
-                <el-button text @click="cancelMigration">{{ $t('configMigration.cancel') }}</el-button>
+            <div v-if="migration" class="migrate">
+                <div class="migrate__card">
+                    <div class="migrate__title">{{ $t('configMigration.title') }}</div>
+                    <div class="migrate__desc">{{ $t('configMigration.desc', { from: migration?.from, to: migration?.to }) }}</div>
+                    <el-progress :percentage="migPercent" :stroke-width="14" />
+                    <div class="migrate__label">{{ migTotal > 0 ? $t('configMigration.moving') : $t('configMigration.preparing') }}</div>
+                    <div class="migrate__path" :title="migCurrent">{{ migCurrent }}</div>
+                    <div class="migrate__count">{{ $t('configMigration.count', { moved: migMoved, total: migTotal }) }}</div>
+                    <el-button text @click="cancelMigration">{{ $t('configMigration.cancel') }}</el-button>
+                </div>
             </div>
         </div>
-    </div>
+    </AntdvRoot>
 </template>
 
 <style scoped>
 .shell {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 /* 配置目录迁移：全屏遮罩 + 居中卡片 */
 .migrate {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--el-bg-color-page);
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--el-bg-color-page);
 }
 .migrate__card {
-  width: min(560px, 88vw);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 24px;
-  border-radius: 12px;
-  background: var(--el-bg-color);
-  box-shadow: var(--el-box-shadow-light);
+    width: min(560px, 88vw);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 24px;
+    border-radius: 12px;
+    background: var(--el-bg-color);
+    box-shadow: var(--el-box-shadow-light);
 }
 .migrate__title {
-  font-size: 16px;
-  font-weight: 600;
+    font-size: 16px;
+    font-weight: 600;
 }
 .migrate__desc {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--el-text-color-secondary);
-  word-break: break-all;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--el-text-color-secondary);
+    word-break: break-all;
 }
 .migrate__label {
-  font-size: 13px;
-  color: var(--el-text-color-regular);
+    font-size: 13px;
+    color: var(--el-text-color-regular);
 }
 .migrate__path {
-  font-size: 12px;
-  font-family: monospace;
-  color: var(--el-text-color-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    font-size: 12px;
+    font-family: monospace;
+    color: var(--el-text-color-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .migrate__count {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
 }
 .body {
-  flex: 1 1 auto;
-  min-height: 0;
-  position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
 }
 /* 常驻 web 宿主（底层，永不卸载以保活 webview） */
 .web-base {
-  position: absolute;
-  inset: 0;
+    position: absolute;
+    inset: 0;
 }
 /* 日志/设置覆盖层：不透明盖在 web 宿主上 */
 .web-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  background: var(--el-bg-color-page);
-  overflow: hidden;
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: var(--el-bg-color-page);
+    overflow: hidden;
 }
 </style>

@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useSettingsStore } from './useSettingsStore'
 import { friendlyPlatform } from './settingsStore'
 import type { AppMeta, AppSlotsState, AppUpdateEvent } from '@shared/types'
+import { errorMessage } from '@shared/errors'
 import { useAppIcon } from '../../lib/appIcon'
 import { tt } from '../../lib/locales'
 import { formatDownload } from '../../lib/format'
@@ -312,7 +313,7 @@ async function check(): Promise<void> {
     } catch (err) {
         // IPC 自己抛错（处理器异常等）时也要落到 error，
         // 否则 phase 会永远停在 checking：按钮一直转圈且一直禁用。
-        errMsg.value = tt('sv.about.checkFailed', { err: err instanceof Error ? err.message : String(err) })
+        errMsg.value = tt('sv.about.checkFailed', { err: errorMessage(err) })
         phase.value = 'error'
     }
 }
@@ -551,120 +552,120 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .au-speed {
-  font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums;
 }
 /* 关于页使用应用图标（icon.png）替代默认的 Info 图标。 */
 .about-logo {
-  background: transparent;
+    background: transparent;
 }
 .about-logo img {
-  width: 52px;
-  height: 52px;
-  border-radius: 13px;
-  object-fit: cover;
-  display: block;
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
+    object-fit: cover;
+    display: block;
 }
 
 /* 项目主页：地址 + 外链按钮 */
 .repo-url {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 3px 8px;
-  font-family: var(--el-font-family-mono);
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
-  border-radius: 6px;
-  word-break: break-all;
+    display: inline-block;
+    margin-top: 8px;
+    padding: 3px 8px;
+    font-family: var(--el-font-family-mono);
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    background: var(--el-fill-color-light);
+    border-radius: 6px;
+    word-break: break-all;
 }
 .repo-btn {
-  flex: 0 0 auto;
+    flex: 0 0 auto;
 }
 
 /* A/B 版本槽：标签行 */
 .slot-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
 }
 .slot-label {
-  flex: 0 0 auto;
-  min-width: 120px;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
+    flex: 0 0 auto;
+    min-width: 120px;
+    font-size: 13px;
+    color: var(--el-text-color-secondary);
 }
 .slot-empty {
-  font-size: 12px;
-  color: var(--el-text-color-placeholder);
+    font-size: 12px;
+    color: var(--el-text-color-placeholder);
 }
 /* antdv 图标按 1em 取尺寸（不是 svg 的 width/height），故用 font-size 控制大小 */
 .gh-icon {
-  font-size: 15px;
-  margin-right: 6px;
-  vertical-align: -2px;
+    font-size: 15px;
+    margin-right: 6px;
+    vertical-align: -2px;
 }
 
 /* 系统架构徽标：彩蛋入口（连点 5 次），给个可点的光标 */
 .env-tap {
-  cursor: pointer;
-  user-select: none;
+    cursor: pointer;
+    user-select: none;
 }
 
 /* ---- 井字棋（彩蛋） ---- */
 /* 注意：el-dialog 的内容会被 teleport 到 body，但仍是本组件的渲染作用域，
-   所以 scoped 样式照常生效，不需要 :deep() 之外的特殊处理。 */
+    所以 scoped 样式照常生效，不需要 :deep() 之外的特殊处理。 */
 .ttt {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
 }
 .ttt__status {
-  font-size: 13px;
-  font-weight: 600;
+    font-size: 13px;
+    font-weight: 600;
 }
 .ttt__grid {
-  display: grid;
-  grid-template-columns: repeat(3, 64px);
-  gap: 6px;
+    display: grid;
+    grid-template-columns: repeat(3, 64px);
+    gap: 6px;
 }
 .ttt__cell {
-  width: 64px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1;
-  border: 1px solid var(--el-border-color);
-  border-radius: 10px;
-  background: var(--el-fill-color-blank);
-  color: var(--el-text-color-primary);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+    border: 1px solid var(--el-border-color);
+    border-radius: 10px;
+    background: var(--el-fill-color-blank);
+    color: var(--el-text-color-primary);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
 }
 .ttt__cell:hover:not(:disabled) {
-  background: var(--el-fill-color-light);
-  border-color: var(--el-color-primary);
+    background: var(--el-fill-color-light);
+    border-color: var(--el-color-primary);
 }
 .ttt__cell:disabled {
-  cursor: default;
+    cursor: default;
 }
 .ttt__cell--x {
-  color: var(--el-color-primary);
+    color: var(--el-color-primary);
 }
 .ttt__cell--o {
-  color: var(--el-color-danger);
+    color: var(--el-color-danger);
 }
 .ttt__foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 .ttt__mark {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
 }
 </style>

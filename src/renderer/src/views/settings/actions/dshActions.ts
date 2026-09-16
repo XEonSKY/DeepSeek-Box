@@ -1,4 +1,5 @@
 import { ElMessage } from 'element-plus'
+import { errorMessage } from '@shared/errors'
 import type { SettingsState } from '../settingsStore'
 
 /**
@@ -39,7 +40,7 @@ export function createDshActions(state: SettingsState): DshActions {
         try {
             await window.api.post('/dsh/start')
         } catch (err) {
-            ElMessage.error(err instanceof Error ? err.message : String(err))
+            ElMessage.error(errorMessage(err))
         } finally {
             await refreshRunning()
         }
@@ -50,7 +51,7 @@ export function createDshActions(state: SettingsState): DshActions {
         try {
             await window.api.post('/dsh/stop')
         } catch (err) {
-            ElMessage.error(err instanceof Error ? err.message : String(err))
+            ElMessage.error(errorMessage(err))
         } finally {
             await refreshRunning()
         }
@@ -61,7 +62,7 @@ export function createDshActions(state: SettingsState): DshActions {
         try {
             await window.api.post('/dsh/restart')
         } catch (err) {
-            ElMessage.error(err instanceof Error ? err.message : String(err))
+            ElMessage.error(errorMessage(err))
         } finally {
             await refreshRunning()
         }

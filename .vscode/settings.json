@@ -1,83 +1,81 @@
 {
-  "files.encoding": "utf8",
-  "files.eol": "\n",
-  "files.trimTrailingWhitespace": true,
-  "files.insertFinalNewline": true,
-  "editor.detectIndentation": false,
-  "editor.tabSize": 4,
-  "editor.insertSpaces": true,
-  "editor.rulers": [
-    120
-  ],
-  "editor.formatOnSave": false,
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit"
-  },
-  "eslint.useFlatConfig": true,
-  "eslint.validate": [
-    "javascript",
-    "typescript",
-    "vue"
-  ],
-  "eslint.workingDirectories": [
-    "."
-  ],
-  "typescript.tsdk": "node_modules/typescript/lib",
-  "typescript.enablePromptUseWorkspaceTsdk": true,
-  "files.exclude": {
-    "**/node_modules": true,
-    "**/out": true,
-    "**/dist": true,
-    "**/.vite": true,
-    "**/.vitepress/cache": true,
-    "**/.vitepress/dist": true
-  },
-  "explorer.fileNesting.enabled": true,
-  "explorer.fileNesting.expand": false,
-  "explorer.fileNesting.patterns": {
-    "package.json": "package-lock.json, pnpm-lock.yaml, yarn.lock, npm-shrinkwrap.json, .npmrc, .nvmrc, .node-version, dev-app-update.yml",
-    "tsconfig.json": "tsconfig.*.json, *.tsbuildinfo",
-    "electron.vite.config.ts": ".env, .env.*",
-    "eslint.config.mjs": ".eslintignore, .prettierrc, .prettierrc.*, .prettierignore, .editorconfig",
-    "README.md": "LICENSE, LICENSE.*, CHANGELOG.md, .gitignore, .gitattributes"
-  },
-  "files.watcherExclude": {
-    "**/node_modules/**": true,
-    "**/out/**": true,
-    "**/dist/**": true,
-    "**/.vitepress/cache/**": true,
-    "**/.vitepress/dist/**": true
-  },
-  "search.exclude": {
-    "**/node_modules": true,
-    "**/out": true,
-    "**/dist": true,
-    "**/.vitepress/cache": true,
-    "**/.vitepress/dist": true,
-    "**/package-lock.json": true
-  },
-  "[vue]": {
-    "editor.tabSize": 4
-  },
-  "[typescript]": {
-    "editor.tabSize": 4
-  },
-  "[typescriptreact]": {
-    "editor.tabSize": 4
-  },
-  "[javascript]": {
-    "editor.tabSize": 4
-  },
-  "[json]": {
-    "editor.tabSize": 2
-  },
-  "[jsonc]": {
-    "editor.tabSize": 2
-  },
-  "[yaml]": {
-    "editor.tabSize": 2
-  },
-  "[markdown]": {
-    "files.trimTrailingWhitespace": false
-  }
+    // ===== 文件与编码 =====
+    "files.encoding": "utf8",
+    "files.eol": "\n",
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+
+    // ===== 编辑器基础 =====
+    // 缩进统一 4 空格（与 .editorconfig、eslint.config.mjs 一致），
+    // 关闭自动探测，避免打开旧文件后被改写成 2 空格。
+    "editor.detectIndentation": false,
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.rulers": [120],
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+
+    // ===== ESLint =====
+    // 项目使用扁平配置 eslint.config.mjs，新版扩展会自动识别，无需 useFlatConfig。
+    "eslint.validate": ["javascript", "typescript", "vue"],
+
+    // ===== TypeScript =====
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+
+    // ===== 资源管理器 =====
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.expand": false,
+    "explorer.fileNesting.patterns": {
+        "package.json": "package-lock.json, skills-lock.json, .npmrc",
+        "tsconfig.json": "tsconfig.*.json, *.tsbuildinfo",
+        "electron.vite.config.ts": "eslint.config.mjs, .editorconfig, .env, .env.*",
+        "README.md": "README.*.md, LICENSE, LICENSE.*, .gitignore"
+    },
+
+    // ===== 隐藏/索引排除 =====
+    // .agents/temp 是 agent 的 npm 缓存与临时产物，体积大且无检索价值。
+    "files.exclude": {
+        "**/node_modules": true,
+        "**/out": true,
+        "**/dist": true,
+        "**/release": true,
+        "**/.vite": true,
+        "**/.vitepress/cache": true,
+        "**/.vitepress/dist": true,
+        "**/.agents/temp": true
+    },
+    "files.watcherExclude": {
+        "**/node_modules/**": true,
+        "**/out/**": true,
+        "**/dist/**": true,
+        "**/release/**": true,
+        "**/.vite/**": true,
+        "**/.vitepress/cache/**": true,
+        "**/.vitepress/dist/**": true,
+        "**/.agents/temp/**": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/out": true,
+        "**/dist": true,
+        "**/release": true,
+        "**/.vite": true,
+        "**/.vitepress/cache": true,
+        "**/.vitepress/dist": true,
+        "**/.agents/temp": true,
+        "**/package-lock.json": true
+    },
+
+    // ===== 按语言覆盖 =====
+    // 只保留与全局 4 空格不同的项：YAML 缩进敏感（见 .github/workflows），
+    // Markdown 允许尾随空格（换行语法）；JSON 亦为 4 空格，无需单列。
+    "[yaml]": {
+        "editor.tabSize": 2
+    },
+    "[markdown]": {
+        "files.trimTrailingWhitespace": false
+    }
 }

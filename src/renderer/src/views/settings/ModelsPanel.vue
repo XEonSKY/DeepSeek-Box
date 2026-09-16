@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ReloadOutlined, RobotFilled, SafetyCertificateFilled } from '@antdv-next/icons'
 import type { ModelBalanceInfo, ModelsInfo } from '@shared/types'
+import { errorMessage } from '@shared/errors'
 import { tt } from '../../lib/locales'
 import { useSettingsStore } from './useSettingsStore'
 
@@ -43,7 +44,7 @@ async function load(): Promise<void> {
     } catch (err) {
         if (seq !== loadSeq) return
         info.value = null
-        loadError.value = err instanceof Error ? err.message : String(err)
+        loadError.value = errorMessage(err)
     } finally {
         if (seq === loadSeq) loading.value = false
     }
@@ -161,126 +162,126 @@ function balanceTitle(b: ModelBalanceInfo): string {
 /* 只留本组件专用规则；跨组件通用样式一律进 styles/*.css（见 AGENT.md §3 样式约定）。 */
 /* ---- 同意卡片 ---- */
 .mp__consent {
-  padding: 18px 18px 16px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 10px;
-  background: var(--el-bg-color);
+    padding: 18px 18px 16px;
+    border: 1px solid var(--el-border-color);
+    border-radius: 10px;
+    background: var(--el-bg-color);
 }
 .mp__consent-t {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
 }
 .mp__consent-t .el-icon {
-  color: var(--el-color-primary);
+    color: var(--el-color-primary);
 }
 .mp__consent-d {
-  margin: 10px 0 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--el-text-color-regular);
+    margin: 10px 0 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--el-text-color-regular);
 }
 .mp__path {
-  margin: 10px 0 0;
+    margin: 10px 0 0;
 }
 .mp__path code {
-  font-family: var(--el-font-family-mono);
-  font-size: 12px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-primary);
-  padding: 2px 8px;
-  border-radius: 6px;
+    font-family: var(--el-font-family-mono);
+    font-size: 12px;
+    background: var(--el-fill-color-light);
+    color: var(--el-text-color-primary);
+    padding: 2px 8px;
+    border-radius: 6px;
 }
 .mp__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
 }
 .mp__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 40px 16px;
-  border: 1px dashed var(--el-border-color);
-  border-radius: 10px;
-  color: var(--el-text-color-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 40px 16px;
+    border: 1px dashed var(--el-border-color);
+    border-radius: 10px;
+    color: var(--el-text-color-secondary);
 }
 .mp__empty-t {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
 }
 /* 工具栏：数量 + 刷新全部 */
 .mp__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
 }
 .mp__count {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
 }
 /* ---- 令牌列表：两列（供应商自适应 / 余额定宽），窄容器不撑横向滚动 ---- */
 .mp__list {
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  overflow: hidden;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 8px;
+    overflow: hidden;
 }
 .mp__head,
 .mp__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
 }
 .mp__head {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    background: var(--el-fill-color-light);
+    border-bottom: 1px solid var(--el-border-color-lighter);
 }
 .mp__tbody .mp__row + .mp__row {
-  border-top: 1px solid var(--el-border-color-lighter);
+    border-top: 1px solid var(--el-border-color-lighter);
 }
 .mp__tbody .mp__row:nth-child(even) {
-  background: var(--el-fill-color-lighter);
+    background: var(--el-fill-color-lighter);
 }
 .mp__c1,
 .mp__c2 {
-  display: flex;
-  align-items: center;
-  min-width: 0;
+    display: flex;
+    align-items: center;
+    min-width: 0;
 }
 .mp__c1 {
-  flex: 1 1 auto;
+    flex: 1 1 auto;
 }
 .mp__c2 {
-  flex: 0 0 170px;
-  justify-content: flex-end;
-  font-variant-numeric: tabular-nums;
+    flex: 0 0 170px;
+    justify-content: flex-end;
+    font-variant-numeric: tabular-nums;
 }
 /* 余额状态配色：正常用正文色，查不了用次要色，失败用警示色 */
 .mp__c2.is-ok {
-  color: var(--el-text-color-primary);
+    color: var(--el-text-color-primary);
 }
 .mp__c2.is-unsupported,
 .mp__c2.is-no-key {
-  color: var(--el-text-color-secondary);
+    color: var(--el-text-color-secondary);
 }
 .mp__c2.is-error {
-  color: var(--el-color-warning);
+    color: var(--el-color-warning);
 }
 .mp__ellip {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 </style>

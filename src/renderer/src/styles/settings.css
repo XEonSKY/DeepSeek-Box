@@ -14,473 +14,473 @@
 
 /* ---- 骨架 ---- */
 .settings {
-  display: flex;
-  height: 100%;
+    display: flex;
+    height: 100%;
 }
 /* 配色：页面 / 侧栏底色由「配色方案」决定（变量在 html 上，见 lib/theme.ts）。
-   这里保留明暗两套 fallback：变量还没写上去（脚本尚未执行）时也不会有白闪/黑闪。 */
+    这里保留明暗两套 fallback：变量还没写上去（脚本尚未执行）时也不会有白闪/黑闪。 */
 .settings {
-  background: var(--scheme-page-bg, #ffffff);
-  color: var(--el-text-color-primary);
+    background: var(--scheme-page-bg, #ffffff);
+    color: var(--el-text-color-primary);
 }
 .settings .side {
-  background: var(--scheme-side-bg, #f9fafb);
+    background: var(--scheme-side-bg, #f9fafb);
 }
 .settings .main {
-  background: transparent;
+    background: transparent;
 }
 /* 配色：深色（html.dark） */
 html.dark .settings {
-  background: var(--scheme-page-bg, #151517);
+    background: var(--scheme-page-bg, #151517);
 }
 html.dark .settings .side {
-  background: var(--scheme-side-bg, #1b1b1c);
+    background: var(--scheme-side-bg, #1b1b1c);
 }
 
 /* ---- 左侧导航 ---- */
 .settings .side {
-  flex: 0 0 280px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 16px 10px;
-  border-right: 1px solid var(--el-border-color-light);
-  overflow-y: auto;
+    flex: 0 0 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px 10px;
+    border-right: 1px solid var(--el-border-color-light);
+    overflow-y: auto;
 }
 .settings .side__cap {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  padding: 0 10px 8px;
-  letter-spacing: 1px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    padding: 0 10px 8px;
+    letter-spacing: 1px;
 }
 .settings .nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 .settings .nav__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--el-text-color-regular);
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--el-text-color-regular);
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
 }
 .settings .nav__item:hover {
-  background: var(--el-fill-color);
+    background: var(--el-fill-color);
 }
 .settings .nav__item.on {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-  font-weight: 600;
+    background: var(--el-color-primary-light-9);
+    color: var(--el-color-primary);
+    font-weight: 600;
 }
 .settings .nav__label {
-  line-height: 1.3;
+    line-height: 1.3;
 }
 
 /* ---- 右侧内容区 ---- */
 .settings .main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
 }
 .settings .main__scroll {
-  flex: 1 1 auto;
-  min-height: 0;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 .settings .main__scroll .el-scrollbar__view {
-  padding: 22px 24px 40px;
+    padding: 22px 24px 40px;
 }
 .settings .cols {
-  width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
 }
 
 /* ---- 正文分区：每个分组一个独立边框盒，组间留间距 ---- */
 .settings .el-collapse {
-  border: none;
-  background: transparent;
+    border: none;
+    background: transparent;
 }
 .settings .el-collapse-item {
-  border: 1px solid var(--el-border-color);
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--el-bg-color);
+    border: 1px solid var(--el-border-color);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--el-bg-color);
 }
 .settings .el-collapse-item + .el-collapse-item {
-  margin-top: 14px;
+    margin-top: 14px;
 }
 .settings .el-collapse-item__header {
-  padding: 13px 18px;
-  border-bottom: none;
-  font-size: 14px;
-  line-height: 1.3;
+    padding: 13px 18px;
+    border-bottom: none;
+    font-size: 14px;
+    line-height: 1.3;
 }
 .settings .el-collapse-item__header.is-active {
-  border-bottom: 1px solid var(--el-border-color);
+    border-bottom: 1px solid var(--el-border-color);
 }
 .settings .el-collapse-item__wrap {
-  border-bottom: none;
+    border-bottom: none;
 }
 .settings .el-collapse-item__content {
-  padding: 14px 18px 18px;
+    padding: 14px 18px 18px;
 }
 .settings .sec__title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
 }
 .settings .sec__title .el-icon {
-  color: var(--el-text-color-secondary);
+    color: var(--el-text-color-secondary);
 }
 
 /* 说明文字（原文件里有两份重复的 .settings .hint，后者逐条覆盖前者，已合并为一份） */
 .settings .hint {
-  width: 100%;
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--el-text-color-secondary);
+    width: 100%;
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-text-color-secondary);
 }
 /* 警示文字（环境页 / 快捷键页共用；≥2 个组件用 → 按 §3 规则放这里而非各自 scoped） */
 .settings .warn {
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--el-color-warning);
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-color-warning);
 }
 
 /* ---- 通用行：左侧说明 + 右侧动作 ---- */
 .settings .row {
-  display: flex;
-  gap: 8px;
-  width: 100%;
+    display: flex;
+    gap: 8px;
+    width: 100%;
 }
 .settings .num {
-  width: 160px;
+    width: 160px;
 }
 .settings .behav__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 /* ---- DSH 品牌 + 版本头 ---- */
 .settings .dsh-brand {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 22px 4px 26px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 22px 4px 26px;
 }
 .settings .dsh-brand__icon {
-  width: 64px;
-  height: 64px;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--el-color-primary);
+    width: 64px;
+    height: 64px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--el-color-primary);
 }
 .settings .dsh-brand__name {
-  font-size: 20px;
-  font-weight: 700;
+    font-size: 20px;
+    font-weight: 700;
 }
 .settings .dsh-brand__desc {
-  margin-top: 6px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--el-text-color-secondary);
+    margin-top: 6px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--el-text-color-secondary);
 }
 .settings .dsh-brand__ver {
-  position: relative;
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+    position: relative;
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--el-text-color-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 .settings .dsh-brand__ver code {
-  font-family: var(--el-font-family-mono);
-  color: var(--el-color-primary);
-  background: var(--el-fill-color-light);
-  padding: 1px 6px;
-  border-radius: 6px;
+    font-family: var(--el-font-family-mono);
+    color: var(--el-color-primary);
+    background: var(--el-fill-color-light);
+    padding: 1px 6px;
+    border-radius: 6px;
 }
 /* 应用版本彩蛋：点击爆炸粒子（来自 alpha 分支） */
 .settings .dsh-brand__ver code.app-ver {
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-  z-index: 1;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    z-index: 1;
 }
 .settings .dsh-brand__ver code.app-ver:hover {
-  background: var(--el-color-primary-light-8);
+    background: var(--el-color-primary-light-8);
 }
 .settings .kv-burst {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 2;
-  animation: kv-burst-fly 0.55s ease-out forwards;
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 2;
+    animation: kv-burst-fly 0.55s ease-out forwards;
 }
 @keyframes kv-burst-fly {
-  0% {
+    0% {
     transform: translate(-50%, -50%) scale(1);
     opacity: 1;
-  }
-  100% {
+    }
+    100% {
     transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.2);
     opacity: 0;
-  }
+    }
 }
 .settings .ver-tag {
-  font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums;
 }
 .settings .env-badge {
-  margin-left: 6px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-variant-numeric: tabular-nums;
+    margin-left: 6px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    background: var(--el-fill-color-light);
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
 }
 
 /* ---- DeepSeek Harness 页：应用（重启）区块 ---- */
 .settings .apply-sec {
-  margin-top: 4px;
+    margin-top: 4px;
 }
 .settings .apply-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 .settings .apply__txt {
-  flex: 1 1 auto;
-  min-width: 260px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--el-text-color-regular);
+    flex: 1 1 auto;
+    min-width: 260px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--el-text-color-regular);
 }
 
 /* ---- DeepSeek Harness 页：更新分组 ---- */
 .settings .kopt {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
 }
 .settings .au {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
 }
 .settings .au__txt {
-  flex: 1 1 auto;
+    flex: 1 1 auto;
 }
 .settings .au__t {
-  font-weight: 600;
-  margin-bottom: 4px;
+    font-weight: 600;
+    margin-bottom: 4px;
 }
 .settings .au__desc {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--el-text-color-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-text-color-secondary);
 }
 .settings .upd-sep {
-  height: 1px;
-  background: var(--el-border-color-lighter);
-  margin: 18px 0 16px;
+    height: 1px;
+    background: var(--el-border-color-lighter);
+    margin: 18px 0 16px;
 }
 .settings .dsh-update {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 .settings .dsh-update__text {
-  flex: 1 1 auto;
-  min-width: 240px;
+    flex: 1 1 auto;
+    min-width: 240px;
 }
 .settings .dsh-update__title {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  margin-bottom: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    margin-bottom: 4px;
 }
 .settings .dsh-update__desc {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--el-text-color-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-text-color-secondary);
 }
 .settings .dsh-update__desc code {
-  font-family: var(--el-font-family-mono);
-  background: var(--el-fill-color-light);
-  padding: 0 4px;
-  border-radius: 4px;
+    font-family: var(--el-font-family-mono);
+    background: var(--el-fill-color-light);
+    padding: 0 4px;
+    border-radius: 4px;
 }
 .settings .dsh-update__actions {
-  flex: 0 0 auto;
-  display: flex;
-  gap: 8px;
-  align-items: center;
+    flex: 0 0 auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 .settings .au-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 .settings .au-note {
-  margin: 8px 0 6px;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
+    margin: 8px 0 6px;
+    font-size: 13px;
+    color: var(--el-text-color-secondary);
 }
 
 /* ---- DeepSeek Harness 页：版本管理 ---- */
 .settings .vm-row {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-  align-items: center;
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    align-items: center;
 }
 .settings .vm-sel {
-  flex: 1 1 auto;
-  min-width: 0;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 .settings .vm-un {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-top: 14px;
-  padding-top: 16px;
-  border-top: 1px solid var(--el-border-color-lighter);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+    padding-top: 16px;
+    border-top: 1px solid var(--el-border-color-lighter);
 }
 .settings .vm-un__txt {
-  flex: 1 1 auto;
-  min-width: 240px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--el-text-color-secondary);
+    flex: 1 1 auto;
+    min-width: 240px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--el-text-color-secondary);
 }
 .settings .vm-un__txt code {
-  font-family: var(--el-font-family-mono);
-  background: var(--el-fill-color-light);
-  padding: 0 4px;
-  border-radius: 4px;
+    font-family: var(--el-font-family-mono);
+    background: var(--el-fill-color-light);
+    padding: 0 4px;
+    border-radius: 4px;
 }
 
 /* ---- 常规页：恢复默认 ---- */
 .settings .reset-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 .settings .reset__txt {
-  flex: 1 1 auto;
-  min-width: 260px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--el-text-color-regular);
+    flex: 1 1 auto;
+    min-width: 260px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--el-text-color-regular);
 }
 
 /* ---- 关于页：更新检查结果 ---- */
 .settings .about-result {
-  margin-top: 18px;
+    margin-top: 18px;
 }
 
 /* ---- 环境 / DeepSeek Harness 页：已安装版本列表（自绘，两处共用） ----
-   不用 el-table：只有三列、行内按钮还要带 loading，手写 flex 行更轻，列宽也天然自适应
-   （版本列 flex:1 吃掉富余宽度，状态 / 操作列固定，窄容器下不会撑出横向滚动）。 */
+    不用 el-table：只有三列、行内按钮还要带 loading，手写 flex 行更轻，列宽也天然自适应
+    （版本列 flex:1 吃掉富余宽度，状态 / 操作列固定，窄容器下不会撑出横向滚动）。 */
 .settings .iv {
-  margin-top: 6px;
+    margin-top: 6px;
 }
 .settings .iv__title {
-  font-size: 13px;
-  color: var(--el-text-color-regular);
-  margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--el-text-color-regular);
+    margin-bottom: 6px;
 }
 .settings .iv__list {
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  overflow: hidden;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 8px;
+    overflow: hidden;
 }
 .settings .iv__thead,
 .settings .iv__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
 }
 .settings .iv__thead {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    background: var(--el-fill-color-light);
+    border-bottom: 1px solid var(--el-border-color-lighter);
 }
 .settings .iv__tbody .iv__row + .iv__row {
-  border-top: 1px solid var(--el-border-color-lighter);
+    border-top: 1px solid var(--el-border-color-lighter);
 }
 /* 斑马纹（等价于 el-table 的 stripe） */
 .settings .iv__tbody .iv__row:nth-child(even) {
-  background: var(--el-fill-color-lighter);
+    background: var(--el-fill-color-lighter);
 }
 .settings .iv__tbody .iv__row:hover {
-  background: var(--el-fill-color);
+    background: var(--el-fill-color);
 }
 /* 三列：版本自适应，状态 / 操作定宽，表头与数据行由此对齐 */
 .settings .iv__c1 {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
 }
 .settings .iv__c2 {
-  flex: 0 0 96px;
-  display: flex;
-  align-items: center;
+    flex: 0 0 96px;
+    display: flex;
+    align-items: center;
 }
 .settings .iv__c3 {
-  flex: 0 0 150px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
+    flex: 0 0 150px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
 }
 /* 按钮间距只用上面的 gap，抵掉 el-button 自带的相邻 margin */
 .settings .iv__c3 .el-button + .el-button {
-  margin-left: 0;
+    margin-left: 0;
 }
 .settings .iv__ver {
-  font-family: var(--el-font-family-mono);
-  color: var(--el-text-color-primary);
-  background: var(--el-fill-color-light);
-  padding: 1px 8px;
-  border-radius: 6px;
+    font-family: var(--el-font-family-mono);
+    color: var(--el-text-color-primary);
+    background: var(--el-fill-color-light);
+    padding: 1px 8px;
+    border-radius: 6px;
 }
 .settings .iv__dash {
-  color: var(--el-text-color-placeholder);
+    color: var(--el-text-color-placeholder);
 }

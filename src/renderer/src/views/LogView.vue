@@ -76,7 +76,7 @@ onMounted(async () => {
         fontSize: 13,
         lineHeight: 1.25,
         fontFamily:
-      "ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
+        "ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
         theme: themeOf(isDark())
     })
     fit = new FitAddon()
@@ -123,47 +123,47 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .log {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
 }
 .log__bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 6px 14px;
-  border-bottom: 1px solid var(--el-border-color-light);
-  font-size: 13px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--el-border-color-light);
+    font-size: 13px;
 }
 .meta {
-  color: var(--el-text-color-secondary);
+    color: var(--el-text-color-secondary);
 }
 .spacer {
-  flex: 1 1 auto;
+    flex: 1 1 auto;
 }
 .log__host {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-  padding: 4px 8px 8px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 4px 8px 8px;
 }
 /* xterm 画布铺满、不露白色底 */
 .log__host :deep(.xterm) {
-  height: 100%;
+    height: 100%;
 }
 .log__host :deep(.xterm-viewport) {
-  background: transparent !important;
+    background: transparent !important;
 }
 .placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--el-text-color-placeholder);
-  pointer-events: none;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--el-text-color-placeholder);
+    pointer-events: none;
 }
 </style>

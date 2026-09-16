@@ -6,6 +6,7 @@ import { ElMessage } from 'element-plus'
 import type { ConfigDirInfo, EnvProbe, NodeRuntimeKind, NpmSource, ProxyProtocol, ProxyScope } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { MIN_NODE_MAJOR, nodeMajor } from '@shared/version'
+import { errorMessage } from '@shared/errors'
 import { useAppIcon } from '../lib/appIcon'
 import { formatDownload } from '../lib/format'
 import ProxyFields from './ProxyFields.vue'
@@ -133,7 +134,7 @@ async function deployOnce(version?: string): Promise<boolean> {
         ElMessage.error(r.message)
         return false
     } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : String(err))
+        ElMessage.error(errorMessage(err))
         return false
     } finally {
         deployingNode.value = false
@@ -164,7 +165,7 @@ async function ensureNpmOnce(version?: string): Promise<boolean> {
         ElMessage.error(r.message)
         return false
     } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : String(err))
+        ElMessage.error(errorMessage(err))
         return false
     } finally {
         installingNpm.value = false
@@ -249,7 +250,7 @@ async function probeEnv(): Promise<void> {
     } catch (err) {
         // 探测失败不能静默：否则界面表现为「系统 Node / 系统 npm 全部灰掉」却给不出任何原因。
         envProbe.value = null
-        envError.value = err instanceof Error ? err.message : String(err)
+        envError.value = errorMessage(err)
     } finally {
         probingEnv.value = false
     }
@@ -323,7 +324,7 @@ async function persistWizard(): Promise<boolean> {
         })
         return true
     } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : String(err))
+        ElMessage.error(errorMessage(err))
         return false
     }
 }
@@ -345,7 +346,7 @@ async function performInstall(): Promise<boolean> {
         }
         return true
     } catch (err) {
-        installError.value = err instanceof Error ? err.message : String(err)
+        installError.value = errorMessage(err)
         return false
     }
 }
@@ -487,7 +488,7 @@ onMounted(() => {
             await probeEnv()
         } catch (err) {
             // 初始化失败必须让用户看见原因，否则只剩一个「选项全都不可用」的死界面
-            envError.value = err instanceof Error ? err.message : String(err)
+            envError.value = errorMessage(err)
         }
     })()
 })
@@ -808,337 +809,337 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .missing-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  display: flex;
-  /* safe center：卡片比窗口高时不再把顶部裁掉（加了网络设置后第 0 步明显变长）；
-     高度够用时表现与 center 完全一致。 */
-  align-items: safe center;
-  justify-content: center;
-  overflow: auto;
-  padding: 24px 0;
-  background: var(--el-bg-color);
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    /* safe center：卡片比窗口高时不再把顶部裁掉（加了网络设置后第 0 步明显变长）；
+        高度够用时表现与 center 完全一致。 */
+    align-items: safe center;
+    justify-content: center;
+    overflow: auto;
+    padding: 24px 0;
+    background: var(--el-bg-color);
 }
 .missing-card {
-  width: 560px;
-  max-width: calc(100% - 48px);
-  text-align: center;
+    width: 560px;
+    max-width: calc(100% - 48px);
+    text-align: center;
 }
 .missing-icon {
-  width: 84px;
-  height: 84px;
-  margin: 0 auto 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 22px;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+    width: 84px;
+    height: 84px;
+    margin: 0 auto 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 22px;
+    color: var(--el-color-primary);
+    background: var(--el-color-primary-light-9);
 }
 .missing-logo {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-  -webkit-user-drag: none;
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    -webkit-user-drag: none;
 }
 .missing-title {
-  margin: 0 0 10px;
-  font-size: 18px;
+    margin: 0 0 10px;
+    font-size: 18px;
 }
 .missing-desc {
-  margin: 0 0 18px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--el-text-color-secondary);
+    margin: 0 0 18px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--el-text-color-secondary);
 }
 .missing-reg {
-  width: 100%;
-  margin-bottom: 8px;
+    width: 100%;
+    margin-bottom: 8px;
 }
 .missing-opt {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: var(--el-text-color-regular);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--el-text-color-regular);
 }
 .missing-vrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 .missing-vrow .missing-reg {
-  flex: 1 1 auto;
-  margin-bottom: 0;
+    flex: 1 1 auto;
+    margin-bottom: 0;
 }
 .missing-err {
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--el-color-danger);
-  word-break: break-all;
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-color-danger);
+    word-break: break-all;
 }
 /* ---- 首次安装引导 ---- */
 .wiz-steps {
-  margin: 6px 0 18px;
-  --el-step-title-font-size: 13px;
+    margin: 6px 0 18px;
+    --el-step-title-font-size: 13px;
 }
 .wiz-body {
-  text-align: left;
-  min-height: 170px;
+    text-align: left;
+    min-height: 170px;
 }
 .wiz-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 /* 探测/初始化失败提示：与字段同宽，左对齐，重试按钮跟在文字后面 */
 .wiz-err {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--el-color-danger-light-5);
-  background: var(--el-color-danger-light-9);
-  color: var(--el-color-danger);
-  font-size: 12px;
-  line-height: 1.6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--el-color-danger-light-5);
+    background: var(--el-color-danger-light-9);
+    color: var(--el-color-danger);
+    font-size: 12px;
+    line-height: 1.6;
 }
 .wiz-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 .wiz-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--el-text-color-regular);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--el-text-color-regular);
 }
 .wiz-hint {
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--el-text-color-secondary);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--el-text-color-secondary);
 }
 .wiz-note {
-  margin: 10px 0 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--el-text-color-secondary);
-  text-align: left;
+    margin: 10px 0 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--el-text-color-secondary);
+    text-align: left;
 }
 .wiz-active {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 .npm-opts {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
 }
 .nr-opts {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
 }
 .nr-opts .el-radio {
-  height: auto;
-  white-space: normal;
-  margin-right: 0;
+    height: auto;
+    white-space: normal;
+    margin-right: 0;
 }
 .nr-local {
-  margin-top: 2px;
-  padding: 10px 12px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: var(--el-border-radius-base);
-  background: var(--el-fill-color-light);
+    margin-top: 2px;
+    padding: 10px 12px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: var(--el-border-radius-base);
+    background: var(--el-fill-color-light);
 }
 .deploy-progress {
-  width: 100%;
+    width: 100%;
 }
 .muted {
-  color: var(--el-text-color-disabled);
-  font-size: 12px;
+    color: var(--el-text-color-disabled);
+    font-size: 12px;
 }
 .wiz-btn-row {
-  display: flex;
-  gap: 10px;
+    display: flex;
+    gap: 10px;
 }
 .wiz-nav {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--el-border-color-lighter);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--el-border-color-lighter);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 .wiz-nav__right {
-  display: flex;
-  gap: 10px;
+    display: flex;
+    gap: 10px;
 }
 .cfg-row {
-  display: flex;
-  gap: 8px;
+    display: flex;
+    gap: 8px;
 }
 .cfg-row .el-input {
-  flex: 1 1 auto;
+    flex: 1 1 auto;
 }
 .node-ver {
-  font-family: var(--el-font-family-mono);
-  font-size: 13px;
-  background: var(--el-fill-color-light);
-  padding: 2px 6px;
-  border-radius: 4px;
+    font-family: var(--el-font-family-mono);
+    font-size: 13px;
+    background: var(--el-fill-color-light);
+    padding: 2px 6px;
+    border-radius: 4px;
 }
 /* ---- 安装进度条（npm / DSH 活动条） ---- */
 .install-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
 }
 .activity {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 .activity__label {
-  flex: 0 0 auto;
-  font-size: 12px;
-  color: var(--el-text-color-regular);
-  white-space: nowrap;
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: var(--el-text-color-regular);
+    white-space: nowrap;
 }
 .activity-bar {
-  position: relative;
-  flex: 1 1 auto;
-  height: 8px;
-  border-radius: 4px;
-  overflow: hidden;
-  background: var(--el-fill-color);
+    position: relative;
+    flex: 1 1 auto;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--el-fill-color);
 }
 .activity-bar::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 40%;
-  border-radius: 4px;
-  background: var(--el-color-primary);
-  animation: bar-slide 1.1s ease-in-out infinite;
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 40%;
+    border-radius: 4px;
+    background: var(--el-color-primary);
+    animation: bar-slide 1.1s ease-in-out infinite;
 }
 @keyframes bar-slide {
-  0% {
+    0% {
     left: -40%;
-  }
-  100% {
+    }
+    100% {
     left: 100%;
-  }
+    }
 }
 /* ---- 右上角入口 + 全屏面板 ---- */
 .wiz-top {
-  position: absolute;
-  top: 12px;
-  right: 18px;
-  z-index: 2001;
-  display: flex;
-  gap: 8px;
+    position: absolute;
+    top: 12px;
+    right: 18px;
+    z-index: 2001;
+    display: flex;
+    gap: 8px;
 }
 /* 全屏面板（代理设置）：与全屏日志同构，只是内容是表单而不是等宽文本 */
 .net-full {
-  position: fixed;
-  inset: 0;
-  z-index: 3000;
-  display: flex;
-  flex-direction: column;
-  background: var(--el-bg-color);
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    background: var(--el-bg-color);
 }
 .net-full__head {
-  flex: 0 0 auto;
-  height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--el-border-color-light);
+    flex: 0 0 auto;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--el-border-color-light);
 }
 .net-full__title {
-  font-weight: 600;
-  font-size: 15px;
+    font-weight: 600;
+    font-size: 15px;
 }
 /* 表单在宽屏下限宽居中，避免输入框被拉成一整行 */
 .net-full__body {
-  flex: 1 1 auto;
-  overflow: auto;
-  width: 100%;
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 20px 24px 28px;
+    flex: 1 1 auto;
+    overflow: auto;
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 20px 24px 28px;
 }
 .net-full__body :deep(.el-form-item) {
-  margin-bottom: 14px;
+    margin-bottom: 14px;
 }
 .net-full__body :deep(.el-form-item__label) {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--el-text-color-regular);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--el-text-color-regular);
 }
 /* ---- 全屏安装日志 ---- */
 .log-full {
-  position: fixed;
-  inset: 0;
-  z-index: 3000;
-  display: flex;
-  flex-direction: column;
-  background: var(--el-bg-color);
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    background: var(--el-bg-color);
 }
 .log-full__head {
-  flex: 0 0 auto;
-  height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--el-border-color-light);
+    flex: 0 0 auto;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--el-border-color-light);
 }
 .log-full__title {
-  font-weight: 600;
-  font-size: 15px;
+    font-weight: 600;
+    font-size: 15px;
 }
 .log-full__acts {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 .log-full__mini {
-  width: 180px;
+    width: 180px;
 }
 .log-full__body {
-  flex: 1 1 auto;
-  margin: 0;
-  overflow: auto;
-  padding: 12px 16px;
-  font-family: var(--el-font-family-mono);
-  font-size: 12.5px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--el-text-color-regular);
+    flex: 1 1 auto;
+    margin: 0;
+    overflow: auto;
+    padding: 12px 16px;
+    font-family: var(--el-font-family-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--el-text-color-regular);
 }
 /* ---- 过渡 ---- */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.18s ease;
+    transition: opacity 0.18s ease;
 }
 .fade-enter-from,
 .fade-leave-to {
-  opacity: 0;
+    opacity: 0;
 }
 </style>

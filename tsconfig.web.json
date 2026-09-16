@@ -1,28 +1,32 @@
 {
-  "compilerOptions": {
-    "composite": true,
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "jsx": "preserve",
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "useDefineForClassFields": true,
-    "outDir": "out/ts-web",
-    "paths": {
-      "@/*": ["./src/renderer/src/*"],
-      "@shared/*": ["./src/shared/*"]
-    }
-  },
-  "include": [
-    "src/renderer/src/**/*",
-    "src/renderer/src/**/*.vue",
-    "src/shared/**/*"
-  ]
+    "compilerOptions": {
+        "composite": true,
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "jsx": "preserve",
+        "types": ["vitest/globals"],
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "useDefineForClassFields": true,
+        "outDir": "out/ts-web",
+        "paths": {
+            "@/*": ["./src/renderer/src/*"],
+            "@shared/*": ["./src/shared/*"]
+        }
+    },
+    "include": [
+        "src/renderer/src/**/*",
+        "src/renderer/src/**/*.vue",
+        "src/shared/**/*"
+    ],
+    // 单元测试跑在 node 环境（要读文件系统、用到 process），由 tsconfig.node.json 负责，
+    // 这里排除掉，否则渲染层工程会因为缺 node 类型而报 TS2307。
+    "exclude": ["src/**/*.test.ts"]
 }

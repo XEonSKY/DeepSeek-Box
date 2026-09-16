@@ -65,6 +65,6 @@ const open = ref(['network-registry', 'network-proxy', 'network-download'])
 
 <style scoped>
 .reg {
-  width: 100%;
+    width: 100%;
 }
 </style>

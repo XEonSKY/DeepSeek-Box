@@ -84,29 +84,29 @@ function resetUa(): void {
 <style scoped>
 /* 只留本组件专用规则；跨组件通用样式一律进 styles/*.css（见 AGENT.md §3 样式约定）。 */
 .ua-actions {
-  margin-top: 8px;
+    margin-top: 8px;
 }
 /* UA 串很长：允许折行、等宽字体，别撑破面板 */
 .ua-cur {
-  margin-top: 6px;
+    margin-top: 6px;
 }
 .ua-cur__t {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  margin-bottom: 4px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    margin-bottom: 4px;
 }
 .ua-cur__t--top {
-  margin-top: 12px;
+    margin-top: 12px;
 }
 .ua-cur__v {
-  display: block;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--el-fill-color-light);
-  font-family: var(--el-font-family-mono);
-  font-size: 12px;
-  line-height: 1.6;
-  word-break: break-all;
-  color: var(--el-text-color-regular);
+    display: block;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--el-fill-color-light);
+    font-family: var(--el-font-family-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    word-break: break-all;
+    color: var(--el-text-color-regular);
 }
 </style>

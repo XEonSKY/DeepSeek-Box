@@ -275,122 +275,122 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .whost {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 /* 导航栏 */
 .wb-nav {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--el-border-color-light);
-  background: var(--el-fill-color-blank);
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--el-border-color-light);
+    background: var(--el-fill-color-blank);
 }
 .wn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--el-text-color-regular);
-  cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--el-text-color-regular);
+    cursor: pointer;
 }
 .wn:hover:not(:disabled) {
-  background: var(--el-fill-color);
-  color: var(--el-color-primary);
+    background: var(--el-fill-color);
+    color: var(--el-color-primary);
 }
 .wn:disabled {
-  color: var(--el-text-color-placeholder);
-  cursor: default;
+    color: var(--el-text-color-placeholder);
+    cursor: default;
 }
 .wn-addr {
-  flex: 1 1 auto;
-  min-width: 0;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 /* 内容舞台 */
 .wb-stage {
-  flex: 1 1 auto;
-  min-height: 0;
-  position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
 }
 /* 顶部加载进度条：贴内容区上沿的一条细线，加载时淡入、结束后补满淡出 */
 .whost__progress {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  z-index: 6;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.25s ease;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 6;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s ease;
 }
 .whost__progress.on {
-  opacity: 1;
+    opacity: 1;
 }
 .whost__progress-bar {
-  height: 100%;
-  width: 0;
-  background: var(--el-color-primary);
-  transition: width 0.18s ease-out;
+    height: 100%;
+    width: 0;
+    background: var(--el-color-primary);
+    transition: width 0.18s ease-out;
 }
 .whost__pane {
-  position: absolute;
-  inset: 0;
-  /* 隐藏非激活页，避免各标签页内容叠穿；用 visibility 而非 display:none，
-     使 webview 保持存活。切回时不再重载的关键是不去重设其 src（见 useWebviews）。 */
-  visibility: hidden;
+    position: absolute;
+    inset: 0;
+    /* 隐藏非激活页，避免各标签页内容叠穿；用 visibility 而非 display:none，
+        使 webview 保持存活。切回时不再重载的关键是不去重设其 src（见 useWebviews）。 */
+    visibility: hidden;
 }
 .whost__pane.on {
-  visibility: visible;
+    visibility: visible;
 }
 .whost__holder {
-  position: absolute;
-  inset: 0;
-  display: flex;
+    position: absolute;
+    inset: 0;
+    display: flex;
 }
 .whost__wait {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--el-color-primary);
-  pointer-events: none;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--el-color-primary);
+    pointer-events: none;
 }
 /* 等待超时的失败态：必须重新开启 pointer-events，否则里面的「重试」按钮点不动 */
 .whost__timeout {
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  max-width: 420px;
-  padding: 16px 20px;
-  border-radius: 10px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-bg-color-overlay);
-  box-shadow: var(--el-box-shadow-light);
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    max-width: 420px;
+    padding: 16px 20px;
+    border-radius: 10px;
+    border: 1px solid var(--el-border-color-lighter);
+    background: var(--el-bg-color-overlay);
+    box-shadow: var(--el-box-shadow-light);
 }
 .whost__timeout-txt {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--el-text-color-regular);
-  text-align: center;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--el-text-color-regular);
+    text-align: center;
 }
 .spin {
-  animation: rot 1s linear infinite;
+    animation: rot 1s linear infinite;
 }
 @keyframes rot {
-  to {
+    to {
     transform: rotate(360deg);
-  }
+    }
 }
 </style>

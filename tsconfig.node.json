@@ -1,27 +1,32 @@
 {
-  "compilerOptions": {
-    "composite": true,
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "lib": ["ES2022"],
-    "types": ["node"],
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "outDir": "out/ts-node",
-    "paths": {
-      "@shared/*": ["./src/shared/*"]
-    }
-  },
-  "include": [
-    "electron.vite.config.ts",
-    "src/main/**/*",
-    "src/preload/**/*",
-    "src/shared/**/*"
-  ]
+    "compilerOptions": {
+        "composite": true,
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "lib": ["ES2022"],
+        "types": ["node", "vitest/globals"],
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "outDir": "out/ts-node",
+        "paths": {
+            "@shared/*": ["./src/shared/*"],
+            "@/*": ["./src/renderer/src/*"]
+        }
+    },
+    "include": [
+        "electron.vite.config.ts",
+        "src/main/**/*",
+        "src/preload/**/*",
+        "src/shared/**/*",
+        // 渲染层的纯函数测试（如 lib/format.test.ts）也跑在 node 环境，
+        // 由本工程负责类型检查；被测源码必须一并列出，否则 composite 工程会报 TS6307。
+        "src/renderer/src/lib/format.ts",
+        "src/renderer/src/**/*.test.ts"
+    ]
 }

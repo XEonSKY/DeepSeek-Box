@@ -3,10 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AppstoreOutlined, DeploymentUnitOutlined, DownloadOutlined, LinkOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { InstalledVersions, NodeRuntimeKind, NodeStatus, NpmRuntimeStatus, NpmSource, NpmStatus } from '@shared/types'
-import { MIN_NODE_MAJOR, nodeMajor } from '@shared/version'
+import { MIN_NODE_MAJOR, nodeMajor, withV } from '@shared/version'
+import { errorMessage } from '@shared/errors'
 import { tt } from '../../lib/locales'
 import { formatDownload } from '../../lib/format'
 import { useSettingsStore } from './useSettingsStore'
+import { useInstallCancel } from './useInstallCancel'
 
 /**
  * 「环境」页：Node 运行时（三个来源）与各自的版本情况。
@@ -115,12 +117,6 @@ onBeforeUnmount(() => {
     offNodeProgress?.()
     offNpmProgress?.()
 })
-
-/** 统一显示成带 v 前缀：`process.versions.node` 不带 v，`node --version` 带。 */
-function withV(v: string | null | undefined): string {
-    if (!v) return '—'
-    return v.startsWith('v') ? v : `v${v}`
-}
 
 /** 探测未完成时统一显示省略号，而不是「未检测到」。 */
 const PENDING = '…'
@@ -257,7 +253,7 @@ async function installNode(version?: string): Promise<void> {
             else ElMessage.error(r.message || tt('sv.env.deployFail'))
         }
     } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : String(err))
+        ElMessage.error(errorMessage(err))
     } finally {
         deploying.value = false
         // 先重启 dsh，再刷新状态 —— 否则刚部署的 Node 可能正被 dsh 用着，版本读不准。
@@ -268,21 +264,7 @@ async function installNode(version?: string): Promise<void> {
     }
 }
 
-/** 取消按钮的进行中状态（Node / npm / dsh 通用）。 */
-const canceling = ref(false)
-
-/** 取消正在进行的安装（下载与解压阶段生效）。 */
-async function cancelInstall(): Promise<void> {
-    if (canceling.value) return
-    canceling.value = true
-    try {
-        await window.api.post('/installs/cancel')
-    } catch {
-        /* 取消失败无需打扰用户 */
-    } finally {
-        canceling.value = false
-    }
-}
+const { canceling, cancelInstall } = useInstallCancel()
 
 // ---- 已安装版本：多版本并存，列表行内切换 / 删除 ----------------------------
 
@@ -327,7 +309,7 @@ async function switchInstalled(kind: 'node' | 'npm', version: string): Promise<v
             ElMessage.error(r.message || '')
         }
     } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : String(err))
+        ElMessage.error(errorMessage(err))
     } finally {
         switching.value = ''
     }
@@ -358,7 +340,7 @@ async function removeInstalled(kind: 'node' | 'npm', version: string): Promise<v
             ElMessage.error(r.message || '')
         }
     } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : String(err))
+        ElMessage.error(errorMessage(err))
     }
 }
 
@@ -478,7 +460,7 @@ async function installNpm(version?: string): Promise<void> {
             else ElMessage.error(r.message || tt('sv.env.npmFail'))
         }
     } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : String(err))
+        ElMessage.error(errorMessage(err))
     } finally {
         npmInstalling.value = false
         await loadNpmStatus()
@@ -811,33 +793,33 @@ async function installNpm(version?: string): Promise<void> {
 
 <style scoped>
 .dep-info {
-  margin-top: 4px;
-  font-variant-numeric: tabular-nums;
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
 }
 /* 只留本组件专用规则；跨组件通用样式一律进 styles/*.css（见 AGENT.md §3 样式约定）。 */
 .kv {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 5px 0;
-  font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 13px;
 }
 .kv__k {
-  flex: 0 0 auto;
-  min-width: 150px;
-  color: var(--el-text-color-secondary);
+    flex: 0 0 auto;
+    min-width: 150px;
+    color: var(--el-text-color-secondary);
 }
 .kv__v {
-  font-family: var(--el-font-family-mono);
-  color: var(--el-text-color-primary);
-  background: var(--el-fill-color-light);
-  padding: 1px 8px;
-  border-radius: 6px;
+    font-family: var(--el-font-family-mono);
+    color: var(--el-text-color-primary);
+    background: var(--el-fill-color-light);
+    padding: 1px 8px;
+    border-radius: 6px;
 }
 .act {
-  margin-top: 14px;
+    margin-top: 14px;
 }
 .dep-progress {
-  margin-top: 14px;
+    margin-top: 14px;
 }
 </style>

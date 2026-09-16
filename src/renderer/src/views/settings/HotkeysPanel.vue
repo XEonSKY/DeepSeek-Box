@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useEventListener } from '@vueuse/core'
 import { ControlOutlined, DeleteOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
 import { DEFAULT_SETTINGS } from '@shared/types'
@@ -38,8 +39,10 @@ const ROWS: Array<{ field: HotkeyField; labelKey: string; hintKey: string; globa
 
 const open = ref(['hotkeys'])
 
+// 录制按键：捕获阶段 + 组件作用域自动解绑（原来是 onMounted/onBeforeUnmount 成对手写）。
+useEventListener(window, 'keydown', onKeydown, { capture: true })
+
 onMounted(async () => {
-    window.addEventListener('keydown', onKeydown, true)
     offState = window.api.on('hotkey:state', (s) => {
         globalState.value = s
     })
@@ -51,7 +54,6 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-    window.removeEventListener('keydown', onKeydown, true)
     offState?.()
 })
 
@@ -152,53 +154,53 @@ const globalFailed = computed(() => state.hotkeyFocusWindow !== '' && globalStat
 <style scoped>
 /* 只留本组件专用规则；跨组件通用样式一律进 styles/*.css（见 AGENT.md §3 样式约定）。 */
 .hk {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 12px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 12px 0;
 }
 .hk + .hk {
-  border-top: 1px solid var(--el-border-color-lighter);
+    border-top: 1px solid var(--el-border-color-lighter);
 }
 .hk__txt {
-  flex: 1 1 auto;
-  min-width: 240px;
+    flex: 1 1 auto;
+    min-width: 240px;
 }
 .hk__t {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  margin-bottom: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    margin-bottom: 4px;
 }
 .hk__desc {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--el-text-color-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-text-color-secondary);
 }
 .hk__keys {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 .hk__kbd {
-  min-width: 118px;
-  padding: 3px 10px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  background: var(--el-fill-color-light);
-  font-family: var(--el-font-family-mono);
-  font-size: 12px;
-  text-align: center;
-  color: var(--el-text-color-primary);
+    min-width: 118px;
+    padding: 3px 10px;
+    border: 1px solid var(--el-border-color);
+    border-radius: 6px;
+    background: var(--el-fill-color-light);
+    font-family: var(--el-font-family-mono);
+    font-size: 12px;
+    text-align: center;
+    color: var(--el-text-color-primary);
 }
 /* 录制态：给出明显的视觉反馈，否则用户不知道程序在等按键 */
 .hk__kbd--rec {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
+    border-color: var(--el-color-primary);
+    background: var(--el-color-primary-light-9);
+    color: var(--el-color-primary);
 }
 </style>

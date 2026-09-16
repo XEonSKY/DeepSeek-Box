@@ -12,7 +12,7 @@ const REPO = 'https://github.com/XEonSKY/DeepSeek-Box'
 // 顶层只放各语言共用的 search / socialLinks。
 
 const zhUser = [
-  { text: '用户文档', items: [
+    { text: '用户文档', items: [
     { text: '总览', link: '/zh/user/' },
     { text: '下载与系统要求', link: '/zh/user/download' },
     { text: '快速开始', link: '/zh/user/quickstart' },
@@ -23,11 +23,11 @@ const zhUser = [
     { text: '模型', link: '/zh/user/models' },
     { text: '应用更新与回退', link: '/zh/user/update' },
     { text: '常见问题', link: '/zh/user/faq' }
-  ] }
+    ] }
 ]
 
 const zhDev = [
-  { text: '开发文档', items: [
+    { text: '开发文档', items: [
     { text: '总览', link: '/zh/dev/' },
     { text: '开发环境与命令', link: '/zh/dev/setup' },
     { text: '架构总览', link: '/zh/dev/architecture' },
@@ -39,11 +39,11 @@ const zhDev = [
     { text: '应用自更新', link: '/zh/dev/app-update' },
     { text: '构建与发布', link: '/zh/dev/release' },
     { text: '开发约定', link: '/zh/dev/conventions' }
-  ] }
+    ] }
 ]
 
 const enUser = [
-  { text: 'User guide', items: [
+    { text: 'User guide', items: [
     { text: 'Overview', link: '/en/user/' },
     { text: 'Download & requirements', link: '/en/user/download' },
     { text: 'Quick start', link: '/en/user/quickstart' },
@@ -54,11 +54,11 @@ const enUser = [
     { text: 'Models', link: '/en/user/models' },
     { text: 'App updates & rollback', link: '/en/user/update' },
     { text: 'FAQ', link: '/en/user/faq' }
-  ] }
+    ] }
 ]
 
 const enDev = [
-  { text: 'Developer guide', items: [
+    { text: 'Developer guide', items: [
     { text: 'Overview', link: '/en/dev/' },
     { text: 'Setup & commands', link: '/en/dev/setup' },
     { text: 'Architecture', link: '/en/dev/architecture' },
@@ -70,32 +70,32 @@ const enDev = [
     { text: 'App self-update', link: '/en/dev/app-update' },
     { text: 'Build & release', link: '/en/dev/release' },
     { text: 'Conventions', link: '/en/dev/conventions' }
-  ] }
+    ] }
 ]
 
 const zhNav = [
-  { text: '首页', link: '/zh/' },
-  { text: '用户文档', link: '/zh/user/', activeMatch: '/zh/user/' },
-  { text: '开发文档', link: '/zh/dev/', activeMatch: '/zh/dev/' },
-  { text: '下载', link: '/zh/user/download' }
+    { text: '首页', link: '/zh/' },
+    { text: '用户文档', link: '/zh/user/', activeMatch: '/zh/user/' },
+    { text: '开发文档', link: '/zh/dev/', activeMatch: '/zh/dev/' },
+    { text: '下载', link: '/zh/user/download' }
 ]
 
 const enNav = [
-  { text: 'Home', link: '/en/' },
-  { text: 'User guide', link: '/en/user/', activeMatch: '/en/user/' },
-  { text: 'Developer guide', link: '/en/dev/', activeMatch: '/en/dev/' },
-  { text: 'Download', link: '/en/user/download' }
+    { text: 'Home', link: '/en/' },
+    { text: 'User guide', link: '/en/user/', activeMatch: '/en/user/' },
+    { text: 'Developer guide', link: '/en/dev/', activeMatch: '/en/dev/' },
+    { text: 'Download', link: '/en/user/download' }
 ]
 
 export default defineConfig({
-  title: 'DeepSeek Box',
-  description: 'DeepSeek Box —— 用户与开发文档',
-  cleanUrls: true,
-  lastUpdated: true,
-  // README.md 是仓库/站点维护说明，不属于用户文档，不进站点。
-  srcDir: 'docs',
-  srcExclude: ['README.md'],
-  head: [
+    title: 'DeepSeek Box',
+    description: 'DeepSeek Box —— 用户与开发文档',
+    cleanUrls: true,
+    lastUpdated: true,
+    // README.md 是仓库/站点维护说明，不属于用户文档，不进站点。
+    srcDir: 'docs',
+    srcExclude: ['README.md'],
+    head: [
     ['meta', { name: 'theme-color', content: '#0d1424' }],
     ['meta', { name: 'application-name', content: 'DeepSeek Box' }],
     ['meta', { property: 'og:type', content: 'website' }],
@@ -104,13 +104,13 @@ export default defineConfig({
     // 应用图标：由 resources/icon.png 复制为 docs/public/logo.png
     ['link', { rel: 'icon', type: 'image/png', href: '/logo.png' }],
     ['meta', { property: 'og:image', content: '/logo.png' }]
-  ],
-  locales: {
+    ],
+    locales: {
     zh: {
-      label: '简体中文',
-      lang: 'zh-CN',
-      link: '/zh/',
-      themeConfig: {
+        label: '简体中文',
+        lang: 'zh-CN',
+        link: '/zh/',
+        themeConfig: {
         nav: zhNav,
         // 左侧边栏：按路径前缀匹配，用户文档 / 开发文档各自一套
         sidebar: { '/zh/user/': zhUser, '/zh/dev/': zhDev },
@@ -124,48 +124,48 @@ export default defineConfig({
         langMenuLabel: '切换语言',
         skipToContentLabel: '跳到正文',
         notFound: {
-          title: '页面不存在',
-          quote: '你访问的页面可能已被移动或删除。',
-          linkLabel: '返回首页',
-          linkText: '回到首页'
+            title: '页面不存在',
+            quote: '你访问的页面可能已被移动或删除。',
+            linkLabel: '返回首页',
+            linkText: '回到首页'
         },
         docFooter: { prev: '上一页', next: '下一页' },
         lastUpdated: { text: '最后更新于', formatOptions: { dateStyle: 'short', timeStyle: 'short' } },
         editLink: { pattern: REPO + '/edit/main/docs/:path', text: '在 GitHub 上编辑此页' },
         footer: {
-          message: 'DeepSeek Box · 用户与开发文档',
-          copyright: 'Copyright © 2026 <a href="https://www.xeonsky.com/" target="_blank" rel="noopener">XEonSKY Studio</a>'
+            message: 'DeepSeek Box · 用户与开发文档',
+            copyright: 'Copyright © 2026 <a href="https://www.xeonsky.com/" target="_blank" rel="noopener">XEonSKY Studio</a>'
         }
-      }
+        }
     },
     en: {
-      label: 'English',
-      lang: 'en-US',
-      link: '/en/',
-      themeConfig: {
+        label: 'English',
+        lang: 'en-US',
+        link: '/en/',
+        themeConfig: {
         nav: enNav,
         // Left sidebar: one set per section, matched by path prefix
         sidebar: { '/en/user/': enUser, '/en/dev/': enDev },
         outline: { label: 'On this page', level: [2, 3] },
         notFound: {
-          title: 'Page not found',
-          quote: 'The page you are looking for might have been moved or deleted.',
-          linkLabel: 'Go to home',
-          linkText: 'Take me home'
+            title: 'Page not found',
+            quote: 'The page you are looking for might have been moved or deleted.',
+            linkLabel: 'Go to home',
+            linkText: 'Take me home'
         },
         docFooter: { prev: 'Previous', next: 'Next' },
         lastUpdated: { text: 'Last updated at', formatOptions: { dateStyle: 'short', timeStyle: 'short' } },
         editLink: { pattern: REPO + '/edit/main/docs/:path', text: 'Edit this page on GitHub' },
         footer: {
-          message: 'DeepSeek Box · User & developer docs',
-          copyright: 'Copyright © 2026 <a href="https://www.xeonsky.com/" target="_blank" rel="noopener">XEonSKY Studio</a>'
+            message: 'DeepSeek Box · User & developer docs',
+            copyright: 'Copyright © 2026 <a href="https://www.xeonsky.com/" target="_blank" rel="noopener">XEonSKY Studio</a>'
         }
-      }
+        }
     }
-  },
-  // 各语言共用的主题配置（会与 locales.<lang>.themeConfig 浅合并）
-  themeConfig: {
+    },
+    // 各语言共用的主题配置（会与 locales.<lang>.themeConfig 浅合并）
+    themeConfig: {
     search: { provider: 'local' },
     socialLinks: [{ icon: 'github', link: REPO }]
-  }
+    }
 })

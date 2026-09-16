@@ -343,308 +343,308 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .titlebar {
-  -webkit-app-region: drag;
-  flex: 0 0 auto;
-  height: var(--titlebar-h, 52px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  /* 左侧不留内边距，Logo 才能贴住窗口最左边缘 */
-  padding: 0 10px 0 0;
-  /* 下边框改用 inset 阴影画：不占布局高度，52×52 的 Logo 正好顶满标题栏 */
-  box-shadow: inset 0 -1px 0 var(--el-border-color-light);
-  background: var(--el-bg-color);
-  user-select: none;
+    -webkit-app-region: drag;
+    flex: 0 0 auto;
+    height: var(--titlebar-h, 52px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    /* 左侧不留内边距，Logo 才能贴住窗口最左边缘 */
+    padding: 0 10px 0 0;
+    /* 下边框改用 inset 阴影画：不占布局高度，52×52 的 Logo 正好顶满标题栏 */
+    box-shadow: inset 0 -1px 0 var(--el-border-color-light);
+    background: var(--el-bg-color);
+    user-select: none;
 }
 /* 动态标签页显示网址导航栏时，去掉标题栏下边框，使标题栏与网址栏无缝相连 */
 .titlebar--flush {
-  box-shadow: none;
+    box-shadow: none;
 }
 .left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
 }
 /* 品牌区：Logo + 标题成组，组内紧贴、与右侧快捷站保持间距 */
 .brand {
-  flex: 0 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+    flex: 0 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 /* Logo 独立元素：宽高随标题栏高度；图标本体固定 32px 居中 */
 .logo {
-  flex: 0 0 auto;
-  width: var(--titlebar-h, 52px);
-  height: var(--titlebar-h, 52px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    flex: 0 0 auto;
+    width: var(--titlebar-h, 52px);
+    height: var(--titlebar-h, 52px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .logo__img {
-  display: block;
-  width: 32px;
-  height: 32px;
-  /* 图标本身已是圆角白底；这里圆角与之一致（224/1024 × 32 ≈ 7px），避免二次裁切 */
-  border-radius: 7px;
-  object-fit: contain;
-  -webkit-user-drag: none;
+    display: block;
+    width: 32px;
+    height: 32px;
+    /* 图标本身已是圆角白底；这里圆角与之一致（224/1024 × 32 ≈ 7px），避免二次裁切 */
+    border-radius: 7px;
+    object-fit: contain;
+    -webkit-user-drag: none;
 }
 .title {
-  /* 允许收缩并省略：窄窗口下标题不挤占标签条 */
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 600;
-  font-size: 15px;
-  white-space: nowrap;
-  color: var(--el-text-color-primary);
+    /* 允许收缩并省略：窄窗口下标题不挤占标签条 */
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+    font-size: 15px;
+    white-space: nowrap;
+    color: var(--el-text-color-primary);
 }
 .right {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 /* 标题栏里的图标按钮可点不可拖；非按钮区域(分割线/空隙)随容器可拖 */
 .titlebar .icon-btn {
-  -webkit-app-region: no-drag;
+    -webkit-app-region: no-drag;
 }
 .divider {
-  width: 1px;
-  height: 22px;
-  background: var(--el-border-color-lighter);
-  margin: 0 6px;
+    width: 1px;
+    height: 22px;
+    background: var(--el-border-color-lighter);
+    margin: 0 6px;
 }
 /* 左侧快捷站与标签条之间的分割线：去掉右侧外边距，紧贴标签条 */
 .quick .divider {
-  margin-right: 0;
+    margin-right: 0;
 }
 .icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* 点击热区仍是 40×40，只把图标本身调小 —— antdv 图标按 1em 走，改 font-size 即可（见 AGENT.md §6）。 */
-  width: 40px;
-  height: 40px;
-  font-size: 18px;
-  border: none;
-  border-radius: var(--el-border-radius-base);
-  background: transparent;
-  color: var(--el-text-color-regular);
-  cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* 点击热区仍是 40×40，只把图标本身调小 —— antdv 图标按 1em 走，改 font-size 即可（见 AGENT.md §6）。 */
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    border: none;
+    border-radius: var(--el-border-radius-base);
+    background: transparent;
+    color: var(--el-text-color-regular);
+    cursor: pointer;
 }
 .icon-btn:hover {
-  background: var(--el-fill-color);
-  color: var(--el-color-primary);
+    background: var(--el-fill-color);
+    color: var(--el-color-primary);
 }
 .icon-btn.active {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+    color: var(--el-color-primary);
+    background: var(--el-color-primary-light-9);
 }
 .icon-btn.danger:hover {
-  background: var(--el-color-danger);
-  color: #fff;
+    background: var(--el-color-danger);
+    color: #fff;
 }
 .icon-btn.core-jump {
-  width: auto;
-  padding: 0 10px;
-  gap: 6px;
-  font-size: 13px;
+    width: auto;
+    padding: 0 10px;
+    gap: 6px;
+    font-size: 13px;
 }
 /* Windows 窗口控制字形（字体族由 TitleBar 内联注入，见 lib/winicons.ts 的 WIN_GLYPH_STACK）。
-   图标字体的字形自带留白，12px 才是 Windows 标题栏的观感；18px（.icon-btn 的 antdv 图标尺寸）会明显偏大。
-   行高锁 1 且不参与基线对齐，避免字形在 flex 居中的按钮里被推偏。 */
+    图标字体的字形自带留白，12px 才是 Windows 标题栏的观感；18px（.icon-btn 的 antdv 图标尺寸）会明显偏大。
+    行高锁 1 且不参与基线对齐，避免字形在 flex 居中的按钮里被推偏。 */
 .wglyph {
-  font-size: 12px;
-  line-height: 1;
-  font-weight: 400;
-  /* 图标字体只有 Regular 一档，禁止浏览器合成字形 */
-  font-synthesis: none;
+    font-size: 12px;
+    line-height: 1;
+    font-weight: 400;
+    /* 图标字体只有 Regular 一档，禁止浏览器合成字形 */
+    font-synthesis: none;
 }
 .core-jump__txt {
-  white-space: nowrap;
+    white-space: nowrap;
 }
 /* ---- 固定三站图标按钮区 + 浏览器标签条 ---- */
 .quick {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
 }
 .tabs {
-  /* 容器可拖窗口；空白（含标签少时右侧）即可拖动，多标签时原生横向滚动 */
-  -webkit-app-region: drag;
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+    /* 容器可拖窗口；空白（含标签少时右侧）即可拖动，多标签时原生横向滚动 */
+    -webkit-app-region: drag;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: thin;
 }
 .tab {
-  -webkit-app-region: no-drag;
-  flex: 0 1 auto;
-  min-width: 110px;
-  max-width: 230px;
-  height: 32px;
-  padding: 0 6px 0 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
+    -webkit-app-region: no-drag;
+    flex: 0 1 auto;
+    min-width: 110px;
+    max-width: 230px;
+    height: 32px;
+    padding: 0 6px 0 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--el-border-color);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
 }
 .tab:hover {
-  background: var(--el-fill-color);
+    background: var(--el-fill-color);
 }
 .tab.on {
-  background: var(--el-bg-color);
-  border-color: var(--el-color-primary);
-  color: var(--el-color-primary);
+    background: var(--el-bg-color);
+    border-color: var(--el-color-primary);
+    color: var(--el-color-primary);
 }
 .tab__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 /* 保活固定按钮（星标，点亮即保活且不计入名额） */
 .tab__pin {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--el-text-color-placeholder);
-  cursor: pointer;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--el-text-color-placeholder);
+    cursor: pointer;
 }
 .tab__pin:hover {
-  background: var(--el-fill-color);
-  color: var(--el-text-color-primary);
+    background: var(--el-fill-color);
+    color: var(--el-text-color-primary);
 }
 .tab__pin.on {
-  color: var(--el-color-warning);
+    color: var(--el-color-warning);
 }
 .tab__x {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--el-text-color-placeholder);
-  cursor: pointer;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--el-text-color-placeholder);
+    cursor: pointer;
 }
 .tab__x:hover {
-  background: var(--el-fill-color);
-  color: var(--el-text-color-primary);
+    background: var(--el-fill-color);
+    color: var(--el-text-color-primary);
 }
 .tab--add {
-  -webkit-app-region: no-drag;
-  flex: 0 0 auto;
-  min-width: 0; /* 覆盖 .tab 的 min-width，＋ 按钮不做最小宽度 */
-  padding: 0 8px;
+    -webkit-app-region: no-drag;
+    flex: 0 0 auto;
+    min-width: 0; /* 覆盖 .tab 的 min-width，＋ 按钮不做最小宽度 */
+    padding: 0 8px;
 }
 /* ---- 拖拽：正在拖的标签、本地插入位置、跨窗可接收遮罩、幽灵标签 ---- */
 .tab {
-  touch-action: none;
+    touch-action: none;
 }
 .tab.dragging {
-  opacity: 0.5;
+    opacity: 0.5;
 }
 .tab.slot {
-  box-shadow: -2px 0 0 0 var(--el-color-primary);
+    box-shadow: -2px 0 0 0 var(--el-color-primary);
 }
 /* 跨窗口拖拽时，目标窗口顶部的“可接收”浅蓝遮罩带 */
 .tab-drop-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 56px;
-  z-index: 60;
-  pointer-events: none;
-  /* 跟随「配色方案」的主色（原来写死 Element 蓝，换方案时会突兀地残留蓝色）。
-     color-mix(in srgb, X N%, transparent) 等价于 X 的 N% 透明度。 */
-  background: color-mix(in srgb, var(--el-color-primary) 16%, transparent);
-  border-bottom: 1px dashed color-mix(in srgb, var(--el-color-primary) 75%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 30%, transparent);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    z-index: 60;
+    pointer-events: none;
+    /* 跟随「配色方案」的主色（原来写死 Element 蓝，换方案时会突兀地残留蓝色）。
+        color-mix(in srgb, X N%, transparent) 等价于 X 的 N% 透明度。 */
+    background: color-mix(in srgb, var(--el-color-primary) 16%, transparent);
+    border-bottom: 1px dashed color-mix(in srgb, var(--el-color-primary) 75%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 30%, transparent);
 }
 /* 拖动时跟随指针的半透明幽灵标签 */
 .tab-ghost {
-  position: fixed;
-  z-index: 3000;
-  max-width: 240px;
-  padding: 5px 12px;
-  font-size: 13px;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* 半透明浮层：底色/文字跟随主题变量，深色下不再是一块刺眼的白药丸 */
-  background: var(--el-bg-color);
-  color: var(--el-text-color-primary);
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 60%, transparent);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  pointer-events: none;
-  opacity: 0.92;
+    position: fixed;
+    z-index: 3000;
+    max-width: 240px;
+    padding: 5px 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* 半透明浮层：底色/文字跟随主题变量，深色下不再是一块刺眼的白药丸 */
+    background: var(--el-bg-color);
+    color: var(--el-text-color-primary);
+    border: 1px solid color-mix(in srgb, var(--el-color-primary) 60%, transparent);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    pointer-events: none;
+    opacity: 0.92;
 }
 /* ---- 标签页右键菜单 ---- */
 .ctx-bk {
-  position: fixed;
-  inset: 0;
-  z-index: 3000;
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
 }
 .ctx {
-  position: fixed;
-  z-index: 3001;
-  min-width: 150px;
-  padding: 4px;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
-  background: var(--el-bg-color);
-  box-shadow: var(--el-box-shadow-light);
+    position: fixed;
+    z-index: 3001;
+    min-width: 150px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--el-border-color-light);
+    border-radius: 8px;
+    background: var(--el-bg-color);
+    box-shadow: var(--el-box-shadow-light);
 }
 .ctx button {
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  padding: 7px 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--el-text-color-regular);
-  cursor: pointer;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--el-text-color-regular);
+    cursor: pointer;
 }
 .ctx button:hover:not(:disabled) {
-  background: var(--el-fill-color);
+    background: var(--el-fill-color);
 }
 .ctx__sep {
-  height: 1px;
-  background: var(--el-border-color-lighter);
-  margin: 4px 0;
+    height: 1px;
+    background: var(--el-border-color-lighter);
+    margin: 4px 0;
 }
 </style>

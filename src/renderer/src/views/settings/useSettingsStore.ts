@@ -1,8 +1,10 @@
 import { reactive, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { defu } from 'defu'
 import { ElMessage } from 'element-plus'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import type { Settings, Theme } from '@shared/types'
+import { errorMessage } from '@shared/errors'
 import { applyTheme, applyColorScheme } from '../../lib/theme'
 import { tt } from '../../lib/locales'
 import { payloadFrom, type SettingsState, type SettingsActions } from './settingsStore'
@@ -68,44 +70,49 @@ export const useSettingsStore = defineStore('settings', () => {
     })
 
     function fillFrom(s: Settings): void {
-        state.workspace = s.workspace ?? ''
-        state.dshBin = s.dshBin ?? ''
-        state.timeoutMs = s.timeoutMs ?? DEFAULT_SETTINGS.timeoutMs
+        // 默认值填充交给 defu（与主进程 loadSettings 同一套语义）：36 个字段逐项手写
+        // `s.x ?? DEFAULT.x` 时，漏掉一项的表现是「设置页显示空值」，很难一眼看出来。
+        // 注意 `s` 来自主进程的完整 Settings（不存在 undefined 之外的缺失），故无需剔除 null。
+        const v = defu(s as Partial<Settings>, DEFAULT_SETTINGS)
+        state.workspace = v.workspace ?? ''
+        state.dshBin = v.dshBin ?? ''
+        state.timeoutMs = v.timeoutMs
         state.closeKeepRunning = s.closeToTray !== false
-        state.theme = s.theme ?? DEFAULT_SETTINGS.theme
+        state.theme = v.theme
         state.autoCheckUpdate = s.autoCheckUpdate !== false
         state.autoCheckPrerelease = s.checkPrerelease === true
-        state.npmRegistry = (s.npmRegistry ?? DEFAULT_SETTINGS.npmRegistry) as SettingsState['npmRegistry']
+        state.npmRegistry = v.npmRegistry as SettingsState['npmRegistry']
         state.appAutoUpdate = s.appAutoUpdate !== false
         state.appCheckPrerelease = s.appCheckPrerelease === true
         state.devMode = s.devMode === true
-        state.dshSource = s.dshSource ?? DEFAULT_SETTINGS.dshSource
-        state.nodeRuntime = s.nodeRuntime ?? DEFAULT_SETTINGS.nodeRuntime
-        state.npmSource = s.npmSource ?? DEFAULT_SETTINGS.npmSource
+        state.dshSource = v.dshSource
+        state.nodeRuntime = v.nodeRuntime
+        state.npmSource = v.npmSource
         state.proxyEnabled = s.proxyEnabled === true
-        state.proxyProtocol = s.proxyProtocol ?? DEFAULT_SETTINGS.proxyProtocol
-        state.proxyHost = s.proxyHost ?? DEFAULT_SETTINGS.proxyHost
-        state.proxyPort = s.proxyPort ?? DEFAULT_SETTINGS.proxyPort
-        state.proxyScope = Array.isArray(s.proxyScope) ? [...s.proxyScope] : [...DEFAULT_SETTINGS.proxyScope]
-        state.downloadThreads = s.downloadThreads ?? DEFAULT_SETTINGS.downloadThreads
-        state.zoomPercent = s.zoomPercent ?? DEFAULT_SETTINGS.zoomPercent
+        state.proxyProtocol = v.proxyProtocol
+        state.proxyHost = v.proxyHost
+        state.proxyPort = v.proxyPort ?? null
+        // 这两个字段要以**新数组**写回 state（defu 会把默认值数组原地合并），否则会改到 DEFAULT_SETTINGS
+        state.proxyScope = Array.isArray(v.proxyScope) ? [...v.proxyScope] : [...DEFAULT_SETTINGS.proxyScope]
+        state.downloadThreads = v.downloadThreads
+        state.zoomPercent = v.zoomPercent
         state.ignoreSystemScale = s.ignoreSystemScale === true
-        state.funLocale = s.funLocale ?? DEFAULT_SETTINGS.funLocale
-        state.searchEngine = s.searchEngine ?? DEFAULT_SETTINGS.searchEngine
-        state.newTabMode = s.newTabMode ?? DEFAULT_SETTINGS.newTabMode
-        state.newTabUrl = s.newTabUrl ?? ''
-        state.shortcuts = Array.isArray(s.shortcuts)
-            ? s.shortcuts.map((sc) => ({ title: sc.title || '', url: sc.url || '' }))
+        state.funLocale = v.funLocale
+        state.searchEngine = v.searchEngine
+        state.newTabMode = v.newTabMode
+        state.newTabUrl = v.newTabUrl ?? ''
+        state.shortcuts = Array.isArray(v.shortcuts)
+            ? v.shortcuts.map((sc) => ({ title: sc.title || '', url: sc.url || '' }))
             : [...DEFAULT_SETTINGS.shortcuts]
-        state.hotkeyFocusWindow = s.hotkeyFocusWindow ?? DEFAULT_SETTINGS.hotkeyFocusWindow
-        state.hotkeyToggleTerminal = s.hotkeyToggleTerminal ?? DEFAULT_SETTINGS.hotkeyToggleTerminal
-        state.hotkeyDevTools = s.hotkeyDevTools ?? DEFAULT_SETTINGS.hotkeyDevTools
+        state.hotkeyFocusWindow = v.hotkeyFocusWindow
+        state.hotkeyToggleTerminal = v.hotkeyToggleTerminal
+        state.hotkeyDevTools = v.hotkeyDevTools
         state.hardwareAcceleration = s.hardwareAcceleration !== false
         state.autoLaunch = s.autoLaunch === true
         state.openDshInBrowser = s.openDshInBrowser === true
-        state.webviewUserAgent = s.webviewUserAgent ?? DEFAULT_SETTINGS.webviewUserAgent
-        state.colorScheme = s.colorScheme ?? DEFAULT_SETTINGS.colorScheme
-        state.appIcon = s.appIcon ?? DEFAULT_SETTINGS.appIcon
+        state.webviewUserAgent = v.webviewUserAgent
+        state.colorScheme = v.colorScheme
+        state.appIcon = v.appIcon
         state.modelsCredConsent = s.modelsCredConsent === true
         if (typeof s.port === 'number' && s.port > 0) {
             state.portMode = 'manual'
@@ -131,7 +138,7 @@ export const useSettingsStore = defineStore('settings', () => {
             lastSaveAt = Date.now()
             await window.api.put('/settings', { body: payloadFrom(state) })
         } catch (err) {
-            ElMessage.error(tt('msg.saveFail', { err: err instanceof Error ? err.message : String(err) }))
+            ElMessage.error(tt('msg.saveFail', { err: errorMessage(err) }))
         }
     }
     function scheduleSave(): void {
@@ -163,7 +170,7 @@ export const useSettingsStore = defineStore('settings', () => {
             await window.api.post('/settings/apply')
             ElMessage.success(tt('msg.applyOk'))
         } catch (err) {
-            ElMessage.error(tt('msg.applyFail', { err: err instanceof Error ? err.message : String(err) }))
+            ElMessage.error(tt('msg.applyFail', { err: errorMessage(err) }))
         } finally {
             state.applying = false
         }
@@ -177,7 +184,7 @@ export const useSettingsStore = defineStore('settings', () => {
             await window.api.post('/settings/apply')
             ElMessage.success(tt('msg.resetOk'))
         } catch (err) {
-            ElMessage.error(tt('msg.resetFail', { err: err instanceof Error ? err.message : String(err) }))
+            ElMessage.error(tt('msg.resetFail', { err: errorMessage(err) }))
         }
     }
 

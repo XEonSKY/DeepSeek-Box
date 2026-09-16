@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useEventListener } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import { WalletOutlined } from '@antdv-next/icons'
 import type { CurrentBalanceInfo } from '@shared/types'
@@ -161,18 +162,17 @@ onMounted(async () => {
     }
     void refreshVersions()
     offSettings = window.api.on('settings:changed', (s) => applyConsent(s.modelsCredConsent === true))
-    document.addEventListener('visibilitychange', onForegroundChange)
-    window.addEventListener('focus', onForegroundChange)
-    window.addEventListener('blur', onForegroundChange)
 })
+
+// useEventListener 绑定当前组件作用域：组件卸载时自动解绑，不再需要成对的手写 remove。
+useEventListener(document, 'visibilitychange', onForegroundChange)
+useEventListener(window, 'focus', onForegroundChange)
+useEventListener(window, 'blur', onForegroundChange)
 
 onBeforeUnmount(() => {
     offSettings?.()
     offSettings = null
     stopTimer()
-    document.removeEventListener('visibilitychange', onForegroundChange)
-    window.removeEventListener('focus', onForegroundChange)
-    window.removeEventListener('blur', onForegroundChange)
 })
 
 /** 余额文案：金额，或查不了的原因。 */
@@ -291,137 +291,137 @@ const versionTitle = computed(() => (badge.value ? tt('sv.version.badge') : tt('
 
 <style scoped>
 .statusbar {
-  flex: 0 0 auto;
-  height: var(--statusbar-h, 24px);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 12px;
-  border-top: 1px solid var(--el-border-color-light);
-  background: var(--el-bg-color);
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1;
-  user-select: none;
+    flex: 0 0 auto;
+    height: var(--statusbar-h, 24px);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px;
+    border-top: 1px solid var(--el-border-color-light);
+    background: var(--el-bg-color);
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+    line-height: 1;
+    user-select: none;
 }
 /* 右侧信息组：整体靠右，内部保持固定间距 */
 .statusbar__right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
 }
 /* 状态栏项：整体可点击 */
 .statusbar__item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 2px 6px;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 2px 6px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
 }
 .statusbar__item:hover,
 .statusbar__item:focus-visible {
-  background: var(--el-fill-color);
-  color: var(--el-text-color-primary);
+    background: var(--el-fill-color);
+    color: var(--el-text-color-primary);
 }
 .statusbar__link {
-  color: var(--el-text-color-secondary);
+    color: var(--el-text-color-secondary);
 }
 .statusbar__provider {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .statusbar__amount {
-  color: var(--el-text-color-primary);
+    color: var(--el-text-color-primary);
 }
 /* 版本项：位置相对，便于放右上角徽标 */
 .statusbar__version {
-  position: relative;
+    position: relative;
 }
 .statusbar__sep {
-  color: var(--el-text-color-placeholder);
+    color: var(--el-text-color-placeholder);
 }
 /* 更新徽标：VS Code 式小红点（静默提示，不弹通知） */
 .statusbar__dot {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--el-color-danger);
-  box-shadow: 0 0 0 2px var(--el-bg-color);
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--el-color-danger);
+    box-shadow: 0 0 0 2px var(--el-bg-color);
 }
 /* 刷新中：钱包图标转动，给出「正在查询」的反馈 */
 .statusbar__item .is-spin {
-  animation: statusbar-spin 0.9s linear infinite;
+    animation: statusbar-spin 0.9s linear infinite;
 }
 @keyframes statusbar-spin {
-  to {
+    to {
     transform: rotate(360deg);
-  }
+    }
 }
 /* 查不了用次要色，失败用警示色 */
 .statusbar__balance.is-unsupported .statusbar__amount,
 .statusbar__balance.is-no-key .statusbar__amount {
-  color: var(--el-text-color-secondary);
+    color: var(--el-text-color-secondary);
 }
 .statusbar__balance.is-error .statusbar__amount {
-  color: var(--el-color-warning);
+    color: var(--el-color-warning);
 }
 /* ---- 版本浮层 ---- */
 .uv {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 .uv__row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 .uv__name {
-  flex: 0 0 44px;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
+    flex: 0 0 44px;
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
 }
 .uv__ver {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-family: var(--el-font-family-mono);
-  font-size: 12px;
-  color: var(--el-text-color-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--el-font-family-mono);
+    font-size: 12px;
+    color: var(--el-text-color-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .uv__state {
-  flex: 0 0 auto;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
 }
 .uv__state.is-available,
 .uv__state.is-downloaded {
-  color: var(--el-color-primary);
+    color: var(--el-color-primary);
 }
 .uv__state.is-error {
-  color: var(--el-color-warning);
+    color: var(--el-color-warning);
 }
 .uv__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 2px;
 }
 </style>

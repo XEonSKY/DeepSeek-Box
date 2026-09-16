@@ -152,122 +152,122 @@ function openSettings(): void {
 
 <style scoped>
 .nt {
-  height: 100%;
-  overflow-y: auto;
-  background: var(--el-bg-color-page);
+    height: 100%;
+    overflow-y: auto;
+    background: var(--el-bg-color-page);
 }
 /*
  * 居中交给内层，并且用 min-height:100% 而不是给外层 justify-content:center：
  * 后者在内容高于容器时会连顶部一起裁掉，且滚不上去（flex 居中的老问题）。
  */
 .nt__inner {
-  box-sizing: border-box;
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 32px 24px 48px;
+    box-sizing: border-box;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 32px 24px 48px;
 }
 .nt__logo {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  -webkit-user-drag: none;
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    -webkit-user-drag: none;
 }
 .nt__title {
-  margin: 4px 0 18px;
-  font-size: 20px;
-  font-weight: 700;
+    margin: 4px 0 18px;
+    font-size: 20px;
+    font-weight: 700;
 }
 .nt__search {
-  display: flex;
-  gap: 8px;
-  width: min(680px, 92%);
+    display: flex;
+    gap: 8px;
+    width: min(680px, 92%);
 }
 .nt__engine {
-  flex: 0 1 132px;
-  min-width: 112px;
+    flex: 0 1 132px;
+    min-width: 112px;
 }
 .nt__input {
-  flex: 1 1 auto;
+    flex: 1 1 auto;
 }
 .nt__go {
-  flex: 0 0 auto;
+    flex: 0 0 auto;
 }
 .nt__quick {
-  margin-top: 34px;
-  width: min(680px, 92%);
+    margin-top: 34px;
+    width: min(680px, 92%);
 }
 .nt__h {
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
-  margin: 0 0 12px;
-  font-weight: 600;
+    font-size: 14px;
+    color: var(--el-text-color-secondary);
+    margin: 0 0 12px;
+    font-weight: 600;
 }
 .nt__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-  gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 10px;
 }
 .nt__cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 8px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 12px;
-  background: var(--el-fill-color-blank);
-  color: var(--el-text-color-primary);
-  text-decoration: none;
-  font-size: 13px;
-  cursor: pointer;
-  overflow: hidden;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 8px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 12px;
+    background: var(--el-fill-color-blank);
+    color: var(--el-text-color-primary);
+    text-decoration: none;
+    font-size: 13px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 .nt__cell:hover {
-  border-color: var(--el-color-primary);
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+    border-color: var(--el-color-primary);
+    color: var(--el-color-primary);
+    background: var(--el-color-primary-light-9);
 }
 /* 键盘操作时给个可见焦点圈（鼠标点击不显示，避免多余的描边） */
 .nt__cell:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
 }
 /* 固定三站与常用站点统一成同一枚徽标，两种格子的首行才对得齐 */
 .nt__badge {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9px;
-  background: var(--el-fill-color);
-  font-size: 15px;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    background: var(--el-fill-color);
+    font-size: 15px;
 }
 .nt__badge--brand {
-  color: var(--el-color-primary);
+    color: var(--el-color-primary);
 }
 .nt__cell:hover .nt__badge {
-  background: var(--el-color-primary-light-8);
+    background: var(--el-color-primary-light-8);
 }
 /* 名称过长时省略，不撑破格子 */
 .nt__label {
-  max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 .nt__empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  font-size: 12px;
-  color: var(--el-text-color-placeholder);
-  margin-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--el-text-color-placeholder);
+    margin-top: 6px;
 }
 </style>

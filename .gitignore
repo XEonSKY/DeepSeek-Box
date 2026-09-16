@@ -96,6 +96,6 @@ temp/
 .workbuddy
 AGENT.md
 
-# ---------- AI 工作区辅助（本地，不入库） ----------
-# 临时文件也放在 .dsh/temp/ 下，因此不再单列 .temp
-.dsh
+# ---------- Agent 目录：技能入库，缓存忽略 ----------
+.agents/temp/*
+!.agents/temp/.gitkeep

@@ -1,42 +1,87 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "lint",
-      "type": "npm",
-      "script": "lint",
-      "problemMatcher": [
-        "$eslint-stylish"
-      ],
-      "group": "test"
-    },
-    {
-      "label": "typecheck",
-      "type": "npm",
-      "script": "typecheck",
-      "problemMatcher": [
-        "$tsc"
-      ]
-    },
-    {
-      "label": "dev",
-      "type": "npm",
-      "script": "dev",
-      "isBackground": true,
-      "problemMatcher": []
-    },
-    {
-      "label": "dev: docs",
-      "type": "npm",
-      "script": "docs:dev",
-      "isBackground": true,
-      "problemMatcher": []
-    },
-    {
-      "label": "build: docs",
-      "type": "npm",
-      "script": "docs:build",
-      "problemMatcher": []
-    }
-  ]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "check",
+            "detail": "typecheck + lint（提交前必过，pre-commit 同款）",
+            "type": "npm",
+            "script": "check",
+            "problemMatcher": ["$tsc", "$eslint-stylish"],
+            "group": { "kind": "test", "isDefault": true },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+        },
+        {
+            "label": "typecheck",
+            "detail": "tsc（主进程/preload）+ vue-tsc（渲染层）",
+            "type": "npm",
+            "script": "typecheck",
+            "problemMatcher": ["$tsc"],
+            "group": "test",
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+        },
+        {
+            "label": "lint",
+            "detail": "ESLint 检查（扁平配置）",
+            "type": "npm",
+            "script": "lint",
+            "problemMatcher": ["$eslint-stylish"],
+            "group": "test",
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+        },
+        {
+            "label": "lint:fix",
+            "detail": "ESLint 自动修复",
+            "type": "npm",
+            "script": "lint:fix",
+            "problemMatcher": ["$eslint-stylish"],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+        },
+
+        {
+            "label": "dev",
+            "detail": "electron-vite 开发态（HMR，不打包）",
+            "type": "npm",
+            "script": "dev",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "dedicated" }
+        },
+        {
+            "label": "build",
+            "detail": "构建到 out/（不含打包）",
+            "type": "npm",
+            "script": "build",
+            "problemMatcher": ["$tsc"],
+            "group": { "kind": "build", "isDefault": true },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+        },
+        {
+            "label": "dist:win",
+            "detail": "构建并打包 Windows 安装包（x64 + arm64）",
+            "type": "npm",
+            "script": "dist:win",
+            "problemMatcher": ["$tsc"],
+            "group": "build",
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+        },
+
+        {
+            "label": "docs:dev",
+            "detail": "VitePress 文档站开发态",
+            "type": "npm",
+            "script": "docs:dev",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "dedicated" }
+        },
+        {
+            "label": "docs:build",
+            "detail": "构建文档站",
+            "type": "npm",
+            "script": "docs:build",
+            "problemMatcher": [],
+            "group": "build",
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+        }
+    ]
 }

@@ -1,62 +1,62 @@
 :root {
-  color-scheme: light dark;
+    color-scheme: light dark;
 
-  /* Element Plus 全局圆角基线（浅/深共用同一套几何） */
-  --el-border-radius-base: 6px;
-  --el-border-radius-small: 4px;
-  --el-border-radius-mini: 3px;
-  --el-border-radius-round: 9999px;
+    /* Element Plus 全局圆角基线（浅/深共用同一套几何） */
+    --el-border-radius-base: 6px;
+    --el-border-radius-small: 4px;
+    --el-border-radius-mini: 3px;
+    --el-border-radius-round: 9999px;
 
-  /* Element Plus 字号与控件尺寸基线 */
-  --el-font-size-small: 12px;
-  --el-font-size-base: 13px;
-  --el-font-size-medium: 14px;
-  --el-font-size-large: 15px;
-  --el-component-size-small: 26px;
-  --el-component-size: 32px;
-  --el-component-size-large: 40px;
+    /* Element Plus 字号与控件尺寸基线 */
+    --el-font-size-small: 12px;
+    --el-font-size-base: 13px;
+    --el-font-size-medium: 14px;
+    --el-font-size-large: 15px;
+    --el-component-size-small: 26px;
+    --el-component-size: 32px;
+    --el-component-size-large: 40px;
 }
 
 html,
 body,
 #app {
-  height: 100%;
-  margin: 0;
-  padding: 0;
+    height: 100%;
+    margin: 0;
+    padding: 0;
 }
 
 body {
-  font-family:
+    font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
     'PingFang SC', 'Microsoft YaHei', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  background: var(--el-bg-color);
-  color: var(--el-text-color-primary);
+    -webkit-font-smoothing: antialiased;
+    background: var(--el-bg-color);
+    color: var(--el-text-color-primary);
 }
 
 * {
-  box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 /* Update-check notification body (teleported to <body>): version el-tags */
 .update-body {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 1px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 1px 0;
 }
 .update-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
 }
 .update-lbl {
-  color: var(--el-text-color-secondary);
-  flex: 0 0 auto;
+    color: var(--el-text-color-secondary);
+    flex: 0 0 auto;
 }
 .update-note {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.5;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    line-height: 1.5;
 }

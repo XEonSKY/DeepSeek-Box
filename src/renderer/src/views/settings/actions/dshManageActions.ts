@@ -1,4 +1,5 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { errorMessage } from '@shared/errors'
 import { tt } from '../../../lib/locales'
 import { dshCheck, checkAndNotify } from '../../../lib/update'
 import type { SettingsState } from '../settingsStore'
@@ -100,7 +101,7 @@ export function createDshManageActions(state: SettingsState): DshManageActions {
                 ElMessage.error(r.message || '')
             }
         } catch (err) {
-            ElMessage.error(tt('msg.updateDshFail', { err: err instanceof Error ? err.message : String(err) }))
+            ElMessage.error(tt('msg.updateDshFail', { err: errorMessage(err) }))
         } finally {
             state.updatingDsh = false
         }
@@ -130,7 +131,7 @@ export function createDshManageActions(state: SettingsState): DshManageActions {
                 ElMessage.error(r.message || '')
             }
         } catch (err) {
-            ElMessage.error(tt('msg.installFail', { err: err instanceof Error ? err.message : String(err) }))
+            ElMessage.error(tt('msg.installFail', { err: errorMessage(err) }))
         } finally {
             state.switchingDsh = false
         }
@@ -155,7 +156,7 @@ export function createDshManageActions(state: SettingsState): DshManageActions {
                 ElMessage.error(r.message || tt('msg.uninstallFail', { err: '' }))
             }
         } catch (err) {
-            ElMessage.error(tt('msg.uninstallFail', { err: err instanceof Error ? err.message : String(err) }))
+            ElMessage.error(tt('msg.uninstallFail', { err: errorMessage(err) }))
         } finally {
             state.uninstalling = false
         }

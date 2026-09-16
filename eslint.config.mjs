@@ -8,9 +8,8 @@ import vueParser from 'vue-eslint-parser'
 import stylistic from '@stylistic/eslint-plugin'
 
 export default tseslint.config(
-    // 构建产物、依赖与本地 AI 辅助目录不参与检查
-    // .dsh（含 .dsh/temp 临时脚本）是约定的本地目录（见 .gitignore），不应让 `npm run lint` 报错
-    { ignores: ['out/**', 'dist/**', 'release/**', 'node_modules/**', '.vitepress/**', '**/.vitepress/**', '.vite/**', '**/*.tsbuildinfo', '.dsh/**'] },
+    // 构建产物与依赖不参与检查
+    { ignores: ['out/**', 'dist/**', 'release/**', 'node_modules/**', '.vitepress/**', '**/.vitepress/**', '.vite/**', '**/*.tsbuildinfo'] },
     js.configs.recommended,
     ...tseslint.configs.recommended,
     ...pluginVue.configs['flat/essential'],

@@ -33,11 +33,11 @@ import LogView from '../LogView.vue'
 <style scoped>
 /* 只留本组件专用规则；跨组件的通用样式一律进 styles/*.css（见 AGENT.md §3 样式约定）。 */
 .term {
-  height: 58vh;
-  min-height: 260px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--el-bg-color);
+    height: 58vh;
+    min-height: 260px;
+    border: 1px solid var(--el-border-color);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--el-bg-color);
 }
 </style>

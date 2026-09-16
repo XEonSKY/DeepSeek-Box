@@ -11,5 +11,7 @@ indent_size = 4
 [*.md]
 trim_trailing_whitespace = false
 
-[*.{json,yml,yaml}]
+# YAML 缩进敏感（序列项的子键必须与 name 对齐而非再缩进一层），
+# 且 GitHub Actions 生态惯例为 2 空格，故单独保留。
+[*.{yml,yaml}]
 indent_size = 2

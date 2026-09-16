@@ -74,19 +74,19 @@ function toggleScope(s: ProxyScope): void {
 
 <style scoped>
 .pf__row {
-  display: flex;
-  gap: 12px;
-  width: 100%;
+    display: flex;
+    gap: 12px;
+    width: 100%;
 }
 .pf__grow {
-  flex: 1 1 auto;
+    flex: 1 1 auto;
 }
 .pf__port {
-  width: 170px;
+    width: 170px;
 }
 .pf__scope {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 </style>
