@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import path from 'node:path'
 import { parse } from 'yaml'
 import {
     HOME_PATCH_FILENAME,
@@ -40,9 +41,14 @@ describe('pickPtcNode', () => {
 })
 
 describe('isValidNodeExecutable', () => {
-    it('接受绝对路径', () => {
-        expect(isValidNodeExecutable('C:\\Program Files\\nodejs\\node.exe')).toBe(true)
+    it('接受当前平台的绝对路径', () => {
+        // path.isAbsolute 是平台相关的：Windows 盘符路径在 Linux 上**不是**绝对路径，
+        // 断言必须跟随平台，否则 CI（ubuntu）必红。用 path.resolve 造当前平台的绝对路径。
+        expect(isValidNodeExecutable(path.resolve('node.exe'))).toBe(true)
+        // POSIX 绝对路径在 Windows 上也判为绝对（root-relative），两端都成立。
         expect(isValidNodeExecutable('/usr/local/bin/node')).toBe(true)
+        // 盘符路径只在 Windows 上是绝对路径。
+        expect(isValidNodeExecutable('C:\\Program Files\\nodejs\\node.exe')).toBe(process.platform === 'win32')
     })
 
     it('拒绝空值与相对路径（dsh 侧会借此提前失败）', () => {
