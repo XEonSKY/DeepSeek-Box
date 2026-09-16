@@ -39,9 +39,27 @@
 - 新增键时 **zh / en / hant 三处一起加**，否则繁体用户会看到简体或原始 key；
 - 文案是**程序的一部分**（`src/shared/locales/**` 不算文档），可随功能一起改。
 
-## 无测试套件
+## 测试
 
-本仓库没有自动化测试，验证以 `typecheck` / `lint` / `build` 为准；涉及运行时行为时请手动或用脚本验证并说明。
+单元测试用 **Vitest**（`vitest.config.mjs`，**`.mjs` 而非 `.ts`**：配置里没有需要类型检查的内容，纯 JS 可省掉加载配置时的一次 esbuild 转译），跑在 node 环境。
+
+**测试独立于源码，统一收在 `tests/` 下**，目录镜像被测源码的层级：
+
+| 测试目录 | 对应源码 | 别名 |
+|---|---|---|
+| `tests/shared/` | `src/shared/` | `@shared/*` |
+| `tests/main/` | `src/main/` | `@main/*` |
+| `tests/renderer/` | `src/renderer/src/` | `@/*` |
+
+- 文件名与被测模块同名，`tests/` 内的层级也镜像源码，因此**搬运测试不需要改相对路径**；
+- 测试内一律用别名 import；`@main` **只在测试与 `tsconfig.node.json` 中配置**，主进程源码自身仍用相对路径；
+- **源码目录里不得出现 `*.test.ts`** —— 由 `tests/shared/version-convention.test.ts` 守护；
+- 可测的是**纯逻辑**（shared 工具、主进程的版本 / 路径 / 归一化 / 迁移判定、渲染层纯函数）；
+  模块顶层 `import { app } from 'electron'` 会让整条链路去加载 Electron，这类模块不要整体测（按名导入其中的纯函数即可）；
+- 命令：`npm run test` / `test:watch` / `test:coverage`（输出到 `.agents/temp/coverage`）；
+- **新写的纯逻辑必须带测试**；修 bug 时优先补一条能复现该 bug 的用例。
+
+运行时行为（窗口、托盘、下载、迁移、代理、自更新）仍以手动验证为准。
 
 ## 已知问题与待办
 

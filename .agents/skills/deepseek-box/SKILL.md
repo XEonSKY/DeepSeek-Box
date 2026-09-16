@@ -70,7 +70,7 @@ metadata:
 18. **版本号规范 `X.Y.Z-{alpha|beta|rc}.N`**：主次修订三段正常递增，**预发布通道限定为 alpha / beta / rc**，通道内序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；遵守 semver 字典序，故 `alpha < beta < rc` 升级链天然正确。改版本要**同时改四处**：`package.json`、`package-lock.json` 顶层与 `packages[""]`、技能 `metadata.version`；一律不带 `v` 前缀（`v` 只在 Git tag 上）。
 19. **提交信息用 Conventional Commits**：`feat:` / `fix:` / `docs:` / `refactor:` / `chore:` 等。
 20. **质量门禁**：`npm run check`（typecheck + lint + 单元测试）必须通过；仓库自带 `.githooks/pre-commit`（`npm install` 的 `prepare` 自动启用 core.hooksPath），CI 见 `.github/workflows/quality.yml`；仅紧急情况用 `--no-verify`。
-21. **纯逻辑必须配单测**：`src/shared/**` 与 `src/main/**` 里不依赖 Electron 的纯函数（版本比较、路径与文件助手、设置归一化、i18n 解析）改动时必须补 `*.test.ts`（与源码同目录）。组件渲染与运行时行为仍由用户验证。
+21. **纯逻辑必须配单测**：`src/shared/**` 与 `src/main/**` 里不依赖 Electron 的纯函数（版本比较、路径与文件助手、设置归一化、i18n 解析）改动时必须补 `*.test.ts`。**测试统一收在 `tests/` 下、按被测层分目录**（`tests/{shared,main,renderer}/`，文件名与被测模块同名），**源码目录里不得出现 `*.test.ts`**；测试内用 `@shared` / `@main` / `@` 别名，不用跨目录相对路径。组件渲染与运行时行为仍由用户验证。
 22. **`.agents` 入库策略**：`.agents/skills/**` 纳入版本管理；`.agents/temp/` 忽略（仅保留 `.gitkeep`）。
 23. **文档同步节奏**：开发期只维护技能；`docs/` 中英在**发布时**统一更新，并同时整理技能。
 24. **UI 组件优先 antdv-next**：新功能一律用 `antdv-next`（`<a-*>` 前缀），**禁止新增 `el-*` 组件**；样式与主题优先走 antdv 的 token。
@@ -119,7 +119,7 @@ metadata:
 - [ ] 设置项是否处理了 `legacy` 与 `settingsVersion`？派生 UI 是否订阅 `settings:changed`？
 - [ ] 文案是否 zh / en / hant 三处对齐？
 - [ ] 缩进 4 空格、注释中文、无新增裸 `fetch` / 裸 `webContents.send`？
-- [ ] 新增 / 改动的纯逻辑是否补了 `*.test.ts`，且 `npm run check`（typecheck + lint + 单测）通过？
+- [ ] 新增 / 改动的纯逻辑是否补了 `tests/` 下的 `*.test.ts`（未落在源码目录），且 `npm run check`（typecheck + lint + 单测）通过？
 - [ ] 有需要人工验证的运行时行为，是否在最终说明里写清复现步骤？
 - [ ] 新依赖是否装对位置（前端 → `devDependencies`；主进程运行时 → `dependencies`）？
 - [ ] 缩进是否 4 空格（YAML 除外）？改过 YAML 是否验证过可解析？

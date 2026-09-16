@@ -39,9 +39,26 @@ Before changing code or documentation, please follow these conventions.
 - When adding a key, add it to **zh / en / hant together**, otherwise Traditional Chinese users see Simplified text or the raw key;
 - Strings are **part of the program** (`src/shared/locales/**` does not count as documentation) and may change together with the feature.
 
-## No test suite
+## Tests
 
-This repository has no automated tests; verification is based on `typecheck` / `lint` / `build`; for runtime behavior, verify manually or with a script and explain how.
+Unit tests use **Vitest** (`vitest.config.mjs`, **`.mjs` rather than `.ts`**: the config contains nothing that needs type checking, and plain JS avoids an extra esbuild transpile when loading it), running in the node environment.
+
+**Tests are independent of the source tree and all live under `tests/`**, mirroring the layers of the code under test:
+
+| Test directory | Source | Alias |
+|---|---|---|
+| `tests/shared/` | `src/shared/` | `@shared/*` |
+| `tests/main/` | `src/main/` | `@main/*` |
+| `tests/renderer/` | `src/renderer/src/` | `@/*` |
+
+- The file is named after the module, and the structure inside `tests/` mirrors the source, so **moving a test never means rewriting relative paths**;
+- Tests always import through aliases; `@main` is configured **only for tests and `tsconfig.node.json`** — main-process source keeps using relative paths;
+- **No `*.test.ts` may appear inside `src/`** — enforced by `tests/shared/version-convention.test.ts`;
+- What is testable is **pure logic** (shared utilities; version / path / normalization / migration decisions in main; pure functions in the renderer). A module-level `import { app } from 'electron'` drags the whole chain into loading Electron, so do not test such modules wholesale — import the pure functions from them by name instead;
+- Commands: `npm run test` / `test:watch` / `test:coverage` (output to `.agents/temp/coverage`);
+- **New pure logic must come with tests**; when fixing a bug, add a case that reproduces it first.
+
+Runtime behaviour (window, tray, downloads, migrations, proxy, self-update) is still verified manually.
 
 ## Known issues and TODOs
 

@@ -74,7 +74,21 @@
   - `src/shared/**` —— 三端共享工具（version / i18n / hotkeys / errors）；
   - `src/main/**` —— 不 import `electron` 的部分（semver 比较、fsutil、设置归一化函数）；
   - 渲染层只测纯函数（如 `lib/format.ts`）。
-- **测试文件与源码同目录**（`foo.ts` → `foo.test.ts`），不要另建 `test/` 目录。
+- **测试独立于源码目录，统一收在 `tests/` 下**，按被测模块所在层分目录：
+
+  | 测试目录 | 对应源码 |
+  |---|---|
+  | `tests/shared/` | `src/shared/` |
+  | `tests/main/` | `src/main/` |
+  | `tests/renderer/` | `src/renderer/src/` |
+
+  文件名保持与被测模块同名（`src/main/dsh/semver.ts` → `tests/main/dsh/semver.test.ts`）。
+  **源码目录里不允许出现 `*.test.ts`** —— 这条由 `tests/shared/version-convention.test.ts` 守护。
+- 目录内部相对层级**镜像被测源码**，因此整份测试可以原样搬运而不改相对路径。
+- 测试里一律用别名 import，不用跨目录相对路径：
+  - `@shared/*` → `src/shared/*`
+  - `@main/*` → `src/main/*`（**只在测试与 `tsconfig.node.json` 中配置**，主进程源码自身仍用相对路径）
+  - `@/*` → `src/renderer/src/*`
 - 命令：`npm run test`（跑一次）、`test:watch`、`test:coverage`（输出到 `.agents/temp/coverage`）。
 - **新写的纯逻辑必须带测试**；修 bug 时优先补一条能复现该 bug 的用例。
 - 常见陷阱：
@@ -89,7 +103,7 @@
   - 三段数字**正常递增**（`0.1.6` 就是 `0.1.6`），不要用 `0.0.0` 之类的占位值——那会让「哪个版本更新」需要额外解释；
   - 通道只有 `alpha` / `beta` / `rc` 三种，序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；
   - semver 的预发布比较是**字典序优先**，故 `alpha < beta < rc`，升级链天然正确；
-  - 该规范由 `src/shared/version-convention.test.ts` 守护（同时校验四处版本号一致），改规范要同步改测试。
+  - 该规范由 `tests/shared/version-convention.test.ts` 守护（同时校验四处版本号一致、以及测试目录规范），改规范要同步改测试。
 - 升版本要**同时改三处**：`package.json` 的 `version`、`package-lock.json` 顶层的 `version` 与 `packages[""].version`、技能 `SKILL.md` 的 `metadata.version`（跟随应用版本）。
 - 版本号一律**不带 `v` 前缀**（`v` 只出现在 Git tag 上）。
 - CI 校验 **Git tag（`v` + 版本号）== package.json 版本**；是否预发布由版本号是否包含 `-` 决定（当前规范下**始终**是 prerelease）。

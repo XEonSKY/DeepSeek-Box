@@ -16,6 +16,16 @@ DeepSeek Box —— DeepSeek Harness 的 Electron 桌面外壳（Electron 44 + V
 
 跳过 `import 'electron'` 的模块（如 `app/settings.ts` 里除归一化函数外的部分）——单测不加载 Electron 运行时。
 
+**测试统一放在 `tests/` 下，按被测层分目录**，镜像被测源码的层级：
+
+| 测试目录 | 对应源码 | 别名 |
+|---|---|---|
+| `tests/shared/` | `src/shared/` | `@shared/*` |
+| `tests/main/` | `src/main/` | `@main/*` |
+| `tests/renderer/` | `src/renderer/src/` | `@/*` |
+
+文件名与被测模块同名（`src/main/dsh/semver.ts` → `tests/main/dsh/semver.test.ts`）。源码目录里**不允许**出现 `*.test.ts`，测试内用别名 import 而非跨目录相对路径。
+
 ## 必读
 
 - `.agents/skills/deepseek-box/SKILL.md` —— 铁律、任务路由表、常用命令、交付前自检；
@@ -30,7 +40,7 @@ DeepSeek Box —— DeepSeek Harness 的 Electron 桌面外壳（Electron 44 + V
 - 新增文案 zh / en / hant 三处对齐；用户可见文案必须 i18n。
 - UI 组件优先 `antdv-next`（`<a-*>`），禁止新增 `el-*`；按需引入由构建器自动注入，不要手动 import 组件或全量注册。
 - 缩进 4 个空格，注释用简要中文。
-- 纯逻辑（shared 工具、主进程的版本 / 路径 / 归一化 / 迁移判定）必须配 `*.test.ts` 单元测试；测试文件与源码同目录。
+- 纯逻辑（shared 工具、主进程的版本 / 路径 / 归一化 / 迁移判定）必须配 `*.test.ts` 单元测试；测试放 `tests/` 下按层分目录，源码目录里不得出现测试文件。
 - agent 缓存 / 临时文件放 `.agents/temp/`，用完即删。
 - 改动推送 `dev`，发行才推 `main`；推送远程前必须征得确认。
 - 一个提交只做一件事；提交信息用 Conventional Commits。
