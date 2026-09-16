@@ -13,11 +13,31 @@
 | `views/settings/*.vue` | 设置面板：General / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / Webview / About |
 | `views/settings/actions/` | `dshActions.ts`（启停 / 向导）、`dshManageActions.ts`（版本管理） |
 | `views/settings/useSettingsStore.ts`、`settingsStore.ts` | Pinia 设置镜像与写回 |
-| `components/` | `DshWizard.vue`（四步向导）、`StatusBar.vue`、`TitleBar.vue`、`ProxyFields.vue`、`ThreadsField.vue` |
+| `components/` | `DshWizard.vue`（四步向导）、`StatusBar.vue`、`TitleBar.vue`、`WindowControls.vue`、`ProxyFields.vue`、`ThreadsField.vue` |
 | `lib/` | 主题、格式化、更新状态、locale、图标等工具 |
 | `lib/update.ts` | 版本状态中心：`versionStatus` / `checkDsh` / `checkAllUpdates` / `applyAppUpdateEvent` |
 | `shell/` | 路由、标签、窗口元信息、标签拖拽（`router` / `tabs` / `shellmeta` / `useTabDrag` / `viewnav`） |
 | `styles/` | 分层：`base.css`（reset + Element Plus 变量）→ `shared.css` → `settings.css` |
+
+### 窗口装饰的两处出口
+
+窗口是**无边框**的（窗口控制按钮由前端自绘），因此「拖动区」与「窗口按钮」必须由页面自己提供。
+目前有两个位置提供它们，**两处都必须存在**：
+
+| 位置 | 何时可见 | 用途 |
+|---|---|---|
+| `TitleBar.vue` | 常规界面 | 标题栏：品牌、固定站、标签条、设置入口、窗口控制 |
+| `DshWizard.vue` 的 `.wiz-navbar` | dsh 缺失时的安装向导 | 专属导航栏：**步骤条在左**，向导入口 + 窗口控制在右 |
+
+安装向导是覆盖整窗口的遮罩（`z-index` 高于标题栏），会把标题栏连同其窗口按钮一起挡住 ——
+所以向导必须自备一条导航栏，否则安装期间窗口既不能拖动也不能最小化 / 关闭。
+
+- 窗口按钮（最小化 / 最大化-还原 / 关闭）由 `WindowControls.vue` 统一提供，两处复用同一组件；
+- 它内部**必须订阅 `win:maximized` 事件**而不是自己记状态：双击拖动区、系统快捷键、
+  Aero Snap 同样会改变最大化状态，各写一份会让图标与窗口对不上；
+- `.icon-btn` / `.wglyph` / `.divider` 是两处共用的样式，放在 `styles/shared.css`
+  （**不要再放进任一组件**，否则另一处会因 scoped 样式而丢失）；
+- 容器加 `-webkit-app-region: drag`，其中的按钮加 `no-drag`。
 
 ## 启动（`src/renderer/src/main.ts`）
 
