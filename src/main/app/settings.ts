@@ -3,6 +3,8 @@ import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
 import { parseDocument } from 'yaml'
+import { defu } from 'defu'
+import writeFileAtomic from 'write-file-atomic'
 import { DEFAULT_SETTINGS, COLOR_SCHEME_IDS, PROXY_SCOPE_IDS, SETTINGS_VERSION } from '@shared/types'
 import type { ConfigDirInfo, ConfigMigrationPlan, ConfigMigrationProgress, Settings, Theme, ResolvedLocale, LocaleCode, ColorSchemeId, ProxyScope } from '@shared/types'
 import { resolveLocale, t as tl } from '@shared/i18n'
@@ -57,7 +59,7 @@ function readConfigOverride(): string | null {
 function writeConfigOverride(dir: string | null): void {
     try {
         fs.mkdirSync(path.dirname(configPointerFile()), { recursive: true })
-        if (dir) fs.writeFileSync(configPointerFile(), dir, 'utf8')
+        if (dir) writeFileAtomic.sync(configPointerFile(), dir, 'utf8')
         else {
             try {
                 fs.unlinkSync(configPointerFile())
@@ -362,7 +364,8 @@ export function readDiskSettings(): Partial<Settings> {
 const KNOWN_FLAGS = new Set(['--port', '--host', '--workspace', '--timeout-ms', '--dsh-bin'])
 function fromArgv(name: string): string | undefined {
     for (let i = 0; i < process.argv.length - 1; i++) {
-        if (process.argv[i] === name && !KNOWN_FLAGS.has(process.argv[i + 1])) return process.argv[i + 1]
+        const value: string | undefined = process.argv[i + 1]
+        if (process.argv[i] === name && value !== undefined && !KNOWN_FLAGS.has(value)) return value
     }
     return undefined
 }
@@ -431,64 +434,66 @@ export function normalizeProxyScope(v: unknown, legacy: boolean): ProxyScope[] {
     return PROXY_SCOPE_IDS.filter((s) => upgraded.has(s))
 }
 
+/**
+ * 磁盘上读到的设置：与 `Settings` 同键，但**显式排除 null**。
+ *
+ * defu 的类型层对「默认值本身可空」的字段会退化成 `T | void`，于是 `workspace` 这类
+ * `string | null` 字段拿到的是 `string | void | null`，直接赋值会报错。
+ * 这里先把「磁盘值不可能为 null」表达出来（withoutNulls 保证），
+ * 让 defu 推导出可用类型，剩余的 undefined 由调用处 `?? null` 收口。
+ */
+type DiskSettings = { [K in keyof Settings]?: Exclude<Settings[K], null> }
+
+/**
+ * 去掉取值为 null 的键。
+ *
+ * defu 只在值为 `undefined` 时用默认值覆盖，null 会被当成「用户明确设置成 null」保留下来；
+ * 而历史版本确实往 settings.json 里写过 null（例如清空过的端口），必须显式剔除后再合并。
+ */
+function withoutNulls(obj: Partial<Settings>): DiskSettings {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(obj)) {
+        if (v !== null) out[k] = v
+    }
+    return out as DiskSettings
+}
+
 export function loadSettings(): Settings {
     const disk = readDiskSettings()
     // 设置结构版本：缺失即第 1 版。只有真正的老配置才做改键名 / 改默认值的迁移，
     // 这样用户在新版里手填的值不会被每次启动反复改写（见 normalizeProxyScope 等）。
     const legacy = Number(disk.settingsVersion ?? 0) < SETTINGS_VERSION
     const diskPort = disk.port
-    const host = fromArgv('--host') ?? process.env.DSH_DESKTOP_HOST ?? disk.host ?? DEFAULT_SETTINGS.host
     const rawPort =
         fromArgv('--port') ??
-    process.env.DSH_DESKTOP_PORT ??
-    (diskPort === undefined || diskPort === null ? undefined : String(diskPort))
-    const port = resolvePortSetting(rawPort)
-    const workspace = fromArgv('--workspace') ?? process.env.DSH_DESKTOP_WORKSPACE ?? disk.workspace ?? defaultWorkspaceDir()
-    const dshBin = fromArgv('--dsh-bin') ?? process.env.DSH_BIN ?? disk.dshBin ?? null
-    const timeoutMs = Number(fromArgv('--timeout-ms') ?? process.env.DSH_DESKTOP_TIMEOUT_MS ?? disk.timeoutMs ?? DEFAULT_SETTINGS.timeoutMs)
+        process.env.DSH_DESKTOP_PORT ??
+        (diskPort === undefined || diskPort === null ? undefined : String(diskPort))
+
+    // 默认值填充交给 defu：逐字段手写 `disk.x ?? DEFAULT.x` 有 36 项，
+    // 漏掉一项的后果是「设置页改了、重启又变回去」这种很难复现的漂移。
+    // 注意 defu 只认 `undefined`（null 会被当作已设置的值原样保留），
+    // 而磁盘上确实可能存着 null（旧版清空过的字段），故显式用 ?? 剔除 null。
+    const merged = defu<DiskSettings, [Settings]>(withoutNulls(disk), DEFAULT_SETTINGS)
     return {
+        ...merged,
+        // 以下字段的取值优先级高于磁盘：命令行 / 环境变量 / 归一化
         settingsVersion: SETTINGS_VERSION,
-        host,
-        port,
-        workspace,
-        timeoutMs,
-        dshBin,
-        closeToTray: disk.closeToTray ?? DEFAULT_SETTINGS.closeToTray,
-        theme: disk.theme ?? DEFAULT_SETTINGS.theme,
-        autoCheckUpdate: disk.autoCheckUpdate ?? DEFAULT_SETTINGS.autoCheckUpdate,
-        checkPrerelease: disk.checkPrerelease ?? DEFAULT_SETTINGS.checkPrerelease,
-        npmRegistry: disk.npmRegistry ?? DEFAULT_SETTINGS.npmRegistry,
-        appAutoUpdate: disk.appAutoUpdate ?? DEFAULT_SETTINGS.appAutoUpdate,
-        appCheckPrerelease: disk.appCheckPrerelease ?? DEFAULT_SETTINGS.appCheckPrerelease,
+        host: fromArgv('--host') ?? process.env.DSH_DESKTOP_HOST ?? merged.host,
+        port: resolvePortSetting(rawPort),
+        workspace: fromArgv('--workspace') ?? process.env.DSH_DESKTOP_WORKSPACE ?? merged.workspace ?? null,
+        dshBin: fromArgv('--dsh-bin') ?? process.env.DSH_BIN ?? merged.dshBin ?? null,
+        timeoutMs: Number(fromArgv('--timeout-ms') ?? process.env.DSH_DESKTOP_TIMEOUT_MS ?? merged.timeoutMs),
+        // defu 对可空字段的推导会带上 void，这里按 Settings 的可空语义统一收回
+        proxyPort: merged.proxyPort ?? null,
+        // kernelSource 是 dshSource 的旧键名，只在迁移时读一次
+        dshSource: merged.dshSource ?? (disk as { kernelSource?: Settings['dshSource'] }).kernelSource,
         downloadThreads: normalizeDownloadThreads(disk.downloadThreads, legacy),
-        devMode: disk.devMode ?? DEFAULT_SETTINGS.devMode,
-        dshSource: disk.dshSource ?? (disk as { kernelSource?: Settings['dshSource'] }).kernelSource ?? DEFAULT_SETTINGS.dshSource,
-        nodeRuntime: disk.nodeRuntime ?? DEFAULT_SETTINGS.nodeRuntime,
-        npmSource: normalizeNpmSource(disk.npmSource ?? DEFAULT_SETTINGS.npmSource),
-        proxyEnabled: disk.proxyEnabled ?? DEFAULT_SETTINGS.proxyEnabled,
-        proxyProtocol: disk.proxyProtocol ?? DEFAULT_SETTINGS.proxyProtocol,
-        proxyHost: disk.proxyHost ?? DEFAULT_SETTINGS.proxyHost,
-        proxyPort: disk.proxyPort ?? DEFAULT_SETTINGS.proxyPort,
+        npmSource: normalizeNpmSource(merged.npmSource),
         proxyScope: normalizeProxyScope(disk.proxyScope, legacy),
-        zoomPercent: disk.zoomPercent ?? DEFAULT_SETTINGS.zoomPercent,
-        ignoreSystemScale: disk.ignoreSystemScale ?? DEFAULT_SETTINGS.ignoreSystemScale,
-        funLocale: disk.funLocale ?? DEFAULT_SETTINGS.funLocale,
-        searchEngine: disk.searchEngine ?? DEFAULT_SETTINGS.searchEngine,
-        newTabMode: disk.newTabMode ?? DEFAULT_SETTINGS.newTabMode,
-        newTabUrl: disk.newTabUrl ?? DEFAULT_SETTINGS.newTabUrl,
-        shortcuts: Array.isArray(disk.shortcuts) ? disk.shortcuts : DEFAULT_SETTINGS.shortcuts,
-        hotkeyFocusWindow: disk.hotkeyFocusWindow ?? DEFAULT_SETTINGS.hotkeyFocusWindow,
-        hotkeyToggleTerminal: disk.hotkeyToggleTerminal ?? DEFAULT_SETTINGS.hotkeyToggleTerminal,
-        hotkeyDevTools: disk.hotkeyDevTools ?? DEFAULT_SETTINGS.hotkeyDevTools,
-        hardwareAcceleration: disk.hardwareAcceleration ?? DEFAULT_SETTINGS.hardwareAcceleration,
-        autoLaunch: disk.autoLaunch ?? DEFAULT_SETTINGS.autoLaunch,
-        openDshInBrowser: disk.openDshInBrowser ?? DEFAULT_SETTINGS.openDshInBrowser,
-        webviewUserAgent: disk.webviewUserAgent ?? DEFAULT_SETTINGS.webviewUserAgent,
-        colorScheme: COLOR_SCHEME_IDS.includes(disk.colorScheme as ColorSchemeId)
-            ? (disk.colorScheme as ColorSchemeId)
-            : DEFAULT_SETTINGS.colorScheme,
-        appIcon: disk.appIcon ?? DEFAULT_SETTINGS.appIcon,
-        modelsCredConsent: disk.modelsCredConsent ?? DEFAULT_SETTINGS.modelsCredConsent
+        shortcuts: Array.isArray(merged.shortcuts) ? merged.shortcuts : DEFAULT_SETTINGS.shortcuts,
+        colorScheme: COLOR_SCHEME_IDS.includes(merged.colorScheme as ColorSchemeId)
+            ? merged.colorScheme
+            : DEFAULT_SETTINGS.colorScheme
     }
 }
 
@@ -533,7 +538,7 @@ export function writeDshLocale(code: LocaleCode): void {
         const next = doc.toString().replace(/\s+$/, '') + '\n'
         if (next !== text) {
             fs.mkdirSync(path.dirname(file), { recursive: true })
-            fs.writeFileSync(file, next, 'utf8')
+            writeFileAtomic.sync(file, next, 'utf8')
         }
         lastSelfLocaleWrite = Date.now()
     } catch (err) {
@@ -599,7 +604,7 @@ export function syncDshTheme(theme: string): void {
         const next = patchUiTheme(text, theme)
         if (next !== text) {
             fs.mkdirSync(path.dirname(file), { recursive: true })
-            fs.writeFileSync(file, next, 'utf8')
+            writeFileAtomic.sync(file, next, 'utf8')
         }
         lastSyncedTheme = theme
         lastSelfThemeWrite = Date.now()
@@ -617,7 +622,9 @@ export function syncNativeTheme(theme: string): void {
 export function persistSettings(s: Settings): void {
     try {
         fs.mkdirSync(path.dirname(settingsFile()), { recursive: true })
-        fs.writeFileSync(settingsFile(), JSON.stringify(s, null, 2), 'utf8')
+        // 原子写：settings.json 是被外部编辑器 / 本应用同时读写的文件，
+        // 直接覆盖可能让另一个进程读到半截 JSON（表现为「设置莫名其妙被重置」）。
+        writeFileAtomic.sync(settingsFile(), JSON.stringify(s, null, 2), 'utf8')
         lastSelfSettingsWrite = Date.now()
     } catch {
     /* non-fatal */

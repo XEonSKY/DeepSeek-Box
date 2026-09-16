@@ -3,6 +3,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { app } from 'electron'
 import type { AppSlotRecord, AppSlotsState } from '@shared/types'
+import writeFileAtomic from 'write-file-atomic'
 import { mt } from './settings'
 
 /**
@@ -114,13 +115,11 @@ export function readManifest(): SlotsManifest {
     }
 }
 
-/** 原子写槽清单（先写临时文件再 rename，避免留下半截 JSON）。 */
+/** 原子写槽清单：交给 write-file-atomic（它额外处理同一路径的并发写与中断清理）。 */
 export function writeManifest(m: SlotsManifest): void {
     try {
         fs.mkdirSync(slotsDir(), { recursive: true })
-        const tmp = manifestFile() + '.tmp'
-        fs.writeFileSync(tmp, JSON.stringify({ ...m, updatedAt: Date.now() }, null, 2), 'utf8')
-        fs.renameSync(tmp, manifestFile())
+        writeFileAtomic.sync(manifestFile(), JSON.stringify({ ...m, updatedAt: Date.now() }, null, 2), 'utf8')
     } catch {
         /* 写失败不影响主流程 */
     }

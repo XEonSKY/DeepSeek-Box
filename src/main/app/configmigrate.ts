@@ -2,6 +2,7 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { ConfigMigrationPlan } from '@shared/types'
+import writeFileAtomic from 'write-file-atomic'
 
 /**
  * 配置目录迁移：计划持久化 + 目录树逐项搬迁（支持取消回滚）。
@@ -32,14 +33,12 @@ export function readMigrationPlan(): ConfigMigrationPlan | null {
     return null
 }
 
-/** 写入迁移计划（原子写：先写临时文件再改名，避免半截 JSON）。 */
+/** 写入迁移计划（原子写交给 write-file-atomic）。 */
 export function writeMigrationPlan(plan: ConfigMigrationPlan): void {
     try {
         const file = migrationPlanFile()
         fs.mkdirSync(path.dirname(file), { recursive: true })
-        const tmp = file + '.tmp'
-        fs.writeFileSync(tmp, JSON.stringify(plan, null, 2), 'utf8')
-        fs.renameSync(tmp, file)
+        writeFileAtomic.sync(file, JSON.stringify(plan, null, 2), 'utf8')
     } catch (err) {
         console.error('[Manager] failed to persist config migration plan:', err)
     }
