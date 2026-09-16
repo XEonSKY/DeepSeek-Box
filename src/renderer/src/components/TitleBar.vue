@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import {
     DeepSeekFilled,
     MessageFilled,
     WalletFilled,
     SettingFilled,
-    MinusOutlined,
-    FullscreenOutlined,
-    FullscreenExitOutlined,
     CloseOutlined,
     ReloadOutlined,
     PlusOutlined,
@@ -17,7 +14,7 @@ import {
 import { ElMessage } from 'element-plus'
 import { useAppIcon } from '../lib/appIcon'
 import { tt } from '../lib/locales'
-import { WIN_GLYPH, WIN_GLYPH_STACK, winGlyphsAvailable } from '../lib/winicons'
+import WindowControls from './WindowControls.vue'
 import { useView, useGoView } from '../shell/viewnav'
 import { webTabs, activeTab, findTab, activateTab, closeTab, openTab, openNewTab, toggleKeep, tabLabel } from '../shell/tabs'
 import { shellMeta } from '../shell/shellmeta'
@@ -162,47 +159,7 @@ const fixedPageReload = computed(() => {
     return k === 'home' || k === 'chat' || k === 'platform'
 })
 
-const winMinimize = (): void => void window.api.post('/windows/minimize')
-const winMaximize = (): void => void window.api.post('/windows/maximize-toggle')
-const winClose = (): void => void window.api.post('/windows/close')
 const winReload = (): void => void window.api.post('/dsh/reload')
-
-/**
- * Windows 下改用系统自带的窗口控制字形（Segoe Fluent Icons → Segoe MDL2 Assets → Segoe UI Symbol），
- * 与系统原生标题栏一致；字体或字形不可用时保留 antdv 的矢量图标（见 lib/winicons.ts）。
- */
-const useWinGlyphs = winGlyphsAvailable()
-
-/**
- * 窗口是否最大化：决定右上角显示「最大化」还是「还原」图标 + 对应提示文案。
- * 必须订阅主进程事件而不是自己记状态 —— 双击拖动区、系统快捷键、Aero Snap 同样会改变最大化状态。
- */
-const maximized = ref(false)
-let offMaximized: (() => void) | null = null
-
-/** 右上角第二个按钮的字形：最大化 / 还原。 */
-const maxRestoreGlyph = computed(() => (maximized.value ? WIN_GLYPH.restore : WIN_GLYPH.maximize))
-
-/**
- * 字形字体栈以**内联样式**注入，而不是写死在 CSS 里：字体顺序与可用性探测（lib/winicons.ts）
- * 必须永远是同一份，写两处迟早会走偏。
- */
-const glyphStyle = { fontFamily: WIN_GLYPH_STACK }
-
-onMounted(async () => {
-    try {
-        maximized.value = await window.api.get('/windows/maximized')
-    } catch {
-    /* 取不到就按未最大化渲染 */
-    }
-    offMaximized = window.api.on('win:maximized', (v) => {
-        maximized.value = v
-    })
-})
-
-onBeforeUnmount(() => {
-    offMaximized?.()
-})
 </script>
 
 <template>
@@ -302,24 +259,7 @@ onBeforeUnmount(() => {
                 </button>
             </el-tooltip>
             <span class="divider" />
-            <el-tooltip :content="$t('app.minimize')" placement="bottom" :show-after="300">
-                <button class="icon-btn" type="button" @click="winMinimize">
-                    <span v-if="useWinGlyphs" class="wglyph" :style="glyphStyle" aria-hidden="true">{{ WIN_GLYPH.minimize }}</span>
-                    <el-icon v-else><MinusOutlined /></el-icon>
-                </button>
-            </el-tooltip>
-            <el-tooltip :content="maximized ? $t('app.restore') : $t('app.maximize')" placement="bottom" :show-after="300">
-                <button class="icon-btn" type="button" @click="winMaximize">
-                    <span v-if="useWinGlyphs" class="wglyph" :style="glyphStyle" aria-hidden="true">{{ maxRestoreGlyph }}</span>
-                    <el-icon v-else><component :is="maximized ? FullscreenExitOutlined : FullscreenOutlined" /></el-icon>
-                </button>
-            </el-tooltip>
-            <el-tooltip :content="$t('app.closeHint')" placement="bottom" :show-after="300">
-                <button class="icon-btn danger" type="button" @click="winClose">
-                    <span v-if="useWinGlyphs" class="wglyph" :style="glyphStyle" aria-hidden="true">{{ WIN_GLYPH.close }}</span>
-                    <el-icon v-else><CloseOutlined /></el-icon>
-                </button>
-            </el-tooltip>
+            <WindowControls />
         </div>
     </header>
 
@@ -416,57 +356,20 @@ onBeforeUnmount(() => {
 .titlebar .icon-btn {
     -webkit-app-region: no-drag;
 }
-.divider {
-    width: 1px;
-    height: 22px;
-    background: var(--el-border-color-lighter);
-    margin: 0 6px;
-}
+/* .divider / .icon-btn / .wglyph 已上提到 styles/shared.css（与向导导航栏共用）。 */
 /* 左侧快捷站与标签条之间的分割线：去掉右侧外边距，紧贴标签条 */
 .quick .divider {
     margin-right: 0;
 }
-.icon-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    /* 点击热区仍是 40×40，只把图标本身调小 —— antdv 图标按 1em 走，改 font-size 即可（见 AGENT.md §6）。 */
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
-    border: none;
-    border-radius: var(--el-border-radius-base);
-    background: transparent;
-    color: var(--el-text-color-regular);
-    cursor: pointer;
-}
-.icon-btn:hover {
-    background: var(--el-fill-color);
-    color: var(--el-color-primary);
-}
 .icon-btn.active {
     color: var(--el-color-primary);
     background: var(--el-color-primary-light-9);
-}
-.icon-btn.danger:hover {
-    background: var(--el-color-danger);
-    color: #fff;
 }
 .icon-btn.core-jump {
     width: auto;
     padding: 0 10px;
     gap: 6px;
     font-size: 13px;
-}
-/* Windows 窗口控制字形（字体族由 TitleBar 内联注入，见 lib/winicons.ts 的 WIN_GLYPH_STACK）。
-    图标字体的字形自带留白，12px 才是 Windows 标题栏的观感；18px（.icon-btn 的 antdv 图标尺寸）会明显偏大。
-    行高锁 1 且不参与基线对齐，避免字形在 flex 居中的按钮里被推偏。 */
-.wglyph {
-    font-size: 12px;
-    line-height: 1;
-    font-weight: 400;
-    /* 图标字体只有 Regular 一档，禁止浏览器合成字形 */
-    font-synthesis: none;
 }
 .core-jump__txt {
     white-space: nowrap;

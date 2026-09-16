@@ -16,6 +16,55 @@
 }
 
 /*
+ * 标题栏图标按钮：应用标题栏（TitleBar）与安装向导的专属导航栏（DshWizard 里的
+ * `WindowControls`）共用。向导是全屏遮罩、会盖住应用标题栏，所以窗口控制按钮必须
+ * 在那里再来一份 —— 两处的按钮样式必须一致，否则同一个按钮在两种界面下长得不一样。
+ */
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* 点击热区固定 40×40，只把图标本身调小 —— antdv 图标按 1em 走，改 font-size 即可。 */
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    border: none;
+    border-radius: var(--el-border-radius-base);
+    background: transparent;
+    color: var(--el-text-color-regular);
+    cursor: pointer;
+}
+.icon-btn:hover {
+    background: var(--el-fill-color);
+    color: var(--el-color-primary);
+}
+.icon-btn.danger:hover {
+    background: var(--el-color-danger);
+    color: #fff;
+}
+
+/*
+ * Windows 窗口控制字形（字体族由调用方内联注入，见 lib/winicons.ts 的 WIN_GLYPH_STACK）。
+ * 图标字体的字形自带留白，12px 才是 Windows 标题栏的观感；18px（.icon-btn 的 antdv 图标尺寸）
+ * 会明显偏大。行高锁 1 且不参与基线对齐，避免字形在 flex 居中的按钮里被推偏。
+ */
+.wglyph {
+    font-size: 12px;
+    line-height: 1;
+    font-weight: 400;
+    /* 图标字体只有 Regular 一档，禁止浏览器合成字形 */
+    font-synthesis: none;
+}
+
+/* 标题栏 / 向导导航栏里的竖直分割线（两个以上组件共用）。 */
+.divider {
+    width: 1px;
+    height: 22px;
+    background: var(--el-border-color-lighter);
+    margin: 0 6px;
+}
+
+/*
  * 表单说明文字：网络字段组件（ProxyFields / ThreadsField）共用 —— 它们既在设置页的
  * `.settings` 里，也在首次安装向导里；后者没有 `.settings .hint` 那条作用域规则，
  * 所以样式必须跟着组件走，而不是依赖设置页的容器类。
