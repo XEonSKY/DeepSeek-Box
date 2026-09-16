@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { DashboardOutlined, RocketOutlined, ThunderboltOutlined, CompassOutlined } from '@antdv-next/icons'
-import { ElMessageBox } from 'element-plus'
 import { tt } from '../../lib/locales'
+import { confirmDialog } from '../../lib/confirm'
 import { useSettingsStore } from './useSettingsStore'
 
 /**
@@ -21,15 +21,13 @@ const open = ref(['system-startup', 'system-performance', 'system-browser'])
 /** 图形加速开关：确认后保存并重启。 */
 async function onGpuAccel(v: boolean): Promise<void> {
     if (v === state.hardwareAcceleration) return
-    try {
-        await ElMessageBox.confirm(tt('sv.system.gpuAccelText'), tt('sv.system.gpuAccel'), {
-            confirmButtonText: tt('sv.system.restartNow'),
-            cancelButtonText: tt('msg.cancelBtn'),
-            type: 'warning'
-        })
-    } catch {
-        return // 取消：不动设置
-    }
+    const ok = await confirmDialog({
+        title: tt('sv.system.gpuAccel'),
+        message: tt('sv.system.gpuAccelText'),
+        confirmText: tt('sv.system.restartNow'),
+        cancelText: tt('msg.cancelBtn')
+    })
+    if (!ok) return // 取消：不动设置
     state.hardwareAcceleration = v
     try {
         const cur = await window.api.get('/settings')

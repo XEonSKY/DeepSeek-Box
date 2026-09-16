@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { FolderOutlined, ReloadOutlined, PoweroffOutlined, SettingOutlined, DesktopOutlined, PlusOutlined, DeleteOutlined } from '@antdv-next/icons'
 import type { ConfigDirInfo } from '@shared/types'
 import { useSettingsStore } from './useSettingsStore'
 import { SEARCH_ENGINE_IDS, ENGINE_LABEL_KEY } from '../../lib/engines'
+import { confirmDialog } from '../../lib/confirm'
 
 const { state, actions } = useSettingsStore()
 const { t } = useI18n({ useScope: 'global' })
@@ -43,18 +44,19 @@ async function applyConfigDir(next: ConfigDirInfo, wanted: string): Promise<void
         return
     }
     if (!next.pending) return
-    try {
-        await ElMessageBox.confirm(t('sv.general.configDirConfirm', { to: next.pending.to }), t('sv.general.configDirConfirmTitle'), {
-            confirmButtonText: t('sv.general.configDirOk'),
-            cancelButtonText: t('sv.general.configDirCancel'),
-            type: 'warning'
-        })
-        // 保留更改：真正的迁移等到下次重启的引导阶段执行
-        ElMessage.info(t('sv.general.configDirWillMigrate', { to: next.pending.to }))
-    } catch {
+    const ok = await confirmDialog({
+        title: t('sv.general.configDirConfirmTitle'),
+        message: t('sv.general.configDirConfirm', { to: next.pending.to }),
+        confirmText: t('sv.general.configDirOk'),
+        cancelText: t('sv.general.configDirCancel')
+    })
+    if (!ok) {
         cfg.value = await window.api.post('/config-dir/revert')
         ElMessage.info(t('sv.general.configDirReverted'))
+        return
     }
+    // 保留更改：真正的迁移等到下次重启的引导阶段执行
+    ElMessage.info(t('sv.general.configDirWillMigrate', { to: next.pending.to }))
 }
 
 async function changeConfigDir(): Promise<void> {

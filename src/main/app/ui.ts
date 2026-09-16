@@ -26,7 +26,8 @@ import { registerShellWindow, hasCoreWindow, promoteNextToCore, windowByContents
 import { attachContextMenu } from './contextmenu'
 import { effectiveIconPath } from './appicon'
 
-function rendererIndex(): string {
+/** 渲染层入口：dev 下是 Vite server URL，打包后是 index.html 的绝对路径。 */
+export function rendererIndex(): string {
     const devUrl = process.env['ELECTRON_RENDERER_URL']
     if (devUrl) return devUrl
     return path.join(__dirname, '../renderer/index.html')

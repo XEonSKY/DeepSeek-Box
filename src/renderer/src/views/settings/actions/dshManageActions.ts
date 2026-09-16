@@ -1,6 +1,7 @@
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { errorMessage } from '@shared/errors'
 import { tt } from '../../../lib/locales'
+import { confirmDialog } from '../../../lib/confirm'
 import { dshCheck, checkAndNotify } from '../../../lib/update'
 import type { SettingsState } from '../settingsStore'
 
@@ -58,16 +59,14 @@ export function createDshManageActions(state: SettingsState): DshManageActions {
             running = false
         }
         if (!running) return true
-        try {
-            await ElMessageBox.confirm(body, tt('msg.dshRunningTitle'), {
-                confirmButtonText: tt('msg.continueBtn'),
-                cancelButtonText: tt('msg.cancelBtn'),
-                type: 'warning'
-            })
-            return true
-        } catch {
-            return false // cancelled
-        }
+        const ok = await confirmDialog({
+            title: tt('msg.dshRunningTitle'),
+            message: body,
+            confirmText: tt('msg.continueBtn'),
+            cancelText: tt('msg.cancelBtn'),
+            danger: true
+        })
+        return ok
     }
 
     async function runUpdateCheck(): Promise<void> {
@@ -138,15 +137,14 @@ export function createDshManageActions(state: SettingsState): DshManageActions {
     }
 
     async function confirmUninstall(): Promise<void> {
-        try {
-            await ElMessageBox.confirm(tt('msg.uninstallBoxText', { pkg: '@deepseek-ai/dsh' }), tt('msg.uninstallBoxTitle'), {
-                confirmButtonText: tt('msg.uninstallOkBtn'),
-                cancelButtonText: tt('msg.cancelBtn'),
-                type: 'warning'
-            })
-        } catch {
-            return // cancelled
-        }
+        const ok = await confirmDialog({
+            title: tt('msg.uninstallBoxTitle'),
+            message: tt('msg.uninstallBoxText', { pkg: '@deepseek-ai/dsh' }),
+            confirmText: tt('msg.uninstallOkBtn'),
+            cancelText: tt('msg.cancelBtn'),
+            danger: true
+        })
+        if (!ok) return // cancelled
         state.uninstalling = true
         try {
             const r = await window.api.delete('/dsh')

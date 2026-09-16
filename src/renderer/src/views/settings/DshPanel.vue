@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { ClusterOutlined, FolderOutlined, SendOutlined, ReloadOutlined } from '@antdv-next/icons'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { InstalledVersions } from '@shared/types'
 import { errorMessage } from '@shared/errors'
 import { withV } from '@shared/version'
 import { dshCheck } from '../../lib/update'
 import { tt } from '../../lib/locales'
+import { confirmDialog } from '../../lib/confirm'
 import { useSettingsStore } from './useSettingsStore'
 import { useInstallCancel } from './useInstallCancel'
 
@@ -67,15 +68,14 @@ async function useInstalled(version: string): Promise<void> {
 
 /** 删除已安装版本；删除前确认，删除生效版本时主进程会自动切到剩余最新版。 */
 async function removeInstalled(version: string): Promise<void> {
-    try {
-        await ElMessageBox.confirm(tt('sv.env.removeVersionConfirm', { version: withV(version) }), tt('sv.env.removeVersion'), {
-            confirmButtonText: tt('sv.env.removeVersion'),
-            cancelButtonText: tt('msg.cancelBtn'),
-            type: 'warning'
-        })
-    } catch {
-        return // 用户取消
-    }
+    const ok = await confirmDialog({
+        title: tt('sv.env.removeVersion'),
+        message: tt('sv.env.removeVersionConfirm', { version: withV(version) }),
+        confirmText: tt('sv.env.removeVersion'),
+        cancelText: tt('msg.cancelBtn'),
+        danger: true
+    })
+    if (!ok) return // 用户取消
     try {
         const r = await window.api.delete('/versions/:kind/:version', { params: { kind: 'dsh', version } })
         if (r.ok) {

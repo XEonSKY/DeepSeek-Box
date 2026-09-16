@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { BgColorsOutlined, BulbOutlined, DeleteOutlined, PictureOutlined, PlusOutlined } from '@antdv-next/icons'
 import { tt, applyExtTranslation, applyLocaleChange, currentLocale } from '../../lib/locales'
+import { confirmDialog } from '../../lib/confirm'
 import { COLOR_SCHEMES, isDark, schemeBackgrounds } from '../../lib/theme'
 import { useSettingsStore } from './useSettingsStore'
 import type { AppIconInfo, FunLocale, ResolvedLocale } from '@shared/types'
@@ -60,15 +61,13 @@ watch(() => state.funLocale, (v) => applyExtTranslation(v))
 // 禁用系统缩放需重启生效：确认→保存并重启；取消→不做任何修改（回退）。
 async function onSysScale(v: boolean): Promise<void> {
     if (v === state.ignoreSystemScale) return
-    try {
-        await ElMessageBox.confirm(tt('sv.appearance.sysScaleText'), tt('sv.appearance.ignoreScale'), {
-            confirmButtonText: tt('sv.appearance.restartNow'),
-            cancelButtonText: tt('msg.cancelBtn'),
-            type: 'warning'
-        })
-    } catch {
-        return // 取消：回退修改（状态未变更）
-    }
+    const ok = await confirmDialog({
+        title: tt('sv.appearance.ignoreScale'),
+        message: tt('sv.appearance.sysScaleText'),
+        confirmText: tt('sv.appearance.restartNow'),
+        cancelText: tt('msg.cancelBtn')
+    })
+    if (!ok) return // 取消：回退修改（状态未变更）
     state.ignoreSystemScale = v
     try {
         const cur = await window.api.get('/settings')
@@ -124,15 +123,14 @@ async function onIconFile(e: Event): Promise<void> {
 
 /** 删除用户上传的图标；若它正被选中，主进程会一并回退内置 Logo。 */
 async function removeIcon(it: AppIconInfo): Promise<void> {
-    try {
-        await ElMessageBox.confirm(tt('sv.appearance.iconDeleteText', { name: it.name }), tt('sv.appearance.iconDelete'), {
-            confirmButtonText: tt('msg.deleteBtn'),
-            cancelButtonText: tt('msg.cancelBtn'),
-            type: 'warning'
-        })
-    } catch {
-        return // 取消删除
-    }
+    const ok = await confirmDialog({
+        title: tt('sv.appearance.iconDelete'),
+        message: tt('sv.appearance.iconDeleteText', { name: it.name }),
+        confirmText: tt('msg.deleteBtn'),
+        cancelText: tt('msg.cancelBtn'),
+        danger: true
+    })
+    if (!ok) return // 取消删除
     try {
         // 选中的正是它时先在本地回退内置 Logo：主进程也会落盘回退，但它的 settings:changed 广播
         // 可能落在本窗口的「忽略自保存回放」窗口期内，本地同步一次才不会留下悬空的选中态。

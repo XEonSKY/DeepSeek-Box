@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ReloadOutlined, SendOutlined, GithubOutlined } from '@antdv-next/icons'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useSettingsStore } from './useSettingsStore'
 import { friendlyPlatform } from './settingsStore'
 import type { AppMeta, AppSlotsState, AppUpdateEvent } from '@shared/types'
 import { errorMessage } from '@shared/errors'
 import { useAppIcon } from '../../lib/appIcon'
 import { tt } from '../../lib/locales'
+import { confirmDialog } from '../../lib/confirm'
 import { formatDownload } from '../../lib/format'
 
 const { state } = useSettingsStore()
@@ -232,15 +233,14 @@ function archiveSize(bytes: number): string {
 /** 手动回退到上一版（二次确认后重启应用）。 */
 async function rollback(): Promise<void> {
     const version = slots.value?.previous?.version ?? ''
-    try {
-        await ElMessageBox.confirm(
-            tt('sv.about.rollbackConfirm', { version }),
-            tt('sv.about.rollbackConfirmTitle'),
-            { type: 'warning', confirmButtonText: tt('sv.about.rollback'), cancelButtonText: tt('sv.about.rollbackCancel') }
-        )
-    } catch {
-        return
-    }
+    const ok = await confirmDialog({
+        title: tt('sv.about.rollbackConfirmTitle'),
+        message: tt('sv.about.rollbackConfirm', { version }),
+        confirmText: tt('sv.about.rollback'),
+        cancelText: tt('sv.about.rollbackCancel'),
+        danger: true
+    })
+    if (!ok) return
     const r = await window.api.post('/app/update/rollback')
     if (r.ok) ElMessage.success(tt('sv.about.rollbackStarted'))
     else ElMessage.error(tt('sv.about.rollbackFailed', { message: r.message }))

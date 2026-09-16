@@ -12,6 +12,7 @@ import { appMeta, appSlotsState, appUpdateState, triggerAppUpdate, restartAndIns
 import { broadcast, getCurrentUrl, getMainWindow, sendCore, sendToWindow, sendToWcId } from './runtime'
 import { isCoreWindow, windowByContentsId, listWindows } from './windowreg'
 import { openStandaloneWindow, focusCoreWindow, takeOpenIntent, createSecondaryShellWindow, syncGlobalHotkey, globalHotkeyState } from './ui'
+import { confirmDialogContext, openConfirmDialog, replyConfirmDialog } from './confirmDialog'
 import { applyWebviewProxy, applyWebviewUserAgent, defaultUserAgent, effectiveUserAgent } from './webview'
 import { applyAutoLaunch } from './autolaunch'
 import { listAppIcons, currentAppIcon, saveUserIcon, deleteUserIcon, applyAppIcon } from './appicon'
@@ -285,6 +286,25 @@ export function registerIpc(): void {
                 ]
             })
             return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]
+        })
+        // 独立确认子窗口：开窗 → 等待确认窗回传结果。文案已由渲染层 i18n。
+        .post('/dialog/confirm', async ({ event, body }) => {
+            const confirmed = await openConfirmDialog(
+                {
+                    title: body.title,
+                    message: body.message,
+                    detail: body.detail,
+                    confirmText: body.confirmText,
+                    cancelText: body.cancelText,
+                    danger: body.danger === true
+                },
+                windowOfSender(event)
+            )
+            return { confirmed }
+        })
+        .get('/dialog/confirm/context', ({ event }) => confirmDialogContext(event.sender.id))
+        .post('/dialog/confirm/reply', ({ event, body }) => {
+            replyConfirmDialog(event.sender.id, body.confirmed === true)
         })
 
         // ---- 外壳 / 标签 / 窗口 ----

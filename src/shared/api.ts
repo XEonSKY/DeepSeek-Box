@@ -19,6 +19,7 @@ import type {
     AppUpdateEvent,
     ConfigDirInfo,
     ConfigMigrationProgress,
+    ConfirmDialogRequest,
     CurrentBalanceInfo,
     DshActionResult,
     EnvProbe,
@@ -166,6 +167,14 @@ export interface ApiRoutes {
     // ---- 原生对话框 ----
     'POST /dialog/directory': { result: string | null }
     'POST /dialog/file': { result: string | null }
+
+    // ---- 独立确认子窗口（自建无边框窗口，取代内嵌确认弹层）----
+    /** 弹出一个独立确认窗口并等待用户选择。 */
+    'POST /dialog/confirm': { body: ConfirmDialogRequest; result: { confirmed: boolean } }
+    /** 确认窗挂载后拉取自己的载荷（避免 did-finish-load 与订阅的时序竞态）。 */
+    'GET /dialog/confirm/context': { result: ConfirmDialogRequest | null }
+    /** 确认窗回传结果；主进程据此关窗并 resolve。 */
+    'POST /dialog/confirm/reply': { body: { confirmed: boolean }; result: void }
 
     // ---- 外壳窗口 / 标签 ----
     'POST /shell/open-external': { body: { url: string }; result: void }
