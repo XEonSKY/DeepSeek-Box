@@ -10,6 +10,7 @@ import { errorMessage } from '@shared/errors'
 import { useAppIcon } from '../lib/appIcon'
 import { formatDownload } from '../lib/format'
 import ProxyFields from './ProxyFields.vue'
+import WindowControls from './WindowControls.vue'
 
 /**
  * @deepseek-ai/dsh 包缺失时的全屏安装向导。
@@ -502,17 +503,33 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="missing-mask">
-        <div class="missing-card">
-            <div class="missing-icon"><img :src="appIcon" alt="DeepSeek Box" draggable="false" class="missing-logo" /></div>
-            <h2 class="missing-title">{{ $t('dshMissing.title') }}</h2>
-            <p class="missing-desc">{{ $t('dshMissing.wizIntro', { pkg: '@deepseek-ai/dsh' }) }}</p>
-
+        <!--
+            向导专属顶部导航栏：**步骤条在左，向导入口与窗口控制在右**。
+            向导是覆盖整个窗口的遮罩（z-index 高于应用标题栏），此时标题栏上的窗口按钮
+            被完全挡住 —— 安装期间窗口就既不能拖也不能最小化 / 关闭。这里复刻一份
+            （窗口按钮直接复用 WindowControls，行为与标题栏完全一致）。
+            导航栏整条可拖动窗口，按钮与步骤条区域不可拖。
+        -->
+        <header class="wiz-navbar">
             <el-steps :active="step" align-center finish-status="success" class="wiz-steps">
                 <el-step :title="$t('dshMissing.wiz.source')" />
                 <el-step :title="$t('dshMissing.wiz.node')" />
                 <el-step :title="$t('dshMissing.wiz.npm')" />
                 <el-step :title="$t('dshMissing.wiz.dsh')" />
             </el-steps>
+
+            <div class="wiz-navbar__acts">
+                <el-button size="small" :icon="LinkOutlined" @click="proxyFull = true">{{ $t('dshMissing.proxySettings') }}</el-button>
+                <el-button size="small" :icon="FileTextOutlined" @click="logFullscreen = true">{{ $t('dshMissing.viewLog') }}</el-button>
+                <span class="divider" />
+                <WindowControls />
+            </div>
+        </header>
+
+        <div class="missing-card">
+            <div class="missing-icon"><img :src="appIcon" alt="DeepSeek Box" draggable="false" class="missing-logo" /></div>
+            <h2 class="missing-title">{{ $t('dshMissing.title') }}</h2>
+            <p class="missing-desc">{{ $t('dshMissing.wizIntro', { pkg: '@deepseek-ai/dsh' }) }}</p>
 
             <div class="wiz-body">
                 <!-- 探测/初始化失败：明确告知原因并提供重试，避免「选项全都不可用」的无解释界面 -->
@@ -761,12 +778,6 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <!-- 右上角入口：代理设置 / 查看日志。向导本身不铺开表单，点开才是全屏面板 -->
-            <div class="wiz-top">
-                <el-button size="small" :icon="LinkOutlined" @click="proxyFull = true">{{ $t('dshMissing.proxySettings') }}</el-button>
-                <el-button size="small" :icon="FileTextOutlined" @click="logFullscreen = true">{{ $t('dshMissing.viewLog') }}</el-button>
-            </div>
-
             <!-- 全屏代理设置：与「设置 → 网络 → 代理」同一批字段（共用 ProxyFields） -->
             <transition name="fade">
                 <div v-if="proxyFull" class="net-full">
@@ -818,7 +829,8 @@ onBeforeUnmount(() => {
     align-items: safe center;
     justify-content: center;
     overflow: auto;
-    padding: 24px 0;
+    /* 顶部让出专属导航栏的高度，否则卡片会被导航栏压住 */
+    padding: var(--titlebar-h, 52px) 0 24px;
     background: var(--el-bg-color);
 }
 .missing-card {
@@ -882,9 +894,45 @@ onBeforeUnmount(() => {
     word-break: break-all;
 }
 /* ---- 首次安装引导 ---- */
+/*
+ * 专属导航栏：高度与下边框都对齐应用标题栏（同一 --titlebar-h 变量），
+ * 这样「向导盖住标题栏」时视觉上是同一条栏，不会跳一下。
+ * 整条可拖动窗口；内部的按钮与步骤条各自关闭拖动。
+ */
+.wiz-navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2001;
+    height: var(--titlebar-h, 52px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    /* 右侧不留内边距：窗口按钮像系统标题栏那样贴住窗口右边缘 */
+    padding: 0 10px 0 14px;
+    /* 下边框用 inset 阴影画，不占布局高度（与 TitleBar 一致） */
+    box-shadow: inset 0 -1px 0 var(--el-border-color-light);
+    background: var(--el-bg-color);
+    -webkit-app-region: drag;
+    user-select: none;
+}
+/* 步骤条靠左：可收缩，窄窗口下不与右侧按钮抢位置 */
 .wiz-steps {
-    margin: 6px 0 18px;
-    --el-step-title-font-size: 13px;
+    flex: 0 1 560px;
+    min-width: 0;
+    --el-step-title-font-size: 12px;
+}
+.wiz-navbar__acts {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+/* 导航栏里的按钮可点不可拖 */
+.wiz-navbar__acts :deep(.el-button) {
+    -webkit-app-region: no-drag;
 }
 .wiz-body {
     text-align: left;
@@ -1043,15 +1091,7 @@ onBeforeUnmount(() => {
     left: 100%;
     }
 }
-/* ---- 右上角入口 + 全屏面板 ---- */
-.wiz-top {
-    position: absolute;
-    top: 12px;
-    right: 18px;
-    z-index: 2001;
-    display: flex;
-    gap: 8px;
-}
+/* ---- 全屏面板 ---- */
 /* 全屏面板（代理设置）：与全屏日志同构，只是内容是表单而不是等宽文本 */
 .net-full {
     position: fixed;
