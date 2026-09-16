@@ -4,9 +4,9 @@ import en from '@shared/locales/en'
 import hant from '@shared/locales/zh/hant'
 
 /**
- * i18n **三处同步**是项目铁律之一：新增文案必须同时改 zh / en / hant。
- * 这里用测试把它变成可执行的约束 —— 漏掉一处时 CI 直接红，
- * 而不是等用户切到繁体才发现界面里冒出一串 key。
+ * i18n 的硬约束是 **zh / en 逐键对齐**（hant 只是差异覆盖目录，无需同步补充）。
+ * 测试守住：en 覆盖 zh 的全部键、en 不多余、hant 只做子集覆盖（含占位符一致）——
+ * 漏掉一处时 CI 直接红，而不是等切到英文才发现界面里冒出一串 key。
  */
 
 type Dict = Record<string, unknown>

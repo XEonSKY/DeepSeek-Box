@@ -113,7 +113,7 @@ async function bootstrap() {
 1. 在 `views/settings/` 新建 `XxxPanel.vue`（`<script setup lang="ts">`，4 空格缩进）。
 2. 在 `SettingsView.vue` 注册入口（导航 + 条件渲染）。
 3. 需要持久化的项：加到 `shared/types.ts` 的 `Settings` 与默认值，并按需订阅 `settings:changed`。
-4. 文案加到 locales（zh / en / hant 三处，见 conventions.md）。
+4. 文案加到 locales（zh / en 两处；hant 是差异覆盖，无需补充，见 conventions.md）。
 5. `npm run typecheck` + `npm run lint`。
 
 ## 与主进程通信

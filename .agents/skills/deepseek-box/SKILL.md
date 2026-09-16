@@ -5,7 +5,7 @@ license: Apache-2.0
 metadata:
   scope: workspace-only
   project: DeepSeek Box
-  version: "0.1.6-alpha.3"  # 跟随应用版本
+  version: "0.1.6-alpha.4"  # 跟随应用版本
 ---
 
 # DeepSeek Box 项目开发技能
@@ -56,10 +56,10 @@ metadata:
 4. **主进程推送不能直接 `webContents.send`**：用 `runtime.ts` 的 `broadcast` / `sendToWindow` / `sendToWcId` / `sendCore`，否则绕过 `ipc:event` 信封，渲染层收不到。
 5. **密钥不出主进程**：模型 / 余额相关的凭据读取只留在主进程，渲染层拿不到明文。
 6. **设置派生状态必须订阅 `settings:changed`**：否则表现为「改完要重启才生效」；发起保存的窗口忽略回放（靠 store 的 `lastSaveAt`）。
-7. **归一化必须保留 `legacy` 判断**：`loadSettings()` 按 `settingsVersion`（当前 2）做一次性迁移，不能反复改写用户手填值。
-8. **i18n 三处同步**：新增文案要同时改 `src/shared/locales/zh/index.ts`、`en/index.ts`、`zh/hant.ts`，键名 / 顺序 / 占位符都对齐。
+7. **归一化必须保留 `legacy` 判断**：`loadSettings()` 按 `settingsVersion`（当前 3）做一次性迁移，不能反复改写用户手填值。
+8. **i18n 两处同步**：新增文案要同时改 `src/shared/locales/zh/index.ts` 与 `en/index.ts`，键名 / 顺序 / 占位符都对齐。`zh/hant.ts` 是**差异覆盖目录，无需同步补充**（新增键不补繁体，运行时自动回落到简体基座）。
 9. **代码风格**：缩进 **4 个空格**（`src/**`、`.vitepress/**`、`scripts/**` 的 ts/vue/js/css/mts 与 `package.json`、`tsconfig*.json` 全部统一）；注释与 JSDoc 用**简要中文**。**YAML 例外**：`.github/workflows/*.yml` 保持 2 空格（缩进敏感 + Actions 惯例），见 `.editorconfig`。
-10. **agent 只做静态验证**：`npm run typecheck` / `npm run lint`（必要时 `npm run build`）。运行时行为（窗口 / 托盘 / 下载 / 迁移 / 自更新）由用户验证，**不要自行启动应用**。
+10. **agent 只做静态验证**：只跑 `npm run typecheck` / `npm run lint`（必要时 `npm run build`）。**不要主动跑测试**（`npm run check` / `npm run test` / `test:watch` / `test:coverage` 一律由用户执行）；运行时行为（窗口 / 托盘 / 下载 / 迁移 / 自更新）由用户验证，**不要自行启动应用**。
 11. **agent 产生的缓存 / 临时文件统一放 `.agents/temp/`**（用完即删），不要散落到工作区根或 `docs/`。
 12. **分支与推送**：改动推送至 `dev`，**发行时才推 `main`**；任何 `git push`（含 `--force` / `--tags` / 删远程分支标签）都要先说明目标并征得同意；本地 `add`/`commit`/`branch`/`merge`/`checkout` 可直接做。
 13. **一个提交只做一件事**，禁止顺手改无关文件；不维护 `CHANGELOG.md`，变更记录以 GitHub Release notes 为准。
@@ -69,7 +69,7 @@ metadata:
 17. **技能维护**：`deepseek-box` 攒一批再统一更新；`metadata.version` 跟随应用版本。
 18. **版本号规范 `X.Y.Z-{alpha|beta|rc}.N`**：主次修订三段正常递增，**预发布通道限定为 alpha / beta / rc**，通道内序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；遵守 semver 字典序，故 `alpha < beta < rc` 升级链天然正确。改版本要**同时改四处**：`package.json`、`package-lock.json` 顶层与 `packages[""]`、技能 `metadata.version`；一律不带 `v` 前缀（`v` 只在 Git tag 上）。
 19. **提交信息用 Conventional Commits**：`feat:` / `fix:` / `docs:` / `refactor:` / `chore:` 等。
-20. **质量门禁**：`npm run check`（typecheck + lint + 单元测试）必须通过；仓库自带 `.githooks/pre-commit`（`npm install` 的 `prepare` 自动启用 core.hooksPath），CI 见 `.github/workflows/quality.yml`；仅紧急情况用 `--no-verify`。
+20. **质量门禁**：`npm run check`（typecheck + lint + 单元测试）必须通过 —— 由用户或 `.githooks/pre-commit`（`npm install` 的 `prepare` 自动启用 core.hooksPath）、CI（`.github/workflows/quality.yml`）执行，**agent 不主动跑**；仅紧急情况用 `--no-verify`。
 21. **纯逻辑必须配单测**：`src/shared/**` 与 `src/main/**` 里不依赖 Electron 的纯函数（版本比较、路径与文件助手、设置归一化、i18n 解析）改动时必须补 `*.test.ts`。**测试统一收在 `tests/` 下、按被测层分目录**（`tests/{shared,main,renderer}/`，文件名与被测模块同名），**源码目录里不得出现 `*.test.ts`**；测试内用 `@shared` / `@main` / `@` 别名，不用跨目录相对路径。组件渲染与运行时行为仍由用户验证。
 22. **`.agents` 入库策略**：`.agents/skills/**` 纳入版本管理；`.agents/temp/` 忽略（仅保留 `.gitkeep`）。
 23. **文档同步节奏**：开发期只维护技能；`docs/` 中英在**发布时**统一更新，并同时整理技能。
@@ -77,6 +77,7 @@ metadata:
 25. **antdv-next 按需引入**：组件与样式由 `electron.vite.config.ts` 的 `AntdvNextResolver` 自动注入，模板里直接写 `<a-button>` 即可，**不要手动 `import { Button }`，也不要全量 `app.use(Antdv)`**；需要上下文（`message` / `Modal` / `notification`）时从 `antdv-next` 显式导入，根容器由 `lib/antdv.ts` 的 `AntdvRoot` 提供。
 26. **Element Plus 迁移进行中**：改动触及某个文件时，顺手把该文件内的 `el-*` 换成 antdv 等价组件（语义对齐、不改变观感行为）；剩余存量逐步清理，全部替换后再卸载 `element-plus` 并移除 `element-plus` 样式。
 27. **图标用 `@antdv-next/icons`**：`@ant-design/icons-vue` 与 antdv-next 不适配，不要引入。
+28. **命令尽量堆叠**：能用一次调用跑完的多条命令，就不要拆成多次 —— 用 `;` / `&&` 串联，或写成一段脚本一次跑完；互不依赖的只读命令也尽量合并。串联时用 `&&`（或显式检查 `$LASTEXITCODE`），**不要用 `;` 把前面的失败掩盖掉**。
 
 ## 任务路由表
 
@@ -85,7 +86,7 @@ metadata:
 | 新增 / 改 IPC 端点 | `src/shared/api.ts` 的 `ApiRoutes` | `src/main/app/ipc.ts` | references/ipc.md |
 | 新增主进程事件 | `shared/api.ts` 的 `AppEvents` | 用 `broadcast` 发送 + 渲染层 `api.on` | references/ipc.md |
 | 新增 / 改设置项 | `shared/types.ts`（`Settings` + 默认值） | 归一化 legacy、订阅 `settings:changed` | references/main-process.md |
-| 新增界面文案 | `locales/zh/index.ts`、`en/index.ts` | `zh/hant.ts` | references/conventions.md |
+| 新增界面文案 | `locales/zh/index.ts`、`en/index.ts` | hant 可选（差异覆盖，不必补） | references/conventions.md |
 | 新增设置面板 | `renderer/src/views/settings/*.vue` | `SettingsView.vue` 注册 + 文案 | references/renderer.md |
 | 改 dsh / Node / npm 安装 | `main/dsh/{manage,nodeenv,npmRunner}.ts` | `dsh/installs.ts` 版本目录 | references/main-process.md |
 | 改下载 / 取消 / 解压 | `main/dsh/downloader.ts`、`cancel.ts` | 进度事件 `phase` | references/main-process.md |
@@ -102,9 +103,9 @@ metadata:
 | `npm install` | 安装依赖 |
 | `npm run dev` | 开发态（electron-vite，主进程改动自动重启、渲染层 HMR） |
 | `npm run typecheck` | 类型检查（node + web 两份） |
-| `npm run check` | typecheck + lint + 单测（提交前必过；pre-commit 钩子自动执行） |
-| `npm run test` | 只跑单元测试 |
-| `npm run test:watch` | 单元测试 watch 模式 |
+| `npm run check` | typecheck + lint + 单测（用户 / pre-commit 执行；agent 不主动跑） |
+| `npm run test` | 只跑单元测试（用户执行；agent 不主动跑） |
+| `npm run test:watch` | 单元测试 watch 模式（用户执行） |
 | `npm run lint` / `lint:fix` | ESLint（0 error 为通过） |
 | `npm run build` | 构建到 `out/` |
 | `npm run dist:win` / `dist:mac` / `dist:linux` | 打包安装包 |
@@ -117,9 +118,9 @@ metadata:
 - [ ] 契约类改动是否 `shared/api.ts` 与 `main/app/ipc.ts` 两处一致（类型检查会拦，但先自查）？
 - [ ] 主进程联网是否都走 `httpFetch`？推送是否都走 `runtime` 的发送函数？
 - [ ] 设置项是否处理了 `legacy` 与 `settingsVersion`？派生 UI 是否订阅 `settings:changed`？
-- [ ] 文案是否 zh / en / hant 三处对齐？
+- [ ] 文案是否 zh / en 两处对齐（hant 无需补充）？
 - [ ] 缩进 4 空格、注释中文、无新增裸 `fetch` / 裸 `webContents.send`？
-- [ ] 新增 / 改动的纯逻辑是否补了 `tests/` 下的 `*.test.ts`（未落在源码目录），且 `npm run check`（typecheck + lint + 单测）通过？
+- [ ] 新增 / 改动的纯逻辑是否补了 `tests/` 下的 `*.test.ts`（未落在源码目录），且 agent 侧 `npm run typecheck` + `npm run lint` 通过？（单测不主动跑，交给用户）
 - [ ] 有需要人工验证的运行时行为，是否在最终说明里写清复现步骤？
 - [ ] 新依赖是否装对位置（前端 → `devDependencies`；主进程运行时 → `dependencies`）？
 - [ ] 缩进是否 4 空格（YAML 除外）？改过 YAML 是否验证过可解析？

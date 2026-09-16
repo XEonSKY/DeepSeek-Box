@@ -25,8 +25,8 @@
 ## i18n 文案
 
 - 单一来源：`src/shared/locales/{zh,en}/index.ts`，中英**逐键对齐**（键名、顺序、`{占位符}` 都一致）。
-- `zh/hant.ts` 是**全量繁体覆盖**；`zh/{anime,wenyan}.ts`、`en/{pirate,shakespeare}.ts` 是**只写差异的覆盖层**，由 `shared/locales/ext.ts` 深合并到基础文案。
-- **新增键时 zh / en / hant 三处一起加**，否则繁体用户会看到简体或原始 key。
+- `zh/hant.ts` 与 `zh/{anime,wenyan}.ts`、`en/{pirate,shakespeare}.ts` 一样是**只写差异的覆盖层**，由 `shared/locales/ext.ts` 深合并到基础文案。
+- **新增键时只需改 zh / en 两处**；hant **无需同步补充**，未覆盖的键自动回落到简体基座。
 - 文案是程序的一部分（`src/shared/locales/` 不算文档），可随功能一起改。
 
 ## 文档
@@ -45,7 +45,7 @@
 - 不维护 `CHANGELOG.md`，变更记录以 GitHub Release notes 为准。
 - **推送远程前必须请求确认**：任何 `git push`（普通、`--force`、`--tags`、删除远程分支 / 标签、移动标签）都要先说明目标（哪个分支、是否强推）并征得同意，不得自动推送。
 - 破坏性远程操作尤其要先确认。
-- **质量门禁**：`npm run check`（typecheck + lint + 单测）必须通过；仓库自带 `.githooks/pre-commit`（由 `npm install` 的 `prepare` 自动启用 `core.hooksPath`），CI 见 `.github/workflows/quality.yml`（`dev` push 与 PR，跑的是同一条命令）。
+- **质量门禁**：`npm run check`（typecheck + lint + 单测）必须通过 —— 由用户、`.githooks/pre-commit` 或 CI（`.github/workflows/quality.yml`）执行，**agent 不主动跑**。
 
 ## 依赖 / 日志 / 安全
 
@@ -66,6 +66,11 @@
 
 - `deepseek-box` 技能**攒一批再统一更新**；但影响开发方式的改动（新增约定、目录、命令、契约同步点）不要长期漏记。
 - 技能 `metadata.version` 跟随应用版本（`package.json`）。
+
+## 命令与工具调用
+
+- **可用时把多条命令堆叠进同一次调用**（用 `;` / `&&` 串联，或写成一段脚本一次跑完），减少无谓的往返；互不依赖的只读命令也尽量合并到一次调用，而不是反复单独发起。
+- 串联时让失败可见：用 `&&` 串联，或显式检查 `$LASTEXITCODE`；不要用 `;` 把前面命令的失败藏掉。
 
 ## 自动化测试与验证边界
 
@@ -94,7 +99,7 @@
 - 常见陷阱：
   - 模块顶层 `import { app } from 'electron'` 会让整条测试链路去加载 Electron，**别测这类模块**（例如 `app/settings.ts` 只测其中不依赖 Electron 的归一化函数，测试里按名导入即可）；
   - 打包时别把 `electron` 卷进来 —— 一旦卷进来，CI 上会触发 Electron 二进制下载。
-- agent 的验证边界：`npm run check`（= typecheck + lint + 单测）是**能自动验证的全部**（必要时再 `npm run build`）。
+- agent 的验证边界：只跑 `npm run typecheck` + `npm run lint`（必要时再 `npm run build`）。**不要主动跑测试**（`npm run check` / `npm run test`）—— 测试与 `npm run check` 由用户执行。
 - **运行时行为（窗口、托盘、下载、迁移、代理、自更新）仍由用户验证**：不要自行 `npm run dev` 启动应用；交付说明里写清需要用户验证的步骤。
 
 ## 版本与发布
