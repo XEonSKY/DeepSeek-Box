@@ -2,8 +2,9 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { useRouter } from 'vue-router'
-import { WalletOutlined } from '@antdv-next/icons'
+import { CheckCircleOutlined, DownloadOutlined, LoadingOutlined, WalletOutlined } from '@antdv-next/icons'
 import type { CurrentBalanceInfo } from '@shared/types'
+import { providerIcon } from '../lib/providerIcon'
 import type { VersionLine } from '../lib/update'
 import { checkAllUpdates, hasUpdate, refreshVersions, versionStatus } from '../lib/update'
 import { tt } from '../lib/locales'
@@ -132,22 +133,53 @@ function restartAndInstall(): void {
     void window.api.post('/app/update/restart')
 }
 
-/** 浮层里的状态文案；失败原因只放 title，避免撑破一行。 */
+/**
+ * 一行版本只在**三种有意义的结局**下出声，其余一律留白：
+ *
+ *  - `available` —— 有更新（用户需要知道并决定要不要装）；
+ *  - `latest`    —— 已是最新版本（用户点开检查后要一个「查过了，没问题」的答复）；
+ *  - `downloaded`—— 已下载，等待安装（用户需要知道「现在可以重启装上」）。
+ *
+ * `idle` / `checking` / `error` 返回空串：
+ *  - idle 是初始态，说「尚未检查」只是噪音；
+ *  - checking 由按钮上的 loading 表达，再写一遍「检测中」是重复；
+ *  - error 的失败原因只放 title（见下方 template），行内不再堆一句同样是灰字的
+ *    「检测失败」——它既没告诉用户原因，也把这一行撑得比别的长。
+ */
 function stateText(line: VersionLine): string {
     switch (line.state) {
-        case 'checking':
-            return tt('sv.version.checking')
         case 'available':
             return tt('sv.version.available')
-        case 'downloaded':
-            return tt('sv.version.downloaded')
         case 'latest':
             return tt('sv.version.upToDate')
-        case 'error':
-            return tt('sv.version.error')
+        case 'downloaded':
+            return tt('sv.version.downloaded')
         default:
             return ''
     }
+}
+
+/**
+ * 该行是否要显示状态图标。图标与文案同步：只有那三个结局才出声，
+ * 于是「一行里只有一个图标 + 一句话」，不会出现空图标占位。
+ */
+function stateIcon(line: VersionLine) {
+    if (line.state === 'available' || line.state === 'downloaded') return DownloadOutlined
+    if (line.state === 'latest') return CheckCircleOutlined
+    return null
+}
+
+/** 浮层里的两行（程序 / dsh），用 v-for 渲染以消掉两份几乎相同的模板。 */
+const versionLines = computed(() => [
+    { name: tt('sv.version.app'), data: versionStatus.app },
+    { name: tt('sv.version.dsh'), data: versionStatus.dsh }
+])
+
+/** 状态文案的强调程度：等待安装要显眼（可操作），已是最新最弱（纯告知）。 */
+function stateClass(line: VersionLine): string {
+    if (line.state === 'available' || line.state === 'downloaded') return 'is-available'
+    if (line.state === 'latest') return 'is-latest'
+    return ''
 }
 
 onMounted(async () => {
@@ -203,6 +235,12 @@ const balanceTitle = computed(() => {
 
 /** 版本项悬停：有更新时说明有新版本，否则提示点击检查。 */
 const versionTitle = computed(() => (badge.value ? tt('sv.version.badge') : tt('sv.version.check')))
+
+/**
+ * 当前供应商的品牌图标；认不出时回落通用的钱包图标。
+ * 认不出就用通用图标 —— 拿别的牌子顶替会误导用户以为在用那家服务。
+ */
+const BalanceIcon = computed(() => providerIcon(info.value?.provider, info.value?.providerName) ?? WalletOutlined)
 </script>
 
 <template>
@@ -229,11 +267,8 @@ const versionTitle = computed(() => (badge.value ? tt('sv.version.badge') : tt('
                 :title="balanceTitle"
                 @click="onBalanceClick"
             >
-                <el-icon :size="13" :class="{ 'is-spin': loading }"><WalletOutlined /></el-icon>
-                <template v-if="info">
-                    <span class="statusbar__provider">{{ info.providerName }}</span>
-                    <span class="statusbar__amount">{{ balanceText }}</span>
-                </template>
+                <el-icon :size="13" :class="{ 'is-spin': loading }"><component :is="BalanceIcon" /></el-icon>
+                <span v-if="info" class="statusbar__amount">{{ balanceText }}</span>
                 <span v-else class="statusbar__amount">{{ loading ? '…' : $t('sv.models.balanceUnknown') }}</span>
             </button>
 
@@ -249,26 +284,23 @@ const versionTitle = computed(() => (badge.value ? tt('sv.version.badge') : tt('
                 </template>
 
                 <div class="uv">
-                    <div class="uv__row">
-                        <span class="uv__name">{{ $t('sv.version.app') }}</span>
-                        <code class="uv__ver">{{ versionStatus.app.current ?? '—' }}</code>
+                    <div v-for="line in versionLines" :key="line.name" class="uv__row">
+                        <span class="uv__name">{{ line.name }}</span>
+                        <code class="uv__ver">{{ line.data.current ?? '—' }}</code>
+                        <!-- 只在三种有意义的结局下出声；error 的原因放 title，行内不重复 -->
                         <span
+                            v-if="stateText(line.data)"
                             class="uv__state"
-                            :class="'is-' + versionStatus.app.state"
-                            :title="versionStatus.app.message ?? ''"
+                            :class="stateClass(line.data)"
+                            :title="line.data.message ?? ''"
                         >
-                            {{ stateText(versionStatus.app) }}
+                            <el-icon v-if="stateIcon(line.data)" :size="12"><component :is="stateIcon(line.data)!" /></el-icon>
+                            {{ stateText(line.data) }}
                         </span>
-                    </div>
-                    <div class="uv__row">
-                        <span class="uv__name">{{ $t('sv.version.dsh') }}</span>
-                        <code class="uv__ver">{{ versionStatus.dsh.current ?? '—' }}</code>
-                        <span
-                            class="uv__state"
-                            :class="'is-' + versionStatus.dsh.state"
-                            :title="versionStatus.dsh.message ?? ''"
-                        >
-                            {{ stateText(versionStatus.dsh) }}
+                        <!-- 检查中：这里给一个占位，否则行内会因为文案为空而跳一下 -->
+                        <span v-else-if="line.data.state === 'checking'" class="uv__state is-checking">
+                            <el-icon :size="12" class="is-spin"><LoadingOutlined /></el-icon>
+                            {{ $t('sv.version.checking') }}
                         </span>
                     </div>
                     <div class="uv__actions">
@@ -335,12 +367,6 @@ const versionTitle = computed(() => (badge.value ? tt('sv.version.badge') : tt('
 .statusbar__link {
     color: var(--el-text-color-secondary);
 }
-.statusbar__provider {
-    max-width: 160px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 .statusbar__amount {
     color: var(--el-text-color-primary);
 }
@@ -384,6 +410,22 @@ const versionTitle = computed(() => (badge.value ? tt('sv.version.badge') : tt('
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+.uv__state {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+/* 有更新 / 等待安装：可操作，用主色强调 */
+.uv__state.is-available {
+    color: var(--el-color-primary);
+}
+/* 已是最新：纯告知，弱化 */
+.uv__state.is-latest {
+    color: var(--el-color-success);
+}
+.uv__state.is-checking {
+    color: var(--el-text-color-secondary);
 }
 .uv__row {
     display: flex;
