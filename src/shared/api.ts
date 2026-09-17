@@ -22,6 +22,8 @@ import type {
     ConfirmDialogRequest,
     CurrentBalanceInfo,
     DshActionResult,
+    DshPluginResult,
+    DshPluginsInfo,
     EnvProbe,
     HotkeyState,
     InstalledVersions,
@@ -34,6 +36,7 @@ import type {
     NpmRegistry,
     NpmSource,
     NpmStatus,
+    PnpmStatus,
     RegistrySpeedResult,
     ResolvedLocale,
     Settings,
@@ -112,6 +115,14 @@ export interface ApiRoutes {
     'DELETE /dsh': { result: DshActionResult }
     /** 请核心窗口重新加载内嵌的 dsh UI（标题栏刷新按钮）。 */
     'POST /dsh/reload': { result: void }
+    /** dsh 插件（profile 组合包）：列出 profile 与插件启用状态。 */
+    'GET /dsh/plugins': { query: { profile?: string }; result: DshPluginsInfo }
+    /** 启停某个插件（改 dsh.profile.bundles，仅改配置层，不装不卸）。 */
+    'PUT /dsh/plugins/:profile/enabled': { body: { name: string; enabled: boolean }; result: DshPluginsInfo }
+    /** 安装插件（转发 dsh plugin add；首次会自动准备内置 pnpm）。 */
+    'POST /dsh/plugins/:profile/install': { body: { spec: string }; result: DshPluginResult }
+    /** 卸载插件（转发 dsh plugin remove，同时删依赖与配置层）。 */
+    'POST /dsh/plugins/:profile/remove': { body: { name: string }; result: DshPluginResult }
 
     // ---- 应用元信息 / 自动更新 ----
     'GET /app/meta': { result: AppMeta }
@@ -136,6 +147,12 @@ export interface ApiRoutes {
     'GET /npm/versions': { query: { prerelease?: boolean }; result: string[] }
     'POST /npm/update': { body?: { source?: NpmSource; version?: string }; result: ToolActionResult }
     'POST /npm/ensure': { body?: { version?: string }; result: ToolActionResult }
+
+    // ---- 内置 pnpm（dsh 插件安装转发给 pnpm 时使用，应用代管）----
+    'GET /pnpm/status': { result: PnpmStatus }
+    'GET /pnpm/versions': { query: { prerelease?: boolean }; result: string[] }
+    'POST /pnpm/update': { body?: { version?: string }; result: ToolActionResult }
+    'POST /pnpm/ensure': { body?: { version?: string }; result: ToolActionResult }
 
     // ---- 安装取消 / 版本管理（node · npm · dsh 通用）----
     'POST /installs/cancel': { result: boolean }
@@ -207,6 +224,7 @@ export interface AppEvents {
     'appupdate:event': AppUpdateEvent
     'nodeenv:deploy-progress': NodeDeployProgress
     'npmenv:progress': NodeDeployProgress
+    'pnmenv:progress': NodeDeployProgress
     'configdir:migration': ConfigMigrationProgress
     'dsh:url': string | null
     'dsh:log': LogEntry

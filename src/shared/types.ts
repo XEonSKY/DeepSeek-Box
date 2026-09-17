@@ -417,8 +417,8 @@ export interface NodeDeployResult {
     canceled?: boolean
 }
 
-/** 可版本化的安装对象：Node / 内置 npm / dsh。 */
-export type InstallKind = 'node' | 'npm' | 'dsh'
+/** 可版本化的安装对象：Node / 内置 npm / 内置 pnpm / dsh。 */
+export type InstallKind = 'node' | 'npm' | 'pnpm' | 'dsh'
 
 /** 安装进度广播：下载阶段带百分比 / 速度，解压阶段前端显示不确定动画。 */
 export interface NodeDeployProgress {
@@ -471,6 +471,58 @@ export interface NpmStatus {
     system: NpmRuntimeStatus
     bundled: NpmRuntimeStatus
     localnode: NpmRuntimeStatus
+}
+
+/** 内置 pnpm（应用代管，供 dsh 插件安装转发给 pnpm 使用）的版本状态。 */
+export interface PnpmRuntimeStatus {
+    present: boolean
+    /** 形如 10.8.2；尚未下载时为 null。 */
+    version: string | null
+    /** 落后于 registry 上的最新版。拿不到最新版或读不到当前版本时一律为 false。 */
+    outdated: boolean
+}
+
+/** 内置 pnpm 探测结果：当前版本 + registry 上的最新版。 */
+export interface PnpmStatus {
+    /** registry 上的最新 pnpm 版本（跟随 npmRegistry 设置）；取不到时为 null。 */
+    latest: string | null
+    bundled: PnpmRuntimeStatus
+}
+
+/** 一个 dsh 插件（profile 的组合包 / 已安装依赖）。 */
+export interface DshPluginEntry {
+    /** 包名，如 @deepseek-ai/dsh-subagent-codex。 */
+    name: string
+    /** 是否列在 dsh.profile.bundles（= 启动时加载它的配置层）。 */
+    enabled: boolean
+    /** 是否作为 profile 依赖安装（随附模板 bundle 直接从 dsh 安装目录解析，也视为已安装）。 */
+    installed: boolean
+    /** 随附模板必备 bundle，不可停用。 */
+    required: boolean
+}
+
+/** 「设置 → 插件」页数据：profile 列表 + 当前 profile 的插件与 manifest 位置。 */
+export interface DshPluginsInfo {
+    /** 当前展示的 profile 名。 */
+    profile: string
+    /** 全部可选 profile（<dshHome>/profiles 下的目录名，按名称排序）。 */
+    profiles: string[]
+    /** 当前 profile 目录。 */
+    dir: string
+    /** 当前 profile 的 package.json 路径。 */
+    manifestPath: string
+    /** 插件条目（必备在前）。 */
+    entries: DshPluginEntry[]
+}
+
+/** dsh 插件安装 / 卸载结果。 */
+export interface DshPluginResult {
+    ok: boolean
+    message: string
+    /** 失败时 pnpm / dsh 的 stderr 尾部，供诊断。 */
+    tail?: string
+    /** 是否因用户取消而中止。 */
+    canceled?: boolean
 }
 
 /** 通用「下载 / 安装」结果（与 NodeDeployResult 同构；npm 更新走它）。 */

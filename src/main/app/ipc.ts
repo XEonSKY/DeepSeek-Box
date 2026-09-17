@@ -19,6 +19,8 @@ import { listAppIcons, currentAppIcon, saveUserIcon, deleteUserIcon, applyAppIco
 import { findSystemNode, findSystemNpm, nodeVersionOf, localNodeExecPath } from '../dsh/tools'
 import { deployLocalNode, listNodeVersions, nodeStatus, listInstalledNodeVersions, useNodeVersion, removeInstalledNodeVersion } from '../dsh/nodeenv'
 import { listNpmVersions, npmStatus, updateNpm, ensureBundledNpmReady, listInstalledNpmVersions, useNpmVersion, removeInstalledNpmVersion } from '../dsh/npmRunner'
+import { listPnpmVersions, pnpmStatus, updatePnpm, ensureBundledPnpmReady, listInstalledPnpmVersions, usePnpmVersion, removeInstalledPnpmVersion } from '../dsh/pnpmRunner'
+import { readPluginsInfo, setPluginEnabled, installDshPlugin, removeDshPlugin } from '../dsh/plugins'
 import { measureRegistrySpeed } from '../dsh/speed'
 import { cancelActive } from '../dsh/cancel'
 import { APP_TITLE } from './const'
@@ -47,13 +49,14 @@ function installProgress(p: NodeDeployProgress): NodeDeployProgress {
 
 /** 版本化安装对象（node / npm / dsh）的入参校验。 */
 function asInstallKind(v: unknown): InstallKind | null {
-    return v === 'node' || v === 'npm' || v === 'dsh' ? v : null
+    return v === 'node' || v === 'npm' || v === 'pnpm' || v === 'dsh' ? v : null
 }
 
 /** 已安装 / 生效的版本列表。 */
 function versionsFor(kind: InstallKind): InstalledVersions {
     if (kind === 'node') return listInstalledNodeVersions()
     if (kind === 'npm') return listInstalledNpmVersions()
+    if (kind === 'pnpm') return listInstalledPnpmVersions()
     return listInstalledDshVersions()
 }
 
@@ -153,6 +156,21 @@ export function registerIpc(): void {
         .delete('/dsh', () => uninstallDsh())
         // 标题栏刷新：请承载 dsh UI 的（核心）窗口重新加载它。
         .post('/dsh/reload', () => sendCore('ui:reload-dsh'))
+        // ---- dsh 插件（profile 组合包）：读 / 启停 / 安装 / 卸载 ----
+        .get('/dsh/plugins', ({ query }) => readPluginsInfo(typeof query?.profile === 'string' && query.profile ? query.profile : undefined))
+        .put('/dsh/plugins/:profile/enabled', ({ params, body }) => {
+            const enabled = body?.enabled === true
+            const name = typeof body?.name === 'string' ? body.name : ''
+            return setPluginEnabled(params.profile, name, enabled)
+        })
+        .post('/dsh/plugins/:profile/install', ({ params, body }) => {
+            const spec = typeof body?.spec === 'string' ? body.spec : ''
+            return installDshPlugin(params.profile, spec, (p) => broadcast('pnmenv:progress', installProgress(p)))
+        })
+        .post('/dsh/plugins/:profile/remove', ({ params, body }) => {
+            const name = typeof body?.name === 'string' ? body.name : ''
+            return removeDshPlugin(params.profile, name)
+        })
 
         // ---- 应用元信息 / 自动更新 ----
         .get('/app/meta', () => appMeta())
@@ -206,6 +224,22 @@ export function registerIpc(): void {
             )
         )
 
+        // ---- 内置 pnpm（dsh 插件安装用；与 npm 同构，仅内置来源）----
+        .get('/pnpm/status', () => pnpmStatus())
+        .get('/pnpm/versions', ({ query }) => listPnpmVersions(loadSettings(), query?.prerelease === true))
+        .post('/pnpm/update', ({ body }) =>
+            updatePnpm(
+                { version: typeof body?.version === 'string' && body.version ? body.version : undefined },
+                (p) => broadcast('pnmenv:progress', installProgress(p))
+            )
+        )
+        .post('/pnpm/ensure', ({ body }) =>
+            ensureBundledPnpmReady(
+                { version: typeof body?.version === 'string' && body.version ? body.version : undefined },
+                (p) => broadcast('pnmenv:progress', installProgress(p))
+            )
+        )
+
         // ---- 安装取消 / 版本管理（node · npm · dsh 通用）----
         .post('/installs/cancel', () => cancelActive())
         .get('/versions/:kind', ({ params }) => {
@@ -218,6 +252,7 @@ export function registerIpc(): void {
             if (!kind || typeof version !== 'string' || !version) return { ok: false, message: '参数不合法', version: null }
             if (kind === 'node') return useNodeVersion(version)
             if (kind === 'npm') return useNpmVersion(version)
+            if (kind === 'pnpm') return usePnpmVersion(version)
             return useDshVersion(version)
         })
         .delete('/versions/:kind/:version', ({ params }) => {
@@ -226,6 +261,7 @@ export function registerIpc(): void {
             if (!kind || !version) return { ok: false, message: '参数不合法', version: null }
             if (kind === 'node') return removeInstalledNodeVersion(version)
             if (kind === 'npm') return removeInstalledNpmVersion(version)
+            if (kind === 'pnpm') return removeInstalledPnpmVersion(version)
             return removeInstalledDshVersion(version)
         })
 

@@ -336,6 +336,18 @@ export function bundledNpmDir(): string {
     return activeSubdir(root, path.join('package', 'bin', 'npm-cli.js')) ?? root
 }
 
+/** 当前生效的内置 pnpm 目录：`<configDir>/pnpm/<版本>`。 */
+export function bundledPnpmDir(): string {
+    const root = path.join(configDir(), 'pnpm')
+    return activeSubdir(root, path.join('package', 'bin', 'pnpm.cjs')) ?? root
+}
+
+/** pnpm 的独立 store 目录：`<工作目录>/temp/pnpm-store`（不污染 ~/.pnpm-store）。 */
+export function tempPnpmStoreDir(): string {
+    const ws = loadSettings().workspace ?? defaultWorkspaceDir()
+    return path.join(ws, 'temp', 'pnpm-store')
+}
+
 /** 默认工作目录：`<configDir>/workspace`。 */
 export function defaultWorkspaceDir(): string {
     return path.join(configDir(), 'workspace')

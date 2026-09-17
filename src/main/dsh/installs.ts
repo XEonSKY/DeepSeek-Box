@@ -70,6 +70,7 @@ const VERSION_RE = /^v?\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$/
 function keyRelPath(kind: InstallKind): string {
     if (kind === 'node') return IS_WIN ? 'node.exe' : path.join('bin', 'node')
     if (kind === 'npm') return path.join('package', 'bin', 'npm-cli.js')
+    if (kind === 'pnpm') return path.join('package', 'bin', 'pnpm.cjs')
     return path.join('node_modules', '@deepseek-ai', 'dsh', 'package.json')
 }
 
