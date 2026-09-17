@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { FolderOutlined, ReloadOutlined, PoweroffOutlined, SettingOutlined, DesktopOutlined, PlusOutlined, DeleteOutlined } from '@antdv-next/icons'
 import type { ConfigDirInfo } from '@shared/types'
+import TagLabel from '../../components/TagLabel.vue'
 import { useSettingsStore } from './useSettingsStore'
 import { SEARCH_ENGINE_IDS, ENGINE_LABEL_KEY } from '../../lib/engines'
 import { confirmDialog } from '../../lib/confirm'
@@ -11,8 +12,16 @@ import { confirmDialog } from '../../lib/confirm'
 const { state, actions } = useSettingsStore()
 const { t } = useI18n({ useScope: 'global' })
 
-// el-collapse：默认全部展开
-const open = ref(['general-run', 'general-configdir', 'general-close', 'general-newtab', 'general-reset'])
+// a-collapse：默认全部展开。用 :active-key + @change（Antdv 未声明 update:activeKey 事件）。
+const open = ref<string[]>(['general-run', 'general-configdir', 'general-close', 'general-newtab', 'general-reset'])
+
+/** a-collapse 展开项变化。 */
+function onOpenChange(keys: string[]): void {
+    open.value = keys
+}
+
+/** 搜索引擎下拉项：项目约定 a-select 用 :options（见 DshWizard.vue）。 */
+const engineOptions = computed(() => SEARCH_ENGINE_IDS.map((id) => ({ value: id, label: t(ENGINE_LABEL_KEY[id]) })))
 
 function addShortcut(): void {
     state.shortcuts.push({ title: '', url: '' })
@@ -85,121 +94,119 @@ async function cancelPendingMigration(): Promise<void> {
 <template>
     <div class="panel">
         <div class="dsh-brand">
-            <div class="dsh-brand__icon"><el-icon :size="34"><SettingOutlined /></el-icon></div>
+            <div class="dsh-brand__icon"><SettingOutlined style="font-size: 34px" /></div>
             <div class="dsh-brand__txt">
                 <div class="dsh-brand__name">{{ $t('sv.nav.general') }}</div>
                 <div class="dsh-brand__desc">{{ $t('sv.intro.general') }}</div>
             </div>
         </div>
-        <el-collapse v-model="open">
-            <el-collapse-item name="general-run" :title="$t('sv.general.run')">
-                <template #title>
-                    <div class="sec__title"><el-icon><SettingOutlined /></el-icon> {{ $t('sv.general.run') }}</div>
+        <a-collapse :active-key="open" @change="onOpenChange">
+            <a-collapse-panel key="general-run">
+                <template #header>
+                    <div class="sec__title"><SettingOutlined /> {{ $t('sv.general.run') }}</div>
                 </template>
-                <el-form label-position="top">
-                    <el-form-item :label="$t('sv.general.workspace')">
+                <a-form layout="vertical">
+                    <a-form-item :label="$t('sv.general.workspace')">
                         <div class="row">
-                            <el-input v-model="state.workspace" :readonly="true" :placeholder="$t('sv.general.workspacePlaceholder')" />
-                            <el-button type="primary" :icon="FolderOutlined" @click="actions.browseWorkspace()">{{ $t('sv.general.browse') }}</el-button>
+                            <a-input v-model:value="state.workspace" readonly :placeholder="$t('sv.general.workspacePlaceholder')" />
+                            <a-button type="primary" :icon="FolderOutlined" @click="actions.browseWorkspace()">{{ $t('sv.general.browse') }}</a-button>
                         </div>
                         <div class="hint">{{ $t('sv.general.workspaceHint') }}</div>
-                    </el-form-item>
+                    </a-form-item>
 
-                    <el-form-item :label="$t('sv.general.port')">
+                    <a-form-item :label="$t('sv.general.port')">
                         <div class="row">
-                            <el-radio-group v-model="state.portMode">
-                                <el-radio-button :value="'auto'">{{ $t('sv.general.portAuto') }}</el-radio-button>
-                                <el-radio-button :value="'manual'">{{ $t('sv.general.portManual') }}</el-radio-button>
-                            </el-radio-group>
-                            <el-input-number v-if="state.portMode === 'manual'" v-model="state.manualPort" :min="1" :max="65535" class="num" />
+                            <a-radio-group v-model:value="state.portMode">
+                                <a-radio-button :value="'auto'"><TagLabel :label="$t('sv.general.portAuto')" /></a-radio-button>
+                                <a-radio-button :value="'manual'">{{ $t('sv.general.portManual') }}</a-radio-button>
+                            </a-radio-group>
+                            <a-input-number v-if="state.portMode === 'manual'" v-model:value="state.manualPort" :min="1" :max="65535" class="num" />
                         </div>
                         <div class="hint">{{ $t('sv.general.portHint') }}</div>
-                    </el-form-item>
-                </el-form>
-            </el-collapse-item>
+                    </a-form-item>
+                </a-form>
+            </a-collapse-panel>
 
-            <el-collapse-item name="general-configdir">
-                <template #title>
-                    <div class="sec__title"><el-icon><FolderOutlined /></el-icon> {{ $t('sv.general.configDirSection') }}</div>
+            <a-collapse-panel key="general-configdir">
+                <template #header>
+                    <div class="sec__title"><FolderOutlined /> {{ $t('sv.general.configDirSection') }}</div>
                 </template>
-                <el-form label-position="top">
-                    <el-form-item :label="$t('sv.general.configDir')">
+                <a-form layout="vertical">
+                    <a-form-item :label="$t('sv.general.configDir')">
                         <div class="row">
-                            <el-input :model-value="cfg?.current ?? ''" readonly />
-                            <el-button type="primary" :icon="FolderOutlined" @click="changeConfigDir">{{ $t('sv.general.configDirChange') }}</el-button>
-                            <el-button v-if="cfg?.override" @click="resetConfigDir">{{ $t('sv.general.configDirReset') }}</el-button>
+                            <a-input :value="cfg?.current ?? ''" readonly />
+                            <a-button type="primary" :icon="FolderOutlined" @click="changeConfigDir">{{ $t('sv.general.configDirChange') }}</a-button>
+                            <a-button v-if="cfg?.override" @click="resetConfigDir">{{ $t('sv.general.configDirReset') }}</a-button>
                         </div>
                         <div class="hint">{{ $t('sv.general.configDirHint') }}</div>
                         <div v-if="cfg?.pending" class="cfg-pending">
                             <span>{{ $t('sv.general.configDirPending', { to: cfgPendingTo }) }}</span>
-                            <el-button link type="primary" @click="restartNow">{{ $t('sv.general.configDirRestart') }}</el-button>
-                            <el-button link type="danger" @click="cancelPendingMigration">{{ $t('sv.general.configDirCancel') }}</el-button>
+                            <a-button type="link" @click="restartNow">{{ $t('sv.general.configDirRestart') }}</a-button>
+                            <a-button type="link" danger @click="cancelPendingMigration">{{ $t('sv.general.configDirCancel') }}</a-button>
                         </div>
-                    </el-form-item>
-                </el-form>
-            </el-collapse-item>
+                    </a-form-item>
+                </a-form>
+            </a-collapse-panel>
 
-            <el-collapse-item name="general-close">
-                <template #title>
-                    <div class="sec__title"><el-icon><PoweroffOutlined /></el-icon> {{ $t('sv.general.closeSection') }}</div>
+            <a-collapse-panel key="general-close">
+                <template #header>
+                    <div class="sec__title"><PoweroffOutlined /> {{ $t('sv.general.closeSection') }}</div>
                 </template>
                 <div class="au">
                     <div class="au__txt">
                         <div class="au__t">{{ $t('sv.general.closeKeepRunning') }}</div>
                         <div class="au__desc">{{ $t('sv.general.closeKeepRunningHint') }}</div>
                     </div>
-                    <el-switch v-model="state.closeKeepRunning" />
+                    <a-switch v-model:checked="state.closeKeepRunning" />
                 </div>
-            </el-collapse-item>
+            </a-collapse-panel>
 
-            <el-collapse-item name="general-newtab">
-                <template #title>
-                    <div class="sec__title"><el-icon><DesktopOutlined /></el-icon> {{ $t('sv.general.newTabTitle') }} &amp; {{ $t('sv.general.engineLabel') }}</div>
+            <a-collapse-panel key="general-newtab">
+                <template #header>
+                    <div class="sec__title"><DesktopOutlined /> {{ $t('sv.general.newTabTitle') }} &amp; {{ $t('sv.general.engineLabel') }}</div>
                 </template>
-                <el-form label-position="top">
-                    <el-form-item :label="$t('sv.general.engineLabel')">
-                        <el-select v-model="state.searchEngine" style="width: 100%">
-                            <el-option v-for="id in SEARCH_ENGINE_IDS" :key="id" :value="id" :label="$t(ENGINE_LABEL_KEY[id])" />
-                        </el-select>
-                    </el-form-item>
+                <a-form layout="vertical">
+                    <a-form-item :label="$t('sv.general.engineLabel')">
+                        <a-select v-model:value="state.searchEngine" :options="engineOptions" style="width: 100%" />
+                    </a-form-item>
 
-                    <el-form-item :label="$t('sv.general.newTabTitle')">
-                        <el-radio-group v-model="state.newTabMode">
-                            <el-radio :value="'builtin'">{{ $t('sv.general.newTabModeBuiltin') }}</el-radio>
-                            <el-radio :value="'url'">{{ $t('sv.general.newTabModeUrl') }}</el-radio>
-                        </el-radio-group>
-                        <el-input
+                    <a-form-item :label="$t('sv.general.newTabTitle')">
+                        <a-radio-group v-model:value="state.newTabMode">
+                            <a-radio :value="'builtin'">{{ $t('sv.general.newTabModeBuiltin') }}</a-radio>
+                            <a-radio :value="'url'">{{ $t('sv.general.newTabModeUrl') }}</a-radio>
+                        </a-radio-group>
+                        <a-input
                             v-if="state.newTabMode === 'url'"
-                            v-model="state.newTabUrl"
+                            v-model:value="state.newTabUrl"
                             :placeholder="$t('sv.general.newTabUrlPlaceholder')"
                             style="margin-top: 8px"
                         />
-                    </el-form-item>
+                    </a-form-item>
 
-                    <el-form-item :label="$t('sv.general.shortcuts')">
+                    <a-form-item :label="$t('sv.general.shortcuts')">
                         <div class="sh-list">
                             <div v-for="(sc, i) in state.shortcuts" :key="i" class="sh-row">
-                                <el-input v-model="sc.title" :placeholder="$t('sv.general.shortcutTitle')" size="small" />
-                                <el-input v-model="sc.url" :placeholder="$t('sv.general.shortcutUrl')" size="small" />
-                                <el-button :icon="DeleteOutlined" text size="small" @click="removeShortcut(i)" />
+                                <a-input v-model:value="sc.title" class="sh-in" :placeholder="$t('sv.general.shortcutTitle')" />
+                                <a-input v-model:value="sc.url" class="sh-in" :placeholder="$t('sv.general.shortcutUrl')" />
+                                <a-button :icon="DeleteOutlined" type="text" @click="removeShortcut(i)" />
                             </div>
                         </div>
-                        <el-button :icon="PlusOutlined" size="small" plain @click="addShortcut">{{ $t('sv.general.shortcutAdd') }}</el-button>
+                        <a-button :icon="PlusOutlined" @click="addShortcut">{{ $t('sv.general.shortcutAdd') }}</a-button>
                         <div class="hint">{{ $t('sv.general.shortcutHint') }}</div>
-                    </el-form-item>
-                </el-form>
-            </el-collapse-item>
+                    </a-form-item>
+                </a-form>
+            </a-collapse-panel>
 
-            <el-collapse-item name="general-reset">
-                <template #title>
-                    <div class="sec__title"><el-icon><ReloadOutlined /></el-icon> {{ $t('sv.general.reset') }}</div>
+            <a-collapse-panel key="general-reset">
+                <template #header>
+                    <div class="sec__title"><ReloadOutlined /> {{ $t('sv.general.reset') }}</div>
                 </template>
                 <div class="reset-row">
                     <div class="reset__txt">{{ $t('sv.general.resetTxt') }}</div>
-                    <el-button plain type="danger" @click="actions.resetAll()">{{ $t('sv.general.resetBtn') }}</el-button>
+                    <a-button danger @click="actions.resetAll()">{{ $t('sv.general.resetBtn') }}</a-button>
                 </div>
-            </el-collapse-item>
-        </el-collapse>
+            </a-collapse-panel>
+        </a-collapse>
     </div>
 </template>
 
@@ -215,7 +222,8 @@ async function cancelPendingMigration(): Promise<void> {
     gap: 6px;
     width: 100%;
 }
-.sh-row .el-input {
+/* 快捷方式的两个输入框等宽撑满，行尾的删除按钮不参与伸缩 */
+.sh-in {
     flex: 1 1 auto;
 }
 .cfg-pending {

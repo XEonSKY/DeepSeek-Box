@@ -7,6 +7,7 @@ import type { DownloadThreads } from '@shared/types'
  *
  * 「自动」= 按本机 CPU 核心数自适应（取值见 main/dsh/downloader.ts 的 autoDownloadThreads）；
  * 手动档默认给 4，仅在用户拖动后才落成具体数字。
+ * 已迁到 antdv；a-form-item 依赖父级 a-form（layout="vertical"）提供上下文。
  */
 
 const threads = defineModel<DownloadThreads>({ required: true })
@@ -19,7 +20,7 @@ const manual = computed({
     }
 })
 
-/** 手动档下的连接数（自动档时给个合法值，避免 el-input-number 拿到 'auto'）。 */
+/** 手动档下的连接数（自动档时给个合法值，避免 a-input-number 拿到 'auto'）。 */
 const count = computed({
     get: () => (threads.value === 'auto' ? 4 : threads.value),
     set: (n: number | undefined) => {
@@ -29,19 +30,17 @@ const count = computed({
 </script>
 
 <template>
-    <el-form-item :label="$t('sv.network.downloadThreads')">
+    <a-form-item :label="$t('sv.network.downloadThreads')">
         <div class="tf__row">
-            <el-switch
-                v-model="manual"
-                :width="64"
-                inline-prompt
-                :active-text="$t('sv.network.downloadThreadsManual')"
-                :inactive-text="$t('sv.network.downloadThreadsAuto')"
+            <a-switch
+                v-model:checked="manual"
+                :checked-children="$t('sv.network.downloadThreadsManual')"
+                :un-checked-children="$t('sv.network.downloadThreadsAuto')"
             />
-            <el-input-number v-if="manual" v-model="count" :min="1" :max="16" :step="1" />
+            <a-input-number v-if="manual" v-model:value="count" :min="1" :max="16" :step="1" />
         </div>
         <div class="nf-hint">{{ $t('sv.network.downloadThreadsHint') }}</div>
-    </el-form-item>
+    </a-form-item>
 </template>
 
 <style scoped>

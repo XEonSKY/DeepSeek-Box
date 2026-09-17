@@ -37,7 +37,12 @@ const ROWS: Array<{ field: HotkeyField; labelKey: string; hintKey: string; globa
     { field: 'hotkeyDevTools', labelKey: 'sv.hotkeys.devTools', hintKey: 'sv.hotkeys.devToolsHint' }
 ]
 
-const open = ref(['hotkeys'])
+/** 折叠面板展开项。用 `:active-key` + `@change` 而非 `v-model:active-key`：后者的更新事件未在组件类型里声明。 */
+const open = ref<string[]>(['hotkeys'])
+
+function onOpenChange(keys: string[]): void {
+    open.value = keys
+}
 
 // 录制按键：捕获阶段 + 组件作用域自动解绑（原来是 onMounted/onBeforeUnmount 成对手写）。
 useEventListener(window, 'keydown', onKeydown, { capture: true })
@@ -103,24 +108,24 @@ const globalFailed = computed(() => state.hotkeyFocusWindow !== '' && globalStat
 <template>
     <div class="panel">
         <div class="dsh-brand">
-            <div class="dsh-brand__icon"><el-icon :size="34"><ControlOutlined /></el-icon></div>
+            <div class="dsh-brand__icon"><ControlOutlined style="font-size: 34px" /></div>
             <div class="dsh-brand__txt">
                 <div class="dsh-brand__name">{{ $t('sv.nav.hotkeys') }}</div>
                 <div class="dsh-brand__desc">{{ $t('sv.intro.hotkeys') }}</div>
             </div>
         </div>
 
-        <el-collapse v-model="open">
-            <el-collapse-item name="hotkeys">
-                <template #title>
-                    <div class="sec__title"><el-icon><ControlOutlined /></el-icon> {{ $t('sv.hotkeys.title') }}</div>
+        <a-collapse :active-key="open" @change="onOpenChange">
+            <a-collapse-panel key="hotkeys">
+                <template #header>
+                    <div class="sec__title"><ControlOutlined /> {{ $t('sv.hotkeys.title') }}</div>
                 </template>
 
                 <div v-for="row in ROWS" :key="row.field" class="hk">
                     <div class="hk__txt">
                         <div class="hk__t">
                             {{ $t(row.labelKey) }}
-                            <el-tag v-if="row.global" size="small" type="warning" effect="plain">{{ $t('sv.hotkeys.global') }}</el-tag>
+                            <a-tag v-if="row.global" color="orange">{{ $t('sv.hotkeys.global') }}</a-tag>
                         </div>
                         <div class="hk__desc">{{ $t(row.hintKey) }}</div>
                     </div>
@@ -128,15 +133,15 @@ const globalFailed = computed(() => state.hotkeyFocusWindow !== '' && globalStat
                         <kbd class="hk__kbd" :class="{ 'hk__kbd--rec': recording === row.field }">
                             {{ recording === row.field ? $t('sv.hotkeys.recording') : display(row.field) }}
                         </kbd>
-                        <el-button size="small" :type="recording === row.field ? 'primary' : 'default'" @click="startRecord(row.field)">
+                        <a-button :type="recording === row.field ? 'primary' : 'default'" @click="startRecord(row.field)">
                             {{ $t('sv.hotkeys.change') }}
-                        </el-button>
-                        <el-button size="small" :icon="DeleteOutlined" :disabled="!state[row.field]" @click="clearHotkey(row.field)">
+                        </a-button>
+                        <a-button :icon="DeleteOutlined" :disabled="!state[row.field]" @click="clearHotkey(row.field)">
                             {{ $t('sv.hotkeys.clear') }}
-                        </el-button>
-                        <el-button size="small" :icon="ReloadOutlined" @click="resetHotkey(row.field)">
+                        </a-button>
+                        <a-button :icon="ReloadOutlined" @click="resetHotkey(row.field)">
                             {{ $t('sv.hotkeys.reset') }}
-                        </el-button>
+                        </a-button>
                     </div>
                 </div>
 
@@ -146,8 +151,8 @@ const globalFailed = computed(() => state.hotkeyFocusWindow !== '' && globalStat
                 </div>
 
                 <div class="hint">{{ $t('sv.hotkeys.hint') }}</div>
-            </el-collapse-item>
-        </el-collapse>
+            </a-collapse-panel>
+        </a-collapse>
     </div>
 </template>
 

@@ -17,7 +17,7 @@ import LogView from '../LogView.vue'
 <template>
     <div class="panel">
         <div class="dsh-brand">
-            <div class="dsh-brand__icon"><el-icon :size="34"><CodeFilled /></el-icon></div>
+            <div class="dsh-brand__icon"><CodeFilled style="font-size: 34px" /></div>
             <div class="dsh-brand__txt">
                 <div class="dsh-brand__name">{{ $t('sv.nav.log') }}</div>
                 <div class="dsh-brand__desc">{{ $t('sv.intro.log') }}</div>

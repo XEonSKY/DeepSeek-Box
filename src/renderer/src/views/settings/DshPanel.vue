@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ClusterOutlined, FolderOutlined, SendOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
 import type { InstalledVersions } from '@shared/types'
@@ -8,12 +9,31 @@ import { withV } from '@shared/version'
 import { dshCheck } from '../../lib/update'
 import { tt } from '../../lib/locales'
 import { confirmDialog } from '../../lib/confirm'
+import TagLabel from '../../components/TagLabel.vue'
 import { useSettingsStore } from './useSettingsStore'
 import { useInstallCancel } from './useInstallCancel'
 
 const { state, actions } = useSettingsStore()
+const { t } = useI18n({ useScope: 'global' })
 
-const open = ref(['dsh-startup', 'dsh-update'])
+/** 折叠面板展开项。用 `:active-key` + `@change` 而非 `v-model:active-key`：后者的更新事件未在组件类型里声明。 */
+const open = ref<string[]>(['dsh-startup', 'dsh-update'])
+
+function onOpenChange(keys: string[]): void {
+    open.value = keys
+}
+
+/**
+ * 「来源」下拉的选项。a-select 用 `:options`（项目约定，见 DshWizard.vue）；
+ * 选项短标签含结尾括号，经 #optionRender / #labelRender 交给 TagLabel 渲染成「主文案 + 标签」。
+ */
+const sourceOptions = computed(() => [
+    { value: 'local', label: t('sv.dsh.local') },
+    { value: 'global', label: t('sv.dsh.global') }
+])
+
+/** 版本下拉项：标签是 actions.versionLabel（拼接「（当前）」后缀），按约定不交给 TagLabel。 */
+const versionOptions = computed(() => state.versions.map((v) => ({ value: v, label: actions.versionLabel(v) })))
 
 /** 本地 dsh 实例的已安装 / 生效版本（全局来源下通常为空）。 */
 const installed = ref<InstalledVersions>({ installed: [], active: null })
@@ -98,71 +118,74 @@ onMounted(() => {
 <template>
     <div class="panel">
         <div class="dsh-brand">
-            <div class="dsh-brand__icon"><el-icon :size="40"><ClusterOutlined /></el-icon></div>
+            <div class="dsh-brand__icon"><ClusterOutlined style="font-size: 34px" /></div>
             <div class="dsh-brand__txt">
                 <div class="dsh-brand__name">DeepSeek Box</div>
                 <div class="dsh-brand__ver">
                     {{ $t('sv.dsh.installedVersion') }}&nbsp;<code>{{ state.version ? 'v' + state.version : $t('sv.dsh.versionMissing', { pkg: '@deepseek-ai/dsh' }) }}</code>
-                    <el-tag
+                    <a-tag
                         v-if="dshCheck.found"
-                        size="small"
-                        effect="plain"
-                        round
                         class="ver-tag"
-                        :type="dshCheck.prerelease ? 'warning' : 'success'"
+                        :color="dshCheck.prerelease ? 'orange' : 'green'"
                     >
                         {{ dshCheck.prerelease ? $t('sv.dsh.tagPre') : $t('sv.dsh.tagStable') }}&nbsp;{{ dshCheck.latest }}
-                    </el-tag>
+                    </a-tag>
                 </div>
             </div>
         </div>
 
-        <el-collapse v-model="open">
-            <el-collapse-item name="dsh-startup">
-                <template #title>
-                    <div class="sec__title"><el-icon><ClusterOutlined /></el-icon> {{ $t('sv.dsh.startup') }}</div>
+        <a-collapse :active-key="open" @change="onOpenChange">
+            <a-collapse-panel key="dsh-startup">
+                <template #header>
+                    <div class="sec__title"><ClusterOutlined /> {{ $t('sv.dsh.startup') }}</div>
                 </template>
-                <el-form label-position="top">
-                    <el-form-item :label="$t('sv.dsh.timeout')">
-                        <el-input-number v-model="state.timeoutMs" :min="5000" :step="5000" />
+                <a-form layout="vertical">
+                    <a-form-item>
+                        <template #label><TagLabel :label="$t('sv.dsh.timeout')" /></template>
+                        <a-input-number v-model:value="state.timeoutMs" :min="5000" :step="5000" />
                         <div class="hint">{{ $t('sv.dsh.timeoutHint') }}</div>
-                    </el-form-item>
+                    </a-form-item>
 
-                    <el-form-item :label="$t('sv.dsh.source')">
-                        <el-select v-model="state.dshSource" class="dd">
-                            <el-option :value="'local'" :label="$t('sv.dsh.local')" />
-                            <el-option :value="'global'" :label="$t('sv.dsh.global')" />
-                        </el-select>
+                    <a-form-item :label="$t('sv.dsh.source')">
+                        <a-select v-model:value="state.dshSource" class="dd" :options="sourceOptions">
+                            <template #labelRender="{ label }">
+                                <TagLabel :label="String(label ?? '')" />
+                            </template>
+                            <template #optionRender="{ option }">
+                                <TagLabel :label="String(option.label ?? '')" />
+                            </template>
+                        </a-select>
                         <div class="hint">{{ state.dshSource === 'local' ? $t('sv.dsh.localHint') : $t('sv.dsh.globalHint') }}</div>
-                    </el-form-item>
+                    </a-form-item>
 
-                    <el-form-item v-if="state.dshSource === 'global'" :label="$t('sv.dsh.launcherPath')">
+                    <a-form-item v-if="state.dshSource === 'global'">
+                        <template #label><TagLabel :label="$t('sv.dsh.launcherPath')" /></template>
                         <div class="row">
-                            <el-input v-model="state.dshBin" readonly :placeholder="$t('sv.dsh.launcherPlaceholder')" />
-                            <el-button :icon="FolderOutlined" @click="actions.browseDshBin()">{{ $t('sv.dsh.browseLauncher') }}</el-button>
+                            <a-input v-model:value="state.dshBin" readonly :placeholder="$t('sv.dsh.launcherPlaceholder')" />
+                            <a-button :icon="FolderOutlined" @click="actions.browseDshBin()">{{ $t('sv.dsh.browseLauncher') }}</a-button>
                         </div>
                         <div class="hint">{{ $t('sv.dsh.launcherHint') }}</div>
-                    </el-form-item>
-                </el-form>
+                    </a-form-item>
+                </a-form>
 
-                <div class="ctl-row" style="display: flex; align-items: center; gap: 10px; margin-top: 4px">
-                    <el-tag :type="state.dshRunning ? 'success' : 'info'" size="small" effect="plain">
+                <div class="ctl-row">
+                    <a-tag :color="state.dshRunning ? 'green' : 'default'">
                         {{ state.dshRunning ? $t('sv.dsh.running') : $t('sv.dsh.stopped') }}
-                    </el-tag>
-                    <el-button-group>
-                        <el-button size="small" type="primary" :disabled="state.dshRunning" @click="actions.startDsh()">{{ $t('sv.dsh.start') }}</el-button>
-                        <el-button size="small" :disabled="!state.dshRunning" @click="actions.stopDsh()">{{ $t('sv.dsh.stop') }}</el-button>
-                        <el-button size="small" @click="actions.restartDsh()">{{ $t('sv.dsh.restart') }}</el-button>
-                    </el-button-group>
-                    <el-button type="primary" style="margin-left: auto" :loading="state.applying" @click="actions.apply()">
+                    </a-tag>
+                    <a-space-compact>
+                        <a-button type="primary" :disabled="state.dshRunning" @click="actions.startDsh()">{{ $t('sv.dsh.start') }}</a-button>
+                        <a-button :disabled="!state.dshRunning" @click="actions.stopDsh()">{{ $t('sv.dsh.stop') }}</a-button>
+                        <a-button @click="actions.restartDsh()">{{ $t('sv.dsh.restart') }}</a-button>
+                    </a-space-compact>
+                    <a-button type="primary" style="margin-left: auto" :loading="state.applying" @click="actions.apply()">
                         {{ $t('sv.dsh.applyBtn') }}
-                    </el-button>
+                    </a-button>
                 </div>
-            </el-collapse-item>
+            </a-collapse-panel>
 
-            <el-collapse-item name="dsh-update">
-                <template #title>
-                    <div class="sec__title"><el-icon><ReloadOutlined /></el-icon> {{ $t('sv.dsh.packageUpdate') }}</div>
+            <a-collapse-panel key="dsh-update">
+                <template #header>
+                    <div class="sec__title"><ReloadOutlined /> {{ $t('sv.dsh.packageUpdate') }}</div>
                 </template>
                 <div class="kopt">
                     <div class="au">
@@ -170,7 +193,7 @@ onMounted(() => {
                             <div class="au__t">{{ $t('sv.dsh.checkOnStart') }}</div>
                             <div class="au__desc">{{ $t('sv.dsh.checkOnStartDesc') }}</div>
                         </div>
-                        <el-switch v-model="state.autoCheckUpdate" />
+                        <a-switch v-model:checked="state.autoCheckUpdate" />
                     </div>
 
                     <div class="au">
@@ -178,91 +201,105 @@ onMounted(() => {
                             <div class="au__t">{{ $t('sv.dsh.checkPrerelease') }}</div>
                             <div class="au__desc">{{ $t('sv.dsh.checkPrereleaseDesc') }}</div>
                         </div>
-                        <el-switch v-model="state.autoCheckPrerelease" />
+                        <a-switch v-model:checked="state.autoCheckPrerelease" />
                     </div>
                 </div>
 
                 <div class="upd-sep" />
                 <div class="dsh-update">
                     <div class="dsh-update__text">
-                        <div class="dsh-update__title"><el-icon><ReloadOutlined /></el-icon> {{ $t('sv.dsh.checkUpdateTitle') }}</div>
+                        <div class="dsh-update__title"><ReloadOutlined /> {{ $t('sv.dsh.checkUpdateTitle') }}</div>
                         <div class="dsh-update__desc">{{ $t('sv.dsh.checkUpdateDesc', { pkg: '@deepseek-ai/dsh' }) }}</div>
                     </div>
                     <div class="dsh-update__actions">
-                        <el-button :icon="ReloadOutlined" :loading="state.updating" :disabled="state.updating || state.updatingDsh" @click="actions.runUpdateCheck()">
+                        <a-button :icon="ReloadOutlined" :loading="state.updating" :disabled="state.updating || state.updatingDsh" @click="actions.runUpdateCheck()">
                             {{ $t('sv.dsh.check') }}
-                        </el-button>
-                        <el-button type="primary" :icon="SendOutlined" :loading="state.updatingDsh" :disabled="state.updatingDsh || state.updating || !dshCheck.found" @click="updateDsh()">
+                        </a-button>
+                        <a-button type="primary" :icon="SendOutlined" :loading="state.updatingDsh" :disabled="state.updatingDsh || state.updating || !dshCheck.found" @click="updateDsh()">
                             {{ $t('sv.dsh.update') }}
-                        </el-button>
-                        <el-button v-if="state.updatingDsh" :loading="canceling" @click="cancelInstall()">
+                        </a-button>
+                        <a-button v-if="state.updatingDsh" :loading="canceling" @click="cancelInstall()">
                             {{ canceling ? $t('sv.env.canceling') : $t('sv.env.cancelInstall') }}
-                        </el-button>
+                        </a-button>
                     </div>
                 </div>
 
                 <!-- 检查结果回显：发现新版本由标题栏的 tag 表示；「已是最新」不再弹 toast，改在这里说明 -->
                 <div v-if="dshCheck.checked && !dshCheck.found" class="au-note">
-                    <el-tag size="small" type="success" effect="plain">{{ $t('update.okTitle') }}</el-tag>
+                    <a-tag color="green">{{ $t('update.okTitle') }}</a-tag>
                     <span v-if="dshCheck.current" class="ver-tag">&nbsp;&nbsp;{{ dshCheck.current }}</span>
                 </div>
 
                 <div class="upd-sep" />
-                <el-form label-position="top" class="vm-in">
-                    <el-form-item :label="$t('sv.dsh.selectVersion')">
+                <a-form layout="vertical" class="vm-in">
+                    <a-form-item :label="$t('sv.dsh.selectVersion')">
                         <div class="vm-row">
-                            <el-select v-model="state.selectedVersion" filterable :placeholder="$t('sv.dsh.selectPlaceholder')" class="vm-sel" :disabled="state.versionsLoading || state.switchingDsh">
-                                <el-option v-for="v in state.versions" :key="v" :label="actions.versionLabel(v)" :value="v" />
-                            </el-select>
-                            <el-button :icon="ReloadOutlined" :loading="state.versionsLoading" @click="actions.loadVersions()">{{ $t('sv.dsh.refresh') }}</el-button>
-                            <el-button type="primary" :icon="SendOutlined" :loading="state.switchingDsh" :disabled="state.switchingDsh || state.versionsLoading || !state.selectedVersion || state.selectedVersion === state.version" @click="switchSelected()">
+                            <a-select v-model:value="state.selectedVersion" show-search :options="versionOptions" :placeholder="$t('sv.dsh.selectPlaceholder')" class="vm-sel" :disabled="state.versionsLoading || state.switchingDsh" />
+                            <a-button :icon="ReloadOutlined" :loading="state.versionsLoading" @click="actions.loadVersions()">{{ $t('sv.dsh.refresh') }}</a-button>
+                            <a-button type="primary" :icon="SendOutlined" :loading="state.switchingDsh" :disabled="state.switchingDsh || state.versionsLoading || !state.selectedVersion || state.selectedVersion === state.version" @click="switchSelected()">
                                 {{ $t('sv.dsh.installVersion') }}
-                            </el-button>
-                            <el-button v-if="state.switchingDsh" :loading="canceling" @click="cancelInstall()">
+                            </a-button>
+                            <a-button v-if="state.switchingDsh" :loading="canceling" @click="cancelInstall()">
                                 {{ canceling ? $t('sv.env.canceling') : $t('sv.env.cancelInstall') }}
-                            </el-button>
+                            </a-button>
                         </div>
                         <div class="hint">{{ $t('sv.dsh.versionListHint') }}</div>
-                    </el-form-item>
-                </el-form>
+                    </a-form-item>
+                </a-form>
 
                 <div class="upd-sep" />
                 <div class="iv">
                     <div class="iv__title">{{ $t('sv.env.installedVersions') }}</div>
                     <div v-if="!installed.installed.length" class="hint">{{ $t('sv.env.installedNone') }}</div>
-                    <div v-else v-loading="installedLoading" class="iv__list">
-                        <div class="iv__thead">
-                            <span class="iv__c1">{{ $t('sv.env.colVersion') }}</span>
-                            <span class="iv__c2">{{ $t('sv.env.colStatus') }}</span>
-                            <span class="iv__c3">{{ $t('sv.env.colActions') }}</span>
-                        </div>
-                        <div class="iv__tbody">
-                            <div v-for="v in installed.installed" :key="v" class="iv__row">
-                                <span class="iv__c1"><code class="iv__ver">{{ withV(v) }}</code></span>
-                                <span class="iv__c2">
-                                    <el-tag v-if="v === installed.active" size="small" type="success" effect="plain">
-                                        {{ $t('sv.env.activeVersion') }}
-                                    </el-tag>
-                                    <span v-else class="iv__dash">—</span>
-                                </span>
-                                <span class="iv__c3">
-                                    <el-button v-if="v !== installed.active" size="small" :loading="switchingInstalled === v" @click="useInstalled(v)">
-                                        {{ $t('sv.env.switchVersion') }}
-                                    </el-button>
-                                    <el-button size="small" type="danger" plain @click="removeInstalled(v)">
-                                        {{ $t('sv.env.removeVersion') }}
-                                    </el-button>
-                                </span>
+                    <a-spin v-else :spinning="installedLoading">
+                        <div class="iv__list">
+                            <div class="iv__thead">
+                                <span class="iv__c1">{{ $t('sv.env.colVersion') }}</span>
+                                <span class="iv__c2">{{ $t('sv.env.colStatus') }}</span>
+                                <span class="iv__c3">{{ $t('sv.env.colActions') }}</span>
+                            </div>
+                            <div class="iv__tbody">
+                                <div v-for="v in installed.installed" :key="v" class="iv__row">
+                                    <span class="iv__c1"><code class="iv__ver">{{ withV(v) }}</code></span>
+                                    <span class="iv__c2">
+                                        <a-tag v-if="v === installed.active" color="green">
+                                            {{ $t('sv.env.activeVersion') }}
+                                        </a-tag>
+                                        <span v-else class="iv__dash">—</span>
+                                    </span>
+                                    <span class="iv__c3">
+                                        <a-button v-if="v !== installed.active" :loading="switchingInstalled === v" @click="useInstalled(v)">
+                                            {{ $t('sv.env.switchVersion') }}
+                                        </a-button>
+                                        <a-button danger @click="removeInstalled(v)">
+                                            {{ $t('sv.env.removeVersion') }}
+                                        </a-button>
+                                    </span>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </a-spin>
                 </div>
 
                 <div class="vm-un">
                     <div class="vm-un__txt">{{ $t('sv.dsh.uninstallTxt', { pkg: '@deepseek-ai/dsh' }) }}</div>
-                    <el-button type="danger" plain :loading="state.uninstalling" @click="actions.confirmUninstall()">{{ $t('sv.dsh.uninstall') }}</el-button>
+                    <a-button danger :loading="state.uninstalling" @click="actions.confirmUninstall()">{{ $t('sv.dsh.uninstall') }}</a-button>
                 </div>
-            </el-collapse-item>
-        </el-collapse>
+            </a-collapse-panel>
+        </a-collapse>
     </div>
 </template>
+
+<style scoped>
+/* 来源下拉占满表单项宽度（原 el-select 默认为 100%，antdv 的 a-select 默认按内容宽）。 */
+.dd {
+    width: 100%;
+}
+/* dsh 运行状态 + 启停按钮组 + 应用按钮：一行排列，应用按钮靠右。 */
+.ctl-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+</style>

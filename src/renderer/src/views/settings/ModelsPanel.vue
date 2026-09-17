@@ -102,7 +102,7 @@ function balanceTitle(b: ModelBalanceInfo): string {
 <template>
     <div class="panel">
         <div class="dsh-brand">
-            <div class="dsh-brand__icon"><el-icon :size="34"><RobotFilled /></el-icon></div>
+            <div class="dsh-brand__icon"><RobotFilled style="font-size: 34px" /></div>
             <div class="dsh-brand__txt">
                 <div class="dsh-brand__name">{{ $t('sv.nav.models') }}</div>
                 <div class="dsh-brand__desc">{{ $t('sv.intro.models') }}</div>
@@ -112,33 +112,33 @@ function balanceTitle(b: ModelBalanceInfo): string {
         <!-- 未授权：首次进入征求同意 -->
         <template v-if="!state.modelsCredConsent">
             <div v-if="!dismissed" class="mp__consent">
-                <div class="mp__consent-t"><el-icon><SafetyCertificateFilled /></el-icon> {{ $t('sv.models.consentTitle') }}</div>
+                <div class="mp__consent-t"><SafetyCertificateFilled /> {{ $t('sv.models.consentTitle') }}</div>
                 <p class="mp__consent-d">{{ $t('sv.models.consentDesc') }}</p>
                 <div class="mp__path"><code>{{ $t('sv.models.consentPathValue') }}</code></div>
                 <div class="mp__actions">
-                    <el-button type="primary" @click="grant">{{ $t('sv.models.consentAgree') }}</el-button>
-                    <el-button @click="dismissed = true">{{ $t('sv.models.consentDeny') }}</el-button>
+                    <a-button type="primary" @click="grant">{{ $t('sv.models.consentAgree') }}</a-button>
+                    <a-button @click="dismissed = true">{{ $t('sv.models.consentDeny') }}</a-button>
                 </div>
                 <div class="hint">{{ $t('sv.models.consentNote') }}</div>
             </div>
             <div v-else class="mp__empty">
-                <el-icon :size="30"><SafetyCertificateFilled /></el-icon>
+                <SafetyCertificateFilled style="font-size: 30px" />
                 <div class="mp__empty-t">{{ $t('sv.models.deniedTitle') }}</div>
                 <div class="hint">{{ $t('sv.models.deniedHint') }}</div>
-                <el-button @click="grant">{{ $t('sv.models.consentAgree') }}</el-button>
+                <a-button @click="grant">{{ $t('sv.models.consentAgree') }}</a-button>
             </div>
         </template>
 
         <!-- 已授权：令牌列表（供应商 / 余额） -->
-        <div v-else v-loading="loading" class="mp__body">
+        <a-spin v-else :spinning="loading" class="mp__body">
             <div class="mp__toolbar">
                 <span class="mp__count">{{ $t('sv.models.modelCount', { n: info?.entries.length ?? 0 }) }}</span>
-                <el-button size="small" :icon="ReloadOutlined" :loading="loading" @click="load">
+                <a-button :icon="ReloadOutlined" :loading="loading" @click="load">
                     {{ $t('sv.models.refreshAll') }}
-                </el-button>
+                </a-button>
             </div>
-            <el-alert v-if="loadError" type="error" :closable="false" show-icon :title="$t('sv.models.loadFail', { err: loadError })" />
-            <el-alert v-else-if="errorText" type="info" :closable="false" show-icon :title="errorText" />
+            <a-alert v-if="loadError" type="error" :closable="false" show-icon :title="$t('sv.models.loadFail', { err: loadError })" />
+            <a-alert v-else-if="errorText" type="info" :closable="false" show-icon :title="errorText" />
             <div v-else-if="isEmpty" class="hint">{{ $t('sv.models.empty') }}</div>
             <div v-else-if="info" class="mp__list">
                 <div class="mp__head">
@@ -154,7 +154,7 @@ function balanceTitle(b: ModelBalanceInfo): string {
                     </div>
                 </div>
             </div>
-        </div>
+        </a-spin>
     </div>
 </template>
 
@@ -175,7 +175,7 @@ function balanceTitle(b: ModelBalanceInfo): string {
     font-weight: 600;
     color: var(--el-text-color-primary);
 }
-.mp__consent-t .el-icon {
+.mp__consent-t .anticon {
     color: var(--el-color-primary);
 }
 .mp__consent-d {

@@ -10,6 +10,7 @@ import { useAppIcon } from '../../lib/appIcon'
 import { tt } from '../../lib/locales'
 import { confirmDialog } from '../../lib/confirm'
 import { formatDownload } from '../../lib/format'
+import TagLabel from '../../components/TagLabel.vue'
 
 const { state } = useSettingsStore()
 // 应用 Logo：随深浅色切换（深色用 icon-dark.png），见 lib/appIcon.ts
@@ -78,7 +79,12 @@ function onAppVerClick(e: MouseEvent): void {
     }, DEV_TAP_WINDOW_MS)
 }
 
-const open = ref(['about-options', 'about-links', 'about-check'])
+/** 折叠面板展开项。用 `:active-key` + `@change` 而非 `v-model:active-key`：后者的更新事件未在组件类型里声明。 */
+const open = ref<string[]>(['about-options', 'about-links', 'about-check'])
+
+function onOpenChange(keys: string[]): void {
+    open.value = keys
+}
 
 // ---------------------------------------------------------------------------
 // 彩蛋二：连点「系统架构」徽标 5 次 → 井字棋
@@ -376,9 +382,9 @@ onBeforeUnmount(() => {
             </div>
         </div>
 
-        <el-collapse v-model="open">
-            <el-collapse-item name="about-options">
-                <template #title>
+        <a-collapse :active-key="open" @change="onOpenChange">
+            <a-collapse-panel key="about-options">
+                <template #header>
                     <div class="sec__title">{{ $t('sv.about.options') }}</div>
                 </template>
                 <div class="kopt">
@@ -387,14 +393,14 @@ onBeforeUnmount(() => {
                             <div class="au__t">{{ $t('sv.about.autoUpdate') }}</div>
                             <div class="au__desc">{{ $t('sv.about.autoUpdateDesc') }}</div>
                         </div>
-                        <el-switch v-model="state.appAutoUpdate" />
+                        <a-switch v-model:checked="state.appAutoUpdate" />
                     </div>
                     <div class="au">
                         <div class="au__txt">
                             <div class="au__t">{{ $t('sv.about.checkPrerelease') }}</div>
                             <div class="au__desc">{{ $t('sv.about.checkPrereleaseDesc') }}</div>
                         </div>
-                        <el-switch v-model="state.appCheckPrerelease" />
+                        <a-switch v-model:checked="state.appCheckPrerelease" />
                     </div>
                     <!-- 开发模式默认隐藏：在本页连点「应用版本号」5 次解锁；开启后才显示，关闭即再隐藏 -->
                     <div v-if="state.devMode" class="au">
@@ -402,13 +408,13 @@ onBeforeUnmount(() => {
                             <div class="au__t">{{ $t('sv.about.devMode') }}</div>
                             <div class="au__desc">{{ $t('sv.about.devModeDesc') }}</div>
                         </div>
-                        <el-switch v-model="state.devMode" />
+                        <a-switch v-model:checked="state.devMode" />
                     </div>
                 </div>
-            </el-collapse-item>
+            </a-collapse-panel>
 
-            <el-collapse-item name="about-links">
-                <template #title>
+            <a-collapse-panel key="about-links">
+                <template #header>
                     <div class="sec__title">{{ $t('sv.about.links') }}</div>
                 </template>
                 <div class="au">
@@ -417,20 +423,19 @@ onBeforeUnmount(() => {
                         <div class="au__desc">{{ $t('sv.about.githubDesc') }}</div>
                         <div class="repo-url">{{ REPO_URL }}</div>
                     </div>
-                    <el-button class="repo-btn" @click="openRepo">
-                        <GithubOutlined class="gh-icon" />
+                    <a-button class="repo-btn" :icon="GithubOutlined" @click="openRepo">
                         {{ $t('sv.about.openGithub') }}
-                    </el-button>
+                    </a-button>
                 </div>
-            </el-collapse-item>
+            </a-collapse-panel>
 
-            <el-collapse-item name="about-check">
-                <template #title>
-                    <div class="sec__title"><el-icon><ReloadOutlined /></el-icon> {{ $t('sv.about.checkTitle') }}</div>
+            <a-collapse-panel key="about-check">
+                <template #header>
+                    <div class="sec__title"><ReloadOutlined /> {{ $t('sv.about.checkTitle') }}</div>
                 </template>
 
                 <div class="au-row">
-                    <el-button
+                    <a-button
                         type="primary"
                         :icon="ReloadOutlined"
                         :loading="phase === 'checking'"
@@ -438,24 +443,25 @@ onBeforeUnmount(() => {
                         @click="check"
                     >
                         {{ $t('sv.about.checkBtn') }}
-                    </el-button>
-                    <el-button
+                    </a-button>
+                    <a-button
                         v-if="phase === 'downloaded'"
-                        type="success"
+                        color="green"
+                        variant="solid"
                         :icon="SendOutlined"
                         @click="restart"
                     >
                         {{ $t('sv.about.restartNow') }}
-                    </el-button>
+                    </a-button>
                 </div>
 
                 <template v-if="phase === 'downloading'">
                     <p class="au-note">{{ $t('sv.about.downloading', { version: targetVersion || '' }) }}</p>
-                    <el-progress :percentage="percent" :status="percent >= 100 ? 'success' : 'active'" />
+                    <a-progress :percent="percent" :status="percent >= 100 ? 'success' : 'active'" />
                     <div class="au-note au-speed">{{ progressInfo }}</div>
                 </template>
 
-                <el-alert
+                <a-alert
                     v-else-if="phase === 'staging'"
                     class="about-result"
                     :title="$t('sv.about.staging', { version: targetVersion || '' })"
@@ -463,16 +469,17 @@ onBeforeUnmount(() => {
                     show-icon
                     :closable="false"
                 />
-                <el-alert
+                <a-alert
                     v-else-if="phase === 'downloaded'"
                     class="about-result"
-                    :title="$t('sv.about.downloadedTitle')"
                     :description="$t('sv.about.downloadedDesc')"
                     type="success"
                     show-icon
                     :closable="false"
-                />
-                <el-alert
+                >
+                    <template #title><TagLabel :label="$t('sv.about.downloadedTitle')" /></template>
+                </a-alert>
+                <a-alert
                     v-else-if="phase === 'none'"
                     class="about-result"
                     :title="
@@ -484,7 +491,7 @@ onBeforeUnmount(() => {
                     show-icon
                     :closable="false"
                 />
-                <el-alert
+                <a-alert
                     v-else-if="phase === 'error' && errMsg"
                     class="about-result"
                     :title="errMsg"
@@ -492,40 +499,40 @@ onBeforeUnmount(() => {
                     show-icon
                     :closable="false"
                 />
-            </el-collapse-item>
+            </a-collapse-panel>
 
-            <el-collapse-item name="about-slots">
-                <template #title>
-                    <div class="sec__title"><el-icon><ReloadOutlined /></el-icon> {{ $t('sv.about.slots') }}</div>
+            <a-collapse-panel key="about-slots">
+                <template #header>
+                    <div class="sec__title"><ReloadOutlined /> <TagLabel :label="$t('sv.about.slots')" /></div>
                 </template>
 
                 <div class="slot-row">
                     <span class="slot-label">{{ $t('sv.about.slotsCurrent') }}</span>
-                    <el-tag size="small" type="success" effect="plain">{{ slots?.current || '—' }}</el-tag>
+                    <a-tag color="green">{{ slots?.current || '—' }}</a-tag>
                 </div>
                 <div class="slot-row">
-                    <span class="slot-label">{{ $t('sv.about.slotsPrevious') }}</span>
-                    <el-tag v-if="slots?.previous" size="small" type="info" effect="plain">
+                    <span class="slot-label"><TagLabel :label="$t('sv.about.slotsPrevious')" /></span>
+                    <a-tag v-if="slots?.previous" color="default">
                         {{ slots.previous.version }} · {{ archiveSize(slots.previous.bytes) }}
-                    </el-tag>
+                    </a-tag>
                     <span v-else class="slot-empty">{{ $t('sv.about.slotsEmpty') }}</span>
                 </div>
                 <div v-if="slots?.pending" class="slot-row">
                     <span class="slot-label">{{ $t('sv.about.slotsPending') }}</span>
-                    <el-tag size="small" type="warning" effect="plain">{{ slots.pending }}</el-tag>
+                    <a-tag color="orange">{{ slots.pending }}</a-tag>
                 </div>
 
                 <div class="au-row">
-                    <el-button :icon="ReloadOutlined" @click="refreshSlots">{{ $t('sv.about.rollbackRefresh') }}</el-button>
-                    <el-button type="warning" :disabled="!slots?.canRollback" @click="rollback">
+                    <a-button :icon="ReloadOutlined" @click="refreshSlots">{{ $t('sv.about.rollbackRefresh') }}</a-button>
+                    <a-button color="orange" variant="solid" :disabled="!slots?.canRollback" @click="rollback">
                         {{ $t('sv.about.rollback') }}
-                    </el-button>
+                    </a-button>
                 </div>
-            </el-collapse-item>
-        </el-collapse>
+            </a-collapse-panel>
+        </a-collapse>
 
-        <!-- 彩蛋：连点系统架构徽标 5 次弹出的井字棋（el-dialog 会 teleport 到 body，放哪都一样） -->
-        <el-dialog v-model="showGame" :title="$t('sv.about.tttTitle')" width="320px" align-center>
+        <!-- 彩蛋：连点系统架构徽标 5 次弹出的井字棋（a-modal 会 teleport 到 body，放哪都一样） -->
+        <a-modal v-model:open="showGame" :title="$t('sv.about.tttTitle')" width="320px" centered :footer="null">
             <div class="ttt">
                 <div class="ttt__status">{{ $t('sv.about.ttt' + statusKey) }}</div>
                 <div class="ttt__grid">
@@ -542,11 +549,11 @@ onBeforeUnmount(() => {
                     </button>
                 </div>
                 <div class="ttt__foot">
-                    <el-button size="small" :icon="ReloadOutlined" @click="resetGame">{{ $t('sv.about.tttAgain') }}</el-button>
+                    <a-button :icon="ReloadOutlined" @click="resetGame">{{ $t('sv.about.tttAgain') }}</a-button>
                     <span class="ttt__mark">{{ $t('sv.about.tttMarks') }}</span>
                 </div>
             </div>
-        </el-dialog>
+        </a-modal>
     </div>
 </template>
 
@@ -599,13 +606,6 @@ onBeforeUnmount(() => {
     font-size: 12px;
     color: var(--el-text-color-placeholder);
 }
-/* antdv 图标按 1em 取尺寸（不是 svg 的 width/height），故用 font-size 控制大小 */
-.gh-icon {
-    font-size: 15px;
-    margin-right: 6px;
-    vertical-align: -2px;
-}
-
 /* 系统架构徽标：彩蛋入口（连点 5 次），给个可点的光标 */
 .env-tap {
     cursor: pointer;
@@ -613,7 +613,7 @@ onBeforeUnmount(() => {
 }
 
 /* ---- 井字棋（彩蛋） ---- */
-/* 注意：el-dialog 的内容会被 teleport 到 body，但仍是本组件的渲染作用域，
+/* 注意：a-modal 的内容会被 teleport 到 body，但仍是本组件的渲染作用域，
     所以 scoped 样式照常生效，不需要 :deep() 之外的特殊处理。 */
 .ttt {
     display: flex;

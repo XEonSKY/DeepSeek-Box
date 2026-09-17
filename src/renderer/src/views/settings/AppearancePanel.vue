@@ -10,8 +10,17 @@ import type { AppIconInfo, FunLocale, ResolvedLocale } from '@shared/types'
 
 const { state } = useSettingsStore()
 
-const open = ref(['appearance-main', 'appearance-icon'])
+// a-collapse：默认全部展开。用 :active-key + @change（Antdv 未声明 update:activeKey 事件）。
+const open = ref<string[]>(['appearance-main', 'appearance-icon'])
+
+/** a-collapse 展开项变化。 */
+function onOpenChange(keys: string[]): void {
+    open.value = keys
+}
+
 const ZOOMS = [50, 75, 100, 125, 150, 175, 200]
+/** 缩放下拉项：项目约定 a-select 用 :options（见 DshWizard.vue）。 */
+const zoomOptions = ZOOMS.map((z) => ({ value: z, label: z + '%' }))
 
 /**
  * 色块预览要按当前明暗取底色。`isDark` 是从 lib/theme.ts 导入的 ref，
@@ -76,6 +85,11 @@ async function onSysScale(v: boolean): Promise<void> {
     /* ignore */
     }
     void window.api.post('/app/relaunch')
+}
+
+/** a-switch 的 change 是 (checked, event) 两参签名，包一层只取布尔值。 */
+function onSysScaleChange(checked: boolean): void {
+    void onSysScale(checked)
 }
 
 // ---------------------------------------------------------------------------
@@ -145,28 +159,28 @@ async function removeIcon(it: AppIconInfo): Promise<void> {
 <template>
     <div class="panel">
         <div class="dsh-brand">
-            <div class="dsh-brand__icon"><el-icon :size="34"><BgColorsOutlined /></el-icon></div>
+            <div class="dsh-brand__icon"><BgColorsOutlined style="font-size: 34px" /></div>
             <div class="dsh-brand__txt">
                 <div class="dsh-brand__name">{{ $t('sv.nav.appearance') }}</div>
                 <div class="dsh-brand__desc">{{ $t('sv.intro.appearance') }}</div>
             </div>
         </div>
-        <el-collapse v-model="open">
-            <el-collapse-item name="appearance-main">
-                <template #title>
-                    <div class="sec__title"><el-icon><BulbOutlined /></el-icon> {{ $t('sv.appearance.title') }}</div>
+        <a-collapse :active-key="open" @change="onOpenChange">
+            <a-collapse-panel key="appearance-main">
+                <template #header>
+                    <div class="sec__title"><BulbOutlined /> {{ $t('sv.appearance.title') }}</div>
                 </template>
 
-                <el-form label-position="top">
-                    <el-form-item :label="$t('sv.appearance.theme')">
-                        <el-radio-group v-model="state.theme">
-                            <el-radio-button :value="'system'">{{ $t('sv.appearance.themeSystem') }}</el-radio-button>
-                            <el-radio-button :value="'light'">{{ $t('sv.appearance.themeLight') }}</el-radio-button>
-                            <el-radio-button :value="'dark'">{{ $t('sv.appearance.themeDark') }}</el-radio-button>
-                        </el-radio-group>
-                    </el-form-item>
+                <a-form layout="vertical">
+                    <a-form-item :label="$t('sv.appearance.theme')">
+                        <a-radio-group v-model:value="state.theme">
+                            <a-radio-button :value="'system'">{{ $t('sv.appearance.themeSystem') }}</a-radio-button>
+                            <a-radio-button :value="'light'">{{ $t('sv.appearance.themeLight') }}</a-radio-button>
+                            <a-radio-button :value="'dark'">{{ $t('sv.appearance.themeDark') }}</a-radio-button>
+                        </a-radio-group>
+                    </a-form-item>
 
-                    <el-form-item :label="$t('sv.appearance.schemeLabel')">
+                    <a-form-item :label="$t('sv.appearance.schemeLabel')">
                         <div class="schemes">
                             <button
                                 v-for="s in COLOR_SCHEMES"
@@ -187,36 +201,34 @@ async function removeIcon(it: AppIconInfo): Promise<void> {
                             </button>
                         </div>
                         <div class="hint">{{ $t('sv.appearance.schemeHint') }}</div>
-                    </el-form-item>
+                    </a-form-item>
 
-                    <el-form-item :label="$t('sv.appearance.zoom')">
-                        <el-select v-model="state.zoomPercent" class="zoom-sel">
-                            <el-option v-for="z in ZOOMS" :key="z" :label="z + '%'" :value="z" />
-                        </el-select>
+                    <a-form-item :label="$t('sv.appearance.zoom')">
+                        <a-select v-model:value="state.zoomPercent" :options="zoomOptions" class="zoom-sel" />
                         <div class="hint">{{ $t('sv.appearance.zoomHint') }}</div>
-                    </el-form-item>
+                    </a-form-item>
 
-                    <el-form-item :label="$t('sv.appearance.ignoreScale')">
-                        <el-switch :model-value="state.ignoreSystemScale" @update:model-value="onSysScale" />
+                    <a-form-item :label="$t('sv.appearance.ignoreScale')">
+                        <a-switch :checked="state.ignoreSystemScale" @change="onSysScaleChange" />
                         <div class="hint">{{ $t('sv.appearance.ignoreScaleHint') }}</div>
-                    </el-form-item>
+                    </a-form-item>
 
-                    <el-form-item :label="$t('sv.appearance.language')">
-                        <el-cascader
+                    <a-form-item :label="$t('sv.appearance.language')">
+                        <a-cascader
                             :options="langOptions"
-                            :model-value="langCascader"
+                            :value="langCascader"
                             class="lang-casc"
                             :placeholder="$t('sv.appearance.language')"
                             @change="onLangCascader"
                         />
                         <div class="hint">{{ $t('sv.appearance.funHint') }}</div>
-                    </el-form-item>
-                </el-form>
-            </el-collapse-item>
+                    </a-form-item>
+                </a-form>
+            </a-collapse-panel>
 
-            <el-collapse-item name="appearance-icon">
-                <template #title>
-                    <div class="sec__title"><el-icon><PictureOutlined /></el-icon> {{ $t('sv.appearance.iconTitle') }}</div>
+            <a-collapse-panel key="appearance-icon">
+                <template #header>
+                    <div class="sec__title"><PictureOutlined /> {{ $t('sv.appearance.iconTitle') }}</div>
                 </template>
 
                 <div class="hint">{{ $t('sv.appearance.iconHint') }}</div>
@@ -255,8 +267,8 @@ async function removeIcon(it: AppIconInfo): Promise<void> {
                     accept="image/png,image/jpeg"
                     @change="onIconFile"
                 />
-            </el-collapse-item>
-        </el-collapse>
+            </a-collapse-panel>
+        </a-collapse>
     </div>
 </template>
 
