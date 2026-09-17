@@ -61,13 +61,13 @@ metadata:
 9. **代码风格**：缩进 **4 个空格**（`src/**`、`.vitepress/**`、`scripts/**` 的 ts/vue/js/css/mts 与 `package.json`、`tsconfig*.json` 全部统一）；注释与 JSDoc 用**简要中文**。**YAML 例外**：`.github/workflows/*.yml` 保持 2 空格（缩进敏感 + Actions 惯例），见 `.editorconfig`。
 10. **agent 只做静态验证**：只跑 `npm run typecheck` / `npm run lint`（必要时 `npm run build`）。**不要主动跑测试**（`npm run check` / `npm run test` / `test:watch` / `test:coverage` 一律由用户执行）；运行时行为（窗口 / 托盘 / 下载 / 迁移 / 自更新）由用户验证，**不要自行启动应用**。
 11. **agent 产生的缓存 / 临时文件统一放 `.agents/temp/`**（用完即删），不要散落到工作区根或 `docs/`。
-12. **分支与推送**：改动推送至 `dev`，**发行时才推 `main`**；任何 `git push`（含 `--force` / `--tags` / 删远程分支标签）都要先说明目标并征得同意；本地 `add`/`commit`/`branch`/`merge`/`checkout` 可直接做。
+12. **分支与推送**：改动推送至 `dev`，**发行时才推 `main`**；任何 `git push`（含 `--force` / `--tags` / 删远程分支标签）都要先说明目标并征得同意；本地 `add`/`commit`/`branch`/`merge`/`checkout` 可直接做。**推送 `main` 前若版本是预发布（alpha / beta / rc），自动把通道序号 +1**——由 `.githooks/pre-push` 执行（改 `package.json` 并提交一条 `chore(release): <新版本>`，随后要**重跑一次 `git push`** 把该提交带上去；正式版不 +1）。
 13. **一个提交只做一件事**，禁止顺手改无关文件；不维护 `CHANGELOG.md`，变更记录以 GitHub Release notes 为准。
 14. **新增依赖优先复用现有能力**，避免重复依赖与体积膨胀。**装到哪一侧**：前端 / 构建期依赖（Vue、UI 库、Vite 插件、resolver、图标等）一律进 `devDependencies`——渲染层会被 Vite 打进产物，运行时无需 node_modules；`dependencies` 只放**主进程外置的运行时依赖**（因为 `electron.vite.config.ts` 里 `main`/`preload` 设了 `externalizeDeps: true`，这些会被随包分发）。当前 `dependencies` 仅有 `electron-updater` / `semver` / `yaml`。
 15. **用户可见文案必须 i18n**（主进程 `mt()`、渲染层 `t()`），日志走统一入口，禁止硬编码文案。
 16. **`settings.json` 结构变更必须向后兼容**：升 `settingsVersion` 并保留旧值迁移；发布保持 A/B 版本槽 + 自动回退能力。
 17. **技能维护**：`deepseek-box` 攒一批再统一更新；`metadata.version` 跟随应用版本。
-18. **版本号规范 `X.Y.Z-{alpha|beta|rc}.N`**：主次修订三段正常递增，**预发布通道限定为 alpha / beta / rc**，通道内序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；遵守 semver 字典序，故 `alpha < beta < rc` 升级链天然正确。改版本要**同时改四处**：`package.json`、`package-lock.json` 顶层与 `packages[""]`、技能 `metadata.version`；一律不带 `v` 前缀（`v` 只在 Git tag 上）。
+18. **版本号规范 `X.Y.Z-{alpha|beta|rc}.N`**：主次修订三段正常递增，**预发布通道限定为 alpha / beta / rc**，通道内序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；遵守 semver 字典序，故 `alpha < beta < rc` 升级链天然正确。改版本要**同时改四处**：`package.json`、`package-lock.json` 顶层与 `packages[""]`、技能 `metadata.version`；一律不带 `v` 前缀（`v` 只在 Git tag 上）。**推送 `main` 前的自动 +1 只动 `package.json` 这一处**（`pre-push` 不做四处同步、也不复读推送）：若那一处要入库，须自己补齐 `package-lock.json` 与技能 `metadata.version` 后另行提交。
 19. **提交信息用 Conventional Commits**：`feat:` / `fix:` / `docs:` / `refactor:` / `chore:` 等。
 20. **质量门禁**：`npm run check`（typecheck + lint + 单元测试）必须通过 —— 由用户或 `.githooks/pre-commit`（`npm install` 的 `prepare` 自动启用 core.hooksPath）、CI（`.github/workflows/quality.yml`）执行，**agent 不主动跑**；仅紧急情况用 `--no-verify`。
 21. **纯逻辑必须配单测**：`src/shared/**` 与 `src/main/**` 里不依赖 Electron 的纯函数（版本比较、路径与文件助手、设置归一化、i18n 解析）改动时必须补 `*.test.ts`。**测试统一收在 `tests/` 下、按被测层分目录**（`tests/{shared,main,renderer}/`，文件名与被测模块同名），**源码目录里不得出现 `*.test.ts`**；测试内用 `@shared` / `@main` / `@` 别名，不用跨目录相对路径。组件渲染与运行时行为仍由用户验证。

@@ -26,6 +26,14 @@ DeepSeek Box —— DeepSeek Harness 的 Electron 桌面外壳（Electron 44 + V
 
 文件名与被测模块同名（`src/main/dsh/semver.ts` → `tests/main/dsh/semver.test.ts`）。源码目录里**不允许**出现 `*.test.ts`，测试内用别名 import 而非跨目录相对路径。
 
+## 分支与发布
+
+- 开发改动推 `dev`；**发行才推 `main`**，且任何 `git push` 都要先说明目标并征得同意。
+- **推送 `main` 前若版本是预发布（alpha / beta / rc），自动把通道序号 +1**：由 `.githooks/pre-push` 改写
+  `package.json` 并提交一条 `chore(release): <新版本>`，随后要**重跑一次 `git push`** 把该提交带上去
+  （正式版 `X.Y.Z` 不 +1）。该 hook 只动 `package.json` 一处，**不做**版本号规范里的"四处同步"、也不复读推送；
+  推送 `v*` 标签、删除远程分支一律放行。紧急情况用 `git push --no-verify` 跳过。
+
 ## 必读
 
 - `.agents/skills/deepseek-box/SKILL.md` —— 铁律、任务路由表、常用命令、交付前自检；
@@ -59,4 +67,4 @@ DeepSeek Box —— DeepSeek Harness 的 Electron 桌面外壳（Electron 44 + V
 | `npm run build` | 构建到 `out/` |
 | `npm run docs:dev` / `docs:build` | 文档站 |
 
-Git hooks 由 `npm install` 的 `prepare` 自动启用；若未生效，运行 `git config core.hooksPath .githooks`（必要时 `chmod +x .githooks/pre-commit`）。
+Git hooks 由 `npm install` 的 `prepare` 自动启用；若未生效，运行 `git config core.hooksPath .githooks`（必要时 `chmod +x .githooks/pre-commit .githooks/pre-push`）。

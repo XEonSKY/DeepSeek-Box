@@ -1,0 +1,73 @@
+#!/bin/sh
+# 推送前门禁：把发布分支 main 上的版本自动推进一格。
+#
+# 约定：推送到远程 main 时，若 `package.json` 的版本是预发布（alpha / beta / rc），
+# 先把通道序号 +1 再推送，例如 0.1.6-alpha.4 → 0.1.6-alpha.5；正式版（X.Y.Z）原样推送。
+# 目的是让 `main` 始终对应一个还没构建过的版本号，避免重复用同一个号码发版。
+#
+# 刻意不做的事：
+#   - 不自动改 package-lock.json 与技能 metadata.version（版本号规范要求"改四处"，
+#     这里只推进 package.json 的一处；收尾请按规范手动统一）；
+#   - 不自动 commit / amend、不复读推送（避免使用方没意识到提交被改写）；
+#   - 不改写 `v*` 标签的推送（标签已固化，改版本只会让门禁对不上）；
+#   - 非 main 的目标分支、删除远程分支（--delete）一律放行。
+#
+# 紧急情况可用 `git push --no-verify` 跳过。
+
+remotes="$*"
+zero=$(git hash-object --stdin </dev/null | tr '[0-9a-f]' '0')
+
+advances_main() {
+    # 逐行读远端反馈："<旧 SHA> <新 SHA> <refname>"；新 SHA 为全零表示删除该引用。
+    while read -r _local_sha remote_sha refname; do
+        case "$refname" in
+            refs/heads/main) ;;
+            *) continue ;;
+        esac
+        [ "$remote_sha" = "$zero" ] && continue
+        echo "$refname"
+    done
+}
+
+bump() {
+    local old_version new_version
+    old_version=$(node -p "require('./package.json').version" 2>/dev/null) || return 0
+    case "$old_version" in
+        *-alpha.*|*-beta.*|*-rc.*) ;;
+        *) return 0 ;;
+    esac
+
+    local next
+    next=$(node -e '
+        const fs = require("node:fs");
+        const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+        const m = /^(.*-)(alpha|beta|rc)\.(\d+)$/.exec(pkg.version);
+        if (!m) { console.log("UNCHANGED"); process.exit(0); }
+        const bumped = m[1] + m[2] + "." + (Number(m[3]) + 1);
+        pkg.version = bumped;
+        fs.writeFileSync("package.json", JSON.stringify(pkg, null, 4) + "\n");
+        console.log(bumped);
+    ') || return 0
+
+    if [ "$next" = "UNCHANGED" ]; then
+        return 0
+    fi
+
+    new_version="$next"
+    git add package.json || return 0
+    git commit -q -m "chore(release): $new_version" --no-verify || {
+        echo "[pre-push] 版本号已改为 $new_version，但提交失败；请手动提交后重推。" >&2
+        return 0
+    }
+    echo "[pre-push] main 预发布版本 $old_version → $new_version（已提交）；请重跑 git push 推送该提交。" >&2
+}
+
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+    for remote in $remotes; do
+        advances_main | grep -q . || continue
+        bump
+        break
+    done
+fi
+
+exit 0
