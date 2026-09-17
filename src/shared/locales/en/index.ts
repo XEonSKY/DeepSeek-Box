@@ -8,7 +8,7 @@ export default {
     app: {
         title: 'DeepSeek Box',
         nav: {
-            ui: 'DeepSeek UI',
+            ui: 'Harness',
             chat: 'DeepSeek Chat',
             platform: 'Usage & top-up',
             settings: 'Settings'
@@ -164,6 +164,7 @@ export default {
     },
     /** Web host: placeholder while waiting for the dsh UI URL, plus the timeout state */
     whost: {
+        starting: 'Starting DeepSeek Harness…',
         timeout: 'Timed out waiting for DeepSeek Harness to start. Check Settings → Terminal for logs, then retry.',
         retry: 'Retry'
     },

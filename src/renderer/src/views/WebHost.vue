@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { ArrowLeftOutlined, ArrowRightOutlined, ReloadOutlined, LoadingOutlined } from '@antdv-next/icons'
+import { ArrowLeftOutlined, ArrowRightOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { webTabs, activeTab, openTarget, setHomeUrl } from '../shell/tabs'
 import NewTab from './NewTab.vue'
 import { buildSearchUrl } from '../lib/engines'
@@ -9,6 +9,7 @@ import { shellMeta } from '../shell/shellmeta'
 import { useWebviews } from './useWebviews'
 import type { WebviewEl } from './useWebviews'
 import { useLoadProgress } from './useLoadProgress'
+import HarnessLoader from '../components/HarnessLoader.vue'
 
 /**
  * 「/」路由宿主：标签页模式的 web 内容区。
@@ -265,7 +266,8 @@ onBeforeUnmount(() => {
                             <div class="whost__timeout-txt">{{ $t('whost.timeout') }}</div>
                             <el-button size="small" :icon="ReloadOutlined" @click="startPolling">{{ $t('whost.retry') }}</el-button>
                         </div>
-                        <el-icon v-else class="spin" :size="36"><LoadingOutlined /></el-icon>
+                        <!-- dsh 启动中：复刻 Harness 进入时的 boot 动画，衔接内嵌页面 -->
+                        <HarnessLoader v-else :hint="$t('whost.starting')" />
                     </div>
                 </template>
             </div>
@@ -359,9 +361,8 @@ onBeforeUnmount(() => {
 .whost__wait {
     position: absolute;
     inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     color: var(--el-color-primary);
     pointer-events: none;
 }

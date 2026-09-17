@@ -5,7 +5,7 @@
 export default {
     app: {
         nav: {
-            ui: 'DeepSeek UI',
+            ui: 'Harness',
             chat: '网页对话～',
             platform: '用量 / 充值',
             settings: '设置'

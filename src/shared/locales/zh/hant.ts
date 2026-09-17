@@ -6,7 +6,7 @@ export default {
     app: {
         title: 'DeepSeek Box',
         nav: {
-            ui: 'DeepSeek UI',
+            ui: 'Harness',
             chat: 'DeepSeek 網頁版對話',
             platform: 'DeepSeek 用量 / 儲值',
             settings: '設定'

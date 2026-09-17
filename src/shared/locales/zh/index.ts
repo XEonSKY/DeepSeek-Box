@@ -9,7 +9,7 @@ export default {
     app: {
         title: 'DeepSeek Box',
         nav: {
-            ui: 'DeepSeek UI',
+            ui: 'Harness',
             chat: 'DeepSeek 网页版对话',
             platform: 'DeepSeek 用量 / 充值',
             settings: '设置'
@@ -170,6 +170,7 @@ export default {
     },
     /** web 宿主：等待 dsh UI 地址时的占位与超时失败态 */
     whost: {
+        starting: '正在启动 DeepSeek Harness…',
         timeout: '等待 DeepSeek Harness 启动超时。可在「设置 → 终端」查看日志后重试。',
         retry: '重试'
     },
