@@ -3,6 +3,7 @@ name: Deploy Docs
 # 把文档站发布到 GitHub Pages：
 # - 仅在 main 分支、且改动涉及文档或配置时触发；
 # - 构建 VitePress 产物（.vitepress/dist）并用官方 Pages Actions 部署。
+# - Node 采用 24（与本地开发环境一致）。
 # 前置：仓库 Settings → Pages → Build and deployment → Source 选择 "GitHub Actions"。
 on:
   push:
@@ -36,7 +37,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
       - name: Install dependencies
         run: npm ci

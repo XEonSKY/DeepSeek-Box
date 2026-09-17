@@ -4,6 +4,7 @@ name: Build & Release
 # - 仅当在 main 分支上推送版本标签（v*）时发布新版本；
 # - main 分支普通推送 / PR / 手动触发：只做类型检查与构建校验，不发版、不打包；
 # - 标签必须位于 main 上，且与 package.json 的 version 一致，否则发布门禁失败。
+# Node 采用 24（与本地开发环境一致），避免"本地过、CI 挂"的语法 / API 差异。
 on:
   push:
     branches: [main]
@@ -33,7 +34,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
       - name: Install dependencies
         run: npm ci
@@ -90,7 +91,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
       - name: Install dependencies
         run: npm ci
@@ -101,6 +102,8 @@ jobs:
       # 发布类型必须按版本号决定：electron-updater 正式版线用 releases/latest 解析 tag，
       # 该端点不返回 prerelease；若固定为 prerelease，将来正式版会被永久钉死。
       # 含 -（alpha/beta/rc）→ prerelease；否则 → release。
+      # 注意：这里只改内存里的对象、用 4 空格缩进写回，与仓库的 JSON 风格一致
+      # （此前写死 2 空格，会让这次改动把 package.json 的缩进改坏）。
       - name: Resolve release type from version
         shell: bash
         run: |
@@ -109,7 +112,7 @@ jobs:
             const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
             const releaseType = /-/.test(pkg.version) ? "prerelease" : "release";
             pkg.build.publish.releaseType = releaseType;
-            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 4) + "\n");
             console.log("version " + pkg.version + " -> publish.releaseType = " + releaseType);
           '
       # 必须是已发布状态、不能停在 draft，否则 electron-updater 读不到。
