@@ -18,7 +18,7 @@ export default {
     },
     sv: {
         cap: '设置',
-        nav: { general: '一般', appearance: '外观', network: '网络', env: '环境', dsh: 'DeepSeek Harness', log: '终端', hotkeys: '快捷键', webview: 'Webview', about: '关于' },
+        nav: { general: '一般', appearance: '外观', network: '网络', env: '环境', dsh: 'DeepSeek Harness', log: '终端', hotkeys: '快捷键', about: '关于' },
         general: {
             run: '执行',
             workspace: '工作目录',

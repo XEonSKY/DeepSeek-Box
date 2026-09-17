@@ -167,10 +167,10 @@ export default {
     },
     sv: {
         cap: '設定',
-        nav: { general: '一般', system: '系統與效能', appearance: '外觀', network: '網路', env: '環境', dsh: 'DeepSeek Harness', models: '模型', log: '終端', hotkeys: '快速鍵', webview: 'Webview', about: '關於' },
+        nav: { general: '一般', system: '系統與效能', appearance: '外觀', network: '網路', env: '環境', dsh: 'DeepSeek Harness', models: '模型', log: '終端', hotkeys: '快速鍵', about: '關於' },
         intro: {
             general: '工作目錄、連接埠與分頁/搜尋等基礎行為。',
-            system: '開機自啟、圖形加速與瀏覽器開啟方式。',
+            system: '開機自啟、瀏覽器開啟方式、圖形加速與內嵌頁面的瀏覽器識別。',
             appearance: '介面語言、主題與縮放等外觀設定。',
             network: '代理連線與網路作用範圍。',
             env: '執行 DeepSeek Harness 所用的 Node 與 npm 來自何處，以及各來源的版本。',
@@ -178,7 +178,6 @@ export default {
             models: '權杖清單：每個金鑰（權杖）一列，顯示所屬供應商與餘額，不顯示金鑰。',
             log: 'DeepSeek Box 的即時輸出（stdout / stderr）。',
             hotkeys: '鍵盤快速鍵：系統全域的與常用的操作。',
-            webview: '內嵌頁面的呈現方式與瀏覽器識別。',
             about: '關於應用程式與 DeepSeek Harness，以及更新檢查。'
         },
         general: {
@@ -222,19 +221,24 @@ export default {
             resetTxt: '恢復預設並重啟 dsh。',
             resetBtn: '一鍵恢復預設'
         },
-        /** 系統與效能：開機自啟、圖形加速、瀏覽器開啟方式 */
+        /** 系統與效能：開機自啟、瀏覽器開啟方式、圖形加速、瀏覽器識別 */
         system: {
             startup: '啟動',
             autoLaunch: '啟動增強（開機自啟）',
             autoLaunchHint: '登入系統後自動啟動 DeepSeek Box 並拉起 DeepSeek Harness。',
+            openInBrowser: '預設使用系統瀏覽器開啟 DSH',
+            openInBrowserHint: '啟動時隱藏到系統匣，並在系統預設瀏覽器中開啟 DeepSeek Harness 介面；之後可隨時從系統匣圖示喚回主視窗。',
             performance: '效能',
             gpuAccel: '在可用時使用圖形加速',
             gpuAccelHint: '用 GPU 呈現內嵌頁面。關閉後資源占用更低、對老舊驅動的相容性更好，但捲動與動畫會變卡。',
             gpuAccelText: '圖形加速只能在應用程式啟動時決定，改動需要重啟應用程式才能生效。現在重啟嗎？',
             restartNow: '立即重啟',
-            browser: '瀏覽器',
-            openInBrowser: '預設使用系統瀏覽器開啟 DSH',
-            openInBrowserHint: '啟動時隱藏到系統匣，並在系統預設瀏覽器中開啟 DeepSeek Harness 介面；之後可隨時從系統匣圖示喚回主視窗。'
+            identity: '瀏覽器識別',
+            ua: 'UserAgent',
+            uaHint: '留空即使用下面的預設 UA。作用於 DeepSeek Harness UI、網頁對話與所有動態分頁；改動後新請求立即採用，已載入的頁面需要重新整理（或重啟）才帶上新 UA。',
+            uaDefault: '預設 UA',
+            uaCurrent: '目前生效',
+            uaReset: '恢復預設'
         },
         appearance: {
             title: '外觀',
@@ -464,14 +468,6 @@ export default {
             cleared: '已清除（相當於停用）',
             busy: '{accel} 已被其它程式占用，請換一個組合鍵。',
             hint: '點「修改」後按下組合鍵即可（Esc 取消）。只支援字母 / 數字 / F1–F24，且至少帶一個修飾鍵 —— 否則打字時會被搶走。'
-        },
-        webview: {
-            title: '呈現與識別',
-            ua: 'UserAgent',
-            uaHint: '留空即使用下面的預設 UA。作用於 DeepSeek Harness UI、網頁對話與所有動態分頁；改動後新請求立即採用，已載入的頁面需要重新整理（或重啟）才帶上新 UA。',
-            uaDefault: '預設 UA',
-            uaCurrent: '目前生效',
-            uaReset: '恢復預設'
         },
         about: {
             appVersion: '應用程式版本',

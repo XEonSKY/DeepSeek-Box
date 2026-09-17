@@ -170,10 +170,10 @@ export default {
     },
     sv: {
         cap: 'Settings',
-        nav: { general: 'General', system: 'System & performance', appearance: 'Appearance', network: 'Network', env: 'Environment', dsh: 'DeepSeek Harness', plugins: 'Plugins', models: 'Models', log: 'Terminal', hotkeys: 'Shortcuts', webview: 'Webview', about: 'About' },
+        nav: { general: 'General', system: 'System & performance', appearance: 'Appearance', network: 'Network', env: 'Environment', dsh: 'DeepSeek Harness', plugins: 'Plugins', models: 'Models', log: 'Terminal', hotkeys: 'Shortcuts', about: 'About' },
         intro: {
             general: 'Working directory, port, tabs and search basics.',
-            system: 'Launch at login, graphics acceleration and how DSH opens.',
+            system: 'Launch at login, how DSH opens, graphics acceleration and page identity.',
             appearance: 'Interface language, theme and zoom.',
             network: 'Proxy connection and scope.',
             env: 'Which Node and npm run the DeepSeek Harness, and the version of each source.',
@@ -182,7 +182,6 @@ export default {
             models: 'Token list: one row per key, showing its provider and balance (no secrets shown).',
             log: 'Live DeepSeek Box output (stdout / stderr).',
             hotkeys: 'Keyboard shortcuts: system-wide and in-app.',
-            webview: 'How the embedded pages render, and what they identify as.',
             about: 'About the app and DeepSeek Harness, plus update checks.'
         },
         plugins: {
@@ -254,19 +253,24 @@ export default {
             resetTxt: 'Restores defaults and restarts dsh.',
             resetBtn: 'Restore defaults'
         },
-        /** System & performance: launch at login, graphics acceleration, browser opening */
+        /** System & performance: launch at login, browser opening, graphics acceleration, page identity */
         system: {
             startup: 'Startup',
             autoLaunch: 'Startup boost (launch at login)',
             autoLaunchHint: 'Starts DeepSeek Box automatically after you sign in and brings DeepSeek Harness up with it.',
+            openInBrowser: 'Open DSH in the system browser by default',
+            openInBrowserHint: 'Starts hidden in the system tray and opens the DeepSeek Harness UI in your default browser; use the tray icon to bring the main window back at any time.',
             performance: 'Performance',
             gpuAccel: 'Use graphics acceleration when available',
             gpuAccelHint: 'Renders the embedded pages on the GPU. Turning it off lowers resource usage and helps with old drivers, at the cost of choppier scrolling and animation.',
             gpuAccelText: 'Graphics acceleration can only be decided while the app starts, so this needs an app restart to take effect. Restart now?',
             restartNow: 'Restart now',
-            browser: 'Browser',
-            openInBrowser: 'Open DSH in the system browser by default',
-            openInBrowserHint: 'Starts hidden in the system tray and opens the DeepSeek Harness UI in your default browser; use the tray icon to bring the main window back at any time.'
+            identity: 'Browser identity',
+            ua: 'UserAgent',
+            uaHint: 'Leave empty to use the default UA below. Applies to the DeepSeek Harness UI, web chat and every dynamic tab; new requests pick it up immediately, already-loaded pages need a refresh (or a restart).',
+            uaDefault: 'Default UA',
+            uaCurrent: 'In effect',
+            uaReset: 'Reset to default'
         },
         appearance: {
             title: 'Appearance',
@@ -496,14 +500,6 @@ export default {
             cleared: 'Cleared (disabled)',
             busy: '{accel} is taken by another program — pick another combination.',
             hint: 'Click Change, then press a combination (Esc cancels). Letters, digits and F1–F24 only, and at least one modifier is required — otherwise typing would be swallowed.'
-        },
-        webview: {
-            title: 'Rendering & identity',
-            ua: 'UserAgent',
-            uaHint: 'Leave empty to use the default UA below. Applies to the DeepSeek Harness UI, web chat and every dynamic tab; new requests pick it up immediately, already-loaded pages need a refresh (or a restart).',
-            uaDefault: 'Default UA',
-            uaCurrent: 'In effect',
-            uaReset: 'Reset to default'
         },
         about: {
             appVersion: 'App version',
