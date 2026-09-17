@@ -105,34 +105,48 @@ html.dark .settings .side {
     margin: 0 auto;
 }
 
-/* ---- 正文分区：每个分组一个独立边框盒，组间留间距 ---- */
-.settings .el-collapse {
+/* ---- 正文分区：每个分组一个独立边框盒（antdv collapse），组间留间距 ----
+   antdv 的样式由 cssinjs 在运行时注入，同权重时后注入者获胜，故凡是与默认值冲突的地方
+   都多带一层 .settings（权重更高），而不是靠源码顺序。 */
+.settings .ant-collapse {
     border: none;
     background: transparent;
 }
-.settings .el-collapse-item {
+.settings .ant-collapse > .ant-collapse-item {
     border: 1px solid var(--el-border-color);
     border-radius: 10px;
     overflow: hidden;
     background: var(--el-bg-color);
 }
-.settings .el-collapse-item + .el-collapse-item {
-    margin-top: 14px;
-}
-.settings .el-collapse-item__header {
-    padding: 13px 18px;
-    border-bottom: none;
-    font-size: 14px;
-    line-height: 1.3;
-}
-.settings .el-collapse-item__header.is-active {
+/* 库默认只给首尾项做圆角、并去掉末项的下边框：这里统一成每张卡都四角 10px、四边完整 */
+.settings .ant-collapse > .ant-collapse-item:first-child,
+.settings .ant-collapse > .ant-collapse-item:last-child {
+    border-radius: 10px;
     border-bottom: 1px solid var(--el-border-color);
 }
-.settings .el-collapse-item__wrap {
-    border-bottom: none;
+.settings .ant-collapse > .ant-collapse-item + .ant-collapse-item {
+    margin-top: 14px;
 }
-.settings .el-collapse-item__content {
+.settings .ant-collapse > .ant-collapse-item > .ant-collapse-header {
+    align-items: center;
+    padding: 13px 18px;
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--el-text-color-primary);
+}
+.settings .ant-collapse > .ant-collapse-item-active > .ant-collapse-header {
+    border-bottom: 1px solid var(--el-border-color);
+}
+.settings .ant-collapse .ant-collapse-panel {
+    border-top: none;
+    background: transparent;
+}
+.settings .ant-collapse .ant-collapse-body {
     padding: 14px 18px 18px;
+}
+/* antdv 数值输入框默认宽 90px（Element Plus 是 150px）：设置页里都放在定宽容器内，统一回 150px */
+.settings .ant-input-number {
+    width: 150px;
 }
 .settings .sec__title {
     display: inline-flex;
@@ -141,8 +155,40 @@ html.dark .settings .side {
     font-weight: 600;
     color: var(--el-text-color-primary);
 }
-.settings .sec__title .el-icon {
+/* 分组标题图标用次要色 */
+.settings .sec__title .anticon {
     color: var(--el-text-color-secondary);
+}
+
+/* ---- 通用键值行 / 动作区 / 下载进度（环境页与插件页共用；原先只写在 EnvPanel 的 scoped 样式里） ---- */
+.settings .kv {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    font-size: 13px;
+}
+.settings .kv__k {
+    flex: 0 0 auto;
+    min-width: 150px;
+    color: var(--el-text-color-secondary);
+}
+.settings .kv__v {
+    font-family: var(--el-font-family-mono);
+    color: var(--el-text-color-primary);
+    background: var(--el-fill-color-light);
+    padding: 1px 8px;
+    border-radius: 6px;
+}
+.settings .act {
+    margin-top: 14px;
+}
+.settings .dep-progress {
+    margin-top: 14px;
+}
+.settings .dep-info {
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
 }
 
 /* 说明文字（原文件里有两份重复的 .settings .hint，后者逐条覆盖前者，已合并为一份） */
@@ -294,6 +340,10 @@ html.dark .settings .side {
 }
 .settings .au__txt {
     flex: 1 1 auto;
+}
+/* 同一分组里的多行开关（如「启动」组的两个）：行间留出间距 */
+.settings .au + .au {
+    margin-top: 16px;
 }
 .settings .au__t {
     font-weight: 600;
@@ -464,16 +514,14 @@ html.dark .settings .side {
     align-items: center;
 }
 .settings .iv__c3 {
-    flex: 0 0 150px;
+    /* 默认尺寸按钮（不再用 size="small"）比原来宽：预留「切换 / 删除」并排 + 间距 */
+    flex: 0 0 176px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
 }
-/* 按钮间距只用上面的 gap，抵掉 el-button 自带的相邻 margin */
-.settings .iv__c3 .el-button + .el-button {
-    margin-left: 0;
-}
+/* 按钮间距只用上面的 gap（antd 按钮没有相邻 margin） */
 .settings .iv__ver {
     font-family: var(--el-font-family-mono);
     color: var(--el-text-color-primary);
