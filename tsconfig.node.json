@@ -32,6 +32,7 @@
         // 而渲染层源码整体归 tsconfig.web.json，故这里逐个补上被测试引用的文件。
         "src/renderer/src/lib/format.ts",
         "src/renderer/src/lib/providerIcon.ts",
+        "src/renderer/src/lib/tagLabel.ts",
         "src/renderer/src/lib/versionIndicator.ts"
     ]
 }
