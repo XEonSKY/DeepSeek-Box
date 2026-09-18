@@ -619,6 +619,8 @@ export default {
             noRollback: '没有可回退的版本。',
             rollbackMissing: '回退包已丢失，无法回退。',
             rollbackFail: '回退失败：无法启动回退程序。',
+            rollbackNoPermission: '回退失败：当前用户没有安装目录的写权限（安装到 Program Files 等系统目录时需要管理员）。请重新安装目标版本。',
+            rollbackGaveUp: '自动回退未能完成，已停止重试，当前仍运行 {version}。请重新安装上一版本。',
             rollbackStarted: '正在回退到 {version}，应用将自动重启。'
         },
         tray: {

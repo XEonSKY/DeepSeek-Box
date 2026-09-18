@@ -610,6 +610,8 @@ export default {
             noRollback: 'No previous version is available to roll back to.',
             rollbackMissing: 'The rollback archive is missing; cannot roll back.',
             rollbackFail: 'Rollback failed: could not launch the rollback helper.',
+            rollbackNoPermission: 'Rollback failed: the current user cannot write to the install directory (installing under system directories such as Program Files requires administrator rights). Please reinstall the target version.',
+            rollbackGaveUp: 'Automatic rollback did not complete; retries have stopped and {version} is still running. Please reinstall the previous version.',
             rollbackStarted: 'Rolling back to {version}; the app will restart automatically.'
         },
         tray: {

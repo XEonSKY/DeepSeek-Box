@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { app } from 'electron'
 import { registerIpc } from './app/ipc'
-import { startAutoCheckIfEnabled } from './app/appupdate'
+import { startAutoCheckIfEnabled, noteGracefulExit } from './app/appupdate'
 import { loadSettings, startConfigWatchers, readDiskSettings, syncNativeTheme, ensureDefaultConfigMigration, waitForConfigMigration } from './app/settings'
 import { createShellWindow, createTray, showMainWindow, syncGlobalHotkey } from './app/ui'
 import { applyHardwareAcceleration, applyWebviewProxy, applyWebviewUserAgent } from './app/webview'
@@ -124,6 +124,8 @@ if (!gotLock) {
         if (cleanExitDone) return
         cleanExitDone = true
         setQuitting(true)
+        // 走得到这里说明主进程是正常退出（不是崩溃），别把这次启动记成「新版启动失败」
+        noteGracefulExit()
         try {
             await stopDshGracefully()
         } catch {

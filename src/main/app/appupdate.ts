@@ -13,14 +13,17 @@ import { loadSettings, mt } from './settings'
 import {
     appSlotsState,
     archiveRunningVersion,
+    beginRollback,
     clearPending,
     dropPreviousIfCurrent,
     noteBootAttempt,
     readManifest,
     restorePrevious,
     stagePendingUpdate,
-    syncCurrentVersion
+    syncCurrentVersion,
+    takeRollbackResult
 } from './appslots'
+import { decideBootGuard } from './bootguard'
 
 /**
  * App 自动更新（A/B 版本槽）：封装 electron-updater(GitHub)。
@@ -223,34 +226,77 @@ async function onDownloaded(info: UpdateDownloadedEvent): Promise<void> {
 
 /**
  * 启动守卫：
+ *  - 先消费上一轮回退脚本留下的结果：失败即停止重试并如实报错（不再起第二轮）；
  *  - 写入当前版本，并在「当前版本 == 上一版归档」时清掉已过期的归档记录；
- *  - 若存在待安装记录而当前版本不是目标版本，说明安装没发生，清掉记录；
- *  - 若当前正是新装版本，累计一次启动尝试；超过阈值自动回退，否则起健康计时器。
+ *  - 判定交给纯函数 `decideBootGuard`（见 bootguard.ts）：无记录 / 记录过期 / 计数 /
+ *    触发回退 / 放弃回退，五选一；
+ *  - 每轮待安装记录**至多回退一次**（`beginRollback` 落盘计数），杜绝
+ *    「回退 → 启动 → 再回退」的无限循环。
  * 返回 false 表示已安排自动回退，调用方不应继续做更新检查。
  */
 function runBootGuard(): boolean {
     const running = app.getVersion()
+
+    const result = takeRollbackResult()
+    if (result && !result.ok) {
+        clearPending()
+        emit({ kind: 'error', message: mt('m.appUpdate.rollbackGaveUp', { version: running }) })
+        return true
+    }
+
     syncCurrentVersion(running)
     dropPreviousIfCurrent(running)
 
+    const decision = decideBootGuard({ running, pending: readManifest().pending, maxAttempts: MAX_BOOT_ATTEMPTS })
+    switch (decision.kind) {
+        case 'idle':
+            return true
+        case 'clear':
+            clearPending()
+            return true
+        case 'count':
+            noteBootAttempt(running)
+            setTimeout(() => clearPending(), HEALTHY_MS)
+            return true
+        case 'giveup':
+            // 回退过一次还是这个版本：回退没生效，别再重启脚本了
+            clearPending()
+            emit({ kind: 'error', message: mt('m.appUpdate.rollbackGaveUp', { version: running }) })
+            return true
+        case 'rollback': {
+            // 先落盘「已回退过一次」，再起脚本：脚本即使没回写结果也不会进入第二轮
+            beginRollback(running)
+            const previous = readManifest().previous?.version ?? null
+            emit({
+                kind: 'rollback',
+                version: previous,
+                message: mt('m.appUpdate.autoRollback', { version: previous ?? '?' })
+            })
+            setTimeout(() => {
+                const res = restorePrevious()
+                if (res.ok) setTimeout(() => app.quit(), 400)
+                else {
+                    // 起不来（例如安装目录无写权限）就到此为止，避免「启动 → 回退 → 启动」空转
+                    clearPending()
+                    emit({ kind: 'error', message: res.message })
+                }
+            }, 1500)
+            return false
+        }
+    }
+}
+
+/**
+ * 优雅退出（`before-quit` 走完清理）时调用。
+ *
+ * 正在运行的就是待安装记录里的目标版本，说明它已经能正常启动起来、只是还没熬满健康观察期 ——
+ * 用户手动关掉它**不是**启动失败。不这么判的话，快速开合几次就会被误判成「连续启动失败」，
+ * 从而触发一次本不该发生的自动回退。
+ */
+export function noteGracefulExit(): void {
+    const running = app.getVersion()
     const pending = readManifest().pending
-    if (!pending) return true
-    if (pending.to !== running) {
-        clearPending()
-        return true
-    }
-    if (noteBootAttempt(running) > MAX_BOOT_ATTEMPTS) {
-        const previous = readManifest().previous?.version ?? null
-        emit({ kind: 'rollback', version: previous, message: mt('m.appUpdate.autoRollback', { version: previous ?? '?' }) })
-        setTimeout(() => {
-            const res = restorePrevious()
-            if (res.ok) setTimeout(() => app.quit(), 400)
-            else emit({ kind: 'error', message: res.message })
-        }, 1500)
-        return false
-    }
-    setTimeout(() => clearPending(), HEALTHY_MS)
-    return true
+    if (pending && pending.to === running) clearPending()
 }
 
 /** 运行环境元信息（关于页显示当前版本/架构）。 */
