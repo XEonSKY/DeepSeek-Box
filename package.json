@@ -1,7 +1,7 @@
 {
     "name": "deepseek-box",
     "productName": "DeepSeek Box",
-    "version": "0.1.6-beta.1",
+    "version": "0.1.6-beta.2",
     "description": "DeepSeek Box —— 基于 Electron + Vite + Vue 3 + Element Plus 的桌面外壳",
     "license": "Apache-2.0",
     "author": "XEonSKY Studio",
