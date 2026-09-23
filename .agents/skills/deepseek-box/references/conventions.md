@@ -108,14 +108,14 @@
 
 ## 版本与发布
 
-- **版本号规范：`X.Y.Z-{alpha|beta|rc}.N`** —— 主次修订三段 + 预发布通道 + 通道内序号。
+- **版本号规范：正式版 `X.Y.Z`，预发布 `X.Y.Z-{alpha|beta|rc}.N`** —— 主次修订三段 +（可选）预发布通道 + 通道内序号。
   - 三段数字**正常递增**（`0.1.6` 就是 `0.1.6`），不要用 `0.0.0` 之类的占位值——那会让「哪个版本更新」需要额外解释；
   - 通道只有 `alpha` / `beta` / `rc` 三种，序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；
   - semver 的预发布比较是**字典序优先**，故 `alpha < beta < rc`，升级链天然正确；
   - 该规范由 `tests/shared/version-convention.test.ts` 守护（同时校验四处版本号一致、以及测试目录规范），改规范要同步改测试。
 - 升版本要**同时改四处**（均由发布者手动指定，没有自动改版本的 hook）：`package.json` 的 `version`、`package-lock.json` 顶层的 `version` 与 `packages[""].version`、技能 `SKILL.md` 的 `metadata.version`（跟随应用版本）。
 - 版本号一律**不带 `v` 前缀**（`v` 只出现在 Git tag 上）。
-- CI 校验 **Git tag（`v` + 版本号）== package.json 版本**；是否预发布由版本号是否包含 `-` 决定（当前规范下**始终**是 prerelease）。
+- CI 校验 **Git tag（`v` + 版本号）== package.json 版本**；是否预发布由版本号是否包含 `-` 决定 —— `build-release.yml` 据此选 `publish.releaseType`，应用内 `isPrerelease()` 是同一判据，三者必须一致。
 - 工作流：`.github/workflows/build-release.yml`（tag 触发打包发布）、`deploy-docs.yml`（`main` 改动 `docs/**` 时部署文档站）。
 - 本地打包：`npm run build` 后 `npm run dist:win`（另有 `dist:mac` / `dist:linux`）。
 

@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
+import semver from 'semver'
+import { isPrerelease } from '@shared/version'
 
 /**
- * 版本号规范：`X.Y.Z-{alpha|beta|rc}.N`
+ * 版本号规范：正式版 `X.Y.Z`，预发布 `X.Y.Z-{alpha|beta|rc}.N`
  *
  * 语义化版本的主次修订三段正常递增，**预发布通道限定为 alpha / beta / rc 三种**，
  * 通道内序号从 .0 起递增（如 `0.1.6-alpha.2` → `0.1.6-alpha.3`）。
- * 遵守 semver 的字典序预发布规则，故升级链 alpha < beta < rc 天然正确。
+ * 遵守 semver 的字典序预发布规则，故升级链 alpha < beta < rc 天然正确，
+ * 且**同段预发布一律低于正式版**（`0.1.6-beta.2` < `0.1.6`）—— 正式版发布后才能覆盖 beta 用户。
  *
  * 这条约束散落在四处（package.json / package-lock.json 两处 / 技能 metadata），
  * 手改时最容易漏 —— 漏了的后果是「应用内显示的版本」与「Release tag」不一致，
@@ -28,7 +31,7 @@ function repoRoot(): string {
 }
 
 const ROOT = repoRoot()
-const VERSION_RE = /^\d+\.\d+\.\d+-(alpha|beta|rc)\.(\d+)$/
+const VERSION_RE = /^\d+\.\d+\.\d+(-(alpha|beta|rc)\.\d+)?$/
 
 function readJson(rel: string): Record<string, unknown> {
     return JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf8')) as Record<string, unknown>
@@ -40,12 +43,13 @@ const version = pkg.version as string
 const lockPackages = lock.packages as Record<string, { version?: string }>
 
 describe('版本号规范', () => {
-    it('package.json 的版本号符合 X.Y.Z-{alpha|beta|rc}.N', () => {
+    it('package.json 的版本号符合 X.Y.Z（正式版）或 X.Y.Z-{alpha|beta|rc}.N（预发布）', () => {
         expect(VERSION_RE.test(version)).toBe(true)
     })
 
-    it('预发布通道只能是 alpha / beta / rc 三者之一', () => {
+    it('预发布通道只能是 alpha / beta / rc 三者之一（正式版没有通道）', () => {
         const channel = version.split('-')[1]?.split('.')[0]
+        if (channel === undefined) return
         expect(['alpha', 'beta', 'rc']).toContain(channel)
     })
 
@@ -71,8 +75,14 @@ describe('版本号规范', () => {
         expect(m?.[1]).toBe(version)
     })
 
-    it('是 prerelease（含 -），发布走 GitHub prerelease 通道', () => {
-        expect(version).toContain('-')
+    it('预发布判据与 CI、应用内一致：含 - 走 prerelease，否则走 release', () => {
+        // CI 的 build-release.yml 按是否含 `-` 选 publish.releaseType，应用内的
+        // isPrerelease() 也必须同一判据，否则「应用声称的通道」与「Release 通道」会错位。
+        expect(version.includes('-')).toBe(isPrerelease(version))
+    })
+
+    it('同段预发布低于正式版（正式版发布后能覆盖 beta 用户）', () => {
+        expect(semver.gt('0.1.6', '0.1.6-beta.2')).toBe(true)
     })
 })
 
