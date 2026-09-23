@@ -67,7 +67,7 @@ metadata:
 15. **用户可见文案必须 i18n**（主进程 `mt()`、渲染层 `t()`），日志走统一入口，禁止硬编码文案。
 16. **`settings.json` 结构变更必须向后兼容**：升 `settingsVersion` 并保留旧值迁移；发布保持 A/B 版本槽 + 自动回退能力。
 17. **技能维护**：`deepseek-box` 攒一批再统一更新；`metadata.version` 跟随应用版本。
-18. **版本号规范 `X.Y.Z-{alpha|beta|rc}.N`**：主次修订三段正常递增，**预发布通道限定为 alpha / beta / rc**，通道内序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；遵守 semver 字典序，故 `alpha < beta < rc` 升级链天然正确。改版本要**同时改四处**：`package.json`、`package-lock.json` 顶层与 `packages[""]`、技能 `metadata.version`；一律不带 `v` 前缀（`v` 只在 Git tag 上）。四处必须**手动**同时改齐 —— 不存在自动改版本号的 hook，改完直接推送即可。
+18. **版本号规范：正式版 `X.Y.Z`，预发布 `X.Y.Z-{alpha|beta|rc}.N`**：主次修订三段正常递增，**预发布通道限定为 alpha / beta / rc**，通道内序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；遵守 semver 字典序，故 `alpha < beta < rc` 升级链天然正确，且同段预发布低于正式版（`0.1.6-beta.2` < `0.1.6`，正式版才能覆盖 beta 用户）。**是否预发布只看版本号是否含 `-`**：CI 的 `build-release.yml` 据此选 `publish.releaseType`，应用内 `isPrerelease()` 与 `tests/shared/version-convention.test.ts` 必须同一判据。改版本要**同时改四处**：`package.json`、`package-lock.json` 顶层与 `packages[""]`、技能 `metadata.version`；一律不带 `v` 前缀（`v` 只在 Git tag 上）。四处必须**手动**同时改齐 —— 不存在自动改版本号的 hook，改完直接推送即可。
 19. **提交信息用 Conventional Commits**：`feat:` / `fix:` / `docs:` / `refactor:` / `chore:` 等。
 20. **质量门禁**：`npm run check`（typecheck + lint + 单元测试）必须通过 —— 由用户或 `.githooks/pre-commit`（`npm install` 的 `prepare` 自动启用 core.hooksPath）、CI（`.github/workflows/quality.yml`）执行，**agent 不主动跑**；仅紧急情况用 `--no-verify`。
 21. **纯逻辑必须配单测**：`src/shared/**` 与 `src/main/**` 里不依赖 Electron 的纯函数（版本比较、路径与文件助手、设置归一化、i18n 解析）改动时必须补 `*.test.ts`。**测试统一收在 `tests/` 下、按被测层分目录**（`tests/{shared,main,renderer}/`，文件名与被测模块同名），**源码目录里不得出现 `*.test.ts`**；测试内用 `@shared` / `@main` / `@` 别名，不用跨目录相对路径。组件渲染与运行时行为仍由用户验证。
