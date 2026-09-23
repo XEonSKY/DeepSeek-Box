@@ -18,8 +18,10 @@
 
 ## 缓存与临时文件
 
-- **所有 agent 产生的缓存 / 临时 / 中间文件（日志、报告、草稿、脚本产物）统一放 `.agents/temp/`**，用完即删。
+- **所有 agent 产生的缓存 / 临时 / 中间文件（日志、报告、草稿、脚本产物）统一放 `.agents/temp/`**；**不必每次用完即删** —— 临时目录允许跨任务保留复用（省掉重复下载 / 克隆的开销），需要时再手动清理。
 - 不要散落到工作区根、`docs/` 或其它目录。
+- **常备上游参考仓库**：`.agents/temp/deepseek-harness/` 保留一份 `https://github.com/deepseek-ai/deepseek-harness.git` 的克隆（查上游 dsh 实现 / 契约用），**不要删除**；需要最新代码时 `git -C .agents/temp/deepseek-harness pull`，仅目录缺失才重新 clone。
+  - 本机 `git clone` 直连 GitHub 时 schannel 会报 `SEC_E_NO_CREDENTIALS`，改用 openssl 后端：`git -c http.sslBackend=openssl clone ...`（该克隆已在仓库级 config 里固定 `http.sslBackend=openssl`，后续 `pull` 直接可用）。
 - `.agents/skills/**` **纳入版本管理**（团队共享）；`.agents/temp/` 已 gitignore，只保留 `.gitkeep` 占位。
 
 ## i18n 文案
@@ -27,6 +29,8 @@
 - 单一来源：`src/shared/locales/{zh,en}/index.ts`，中英**逐键对齐**（键名、顺序、`{占位符}` 都一致）。
 - `zh/hant.ts` 与 `zh/{anime,wenyan}.ts`、`en/{pirate,shakespeare}.ts` 一样是**只写差异的覆盖层**，由 `shared/locales/ext.ts` 深合并到基础文案。
 - **新增键时只需改 zh / en 两处**；hant **无需同步补充**，未覆盖的键自动回落到简体基座。
+- **删除键时三处都要删**：`tests/shared/locales/i18n-sync.test.ts` 守着「en 与 zh 逐键对齐」与
+  「hant 必须是 zh 的子集」——只删 zh 会让 hant 留下孤儿键，测试直接红（新增两处、删除三处，方向不同）。
 - 文案是程序的一部分（`src/shared/locales/` 不算文档），可随功能一起改。
 
 ## 文档
@@ -109,7 +113,7 @@
   - 通道只有 `alpha` / `beta` / `rc` 三种，序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；
   - semver 的预发布比较是**字典序优先**，故 `alpha < beta < rc`，升级链天然正确；
   - 该规范由 `tests/shared/version-convention.test.ts` 守护（同时校验四处版本号一致、以及测试目录规范），改规范要同步改测试。
-- 升版本要**同时改三处**：`package.json` 的 `version`、`package-lock.json` 顶层的 `version` 与 `packages[""].version`、技能 `SKILL.md` 的 `metadata.version`（跟随应用版本）。
+- 升版本要**同时改四处**（均由发布者手动指定，没有自动改版本的 hook）：`package.json` 的 `version`、`package-lock.json` 顶层的 `version` 与 `packages[""].version`、技能 `SKILL.md` 的 `metadata.version`（跟随应用版本）。
 - 版本号一律**不带 `v` 前缀**（`v` 只出现在 Git tag 上）。
 - CI 校验 **Git tag（`v` + 版本号）== package.json 版本**；是否预发布由版本号是否包含 `-` 决定（当前规范下**始终**是 prerelease）。
 - 工作流：`.github/workflows/build-release.yml`（tag 触发打包发布）、`deploy-docs.yml`（`main` 改动 `docs/**` 时部署文档站）。

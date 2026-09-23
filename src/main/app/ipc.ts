@@ -5,6 +5,7 @@ import type { InstallKind, InstalledVersions, NodeDeployProgress, Settings } fro
 import { resolveLocale, localeCodeOf } from '@shared/i18n'
 import { readDiskSettings, persistSettings, syncDshTheme, syncNativeTheme, loadSettings, dshLocale, writeDshLocale, configDirInfo, setConfigDir, revertConfigDir, runConfigMigration, cancelConfigMigration, normalizeNpmSource } from './settings'
 import { readCurrentBalance, readModelsInfo } from './models'
+import type { ModelsEnv } from './models'
 import { resolveInstall, dshInstalled, listVersions, performUpdateCheck, updateDsh, installDsh, uninstallDsh, listInstalledDshVersions, useDshVersion, removeInstalledDshVersion } from '../dsh/manage'
 import { restart, isDshRunning, stopServer } from '../dsh/dsh'
 import { getLogHistory } from '../dsh/logbus'
@@ -16,7 +17,7 @@ import { confirmDialogContext, openConfirmDialog, replyConfirmDialog } from './c
 import { applyWebviewProxy, applyWebviewUserAgent, defaultUserAgent, effectiveUserAgent } from './webview'
 import { applyAutoLaunch } from './autolaunch'
 import { listAppIcons, currentAppIcon, saveUserIcon, deleteUserIcon, applyAppIcon } from './appicon'
-import { findSystemNode, findSystemNpm, nodeVersionOf, localNodeExecPath } from '../dsh/tools'
+import { findSystemNode, findSystemNpm, nodeVersionOf, localNodeExecPath, dshInstallNodeModules } from '../dsh/tools'
 import { deployLocalNode, listNodeVersions, nodeStatus, listInstalledNodeVersions, useNodeVersion, removeInstalledNodeVersion } from '../dsh/nodeenv'
 import { listNpmVersions, npmStatus, updateNpm, ensureBundledNpmReady, listInstalledNpmVersions, useNpmVersion, removeInstalledNpmVersion } from '../dsh/npmRunner'
 import { listPnpmVersions, pnpmStatus, updatePnpm, ensureBundledPnpmReady, listInstalledPnpmVersions, usePnpmVersion, removeInstalledPnpmVersion } from '../dsh/pnpmRunner'
@@ -76,6 +77,14 @@ function focusWindowById(wcId: number): void {
  * 由 {@link Router} 在唯一通道上按「方法 + 路径」分发；渲染层用
  * `window.api.get('/settings')` 这类调用访问，类型来自 `@shared/api` 的 `ApiRoutes`。
  */
+/**
+ * 「模型」页需要的外部环境：dsh 安装目录下的 `node_modules`。
+ * 随附 bundle（dsh-base / dsh-web-app）的默认配置就装在那里，模型页要靠它才能看到「开箱可用」
+ * 的默认供应商；解析放在这里（而不是 models.ts）是为了让它保持「不依赖 electron」。
+ */
+function modelsEnv(): ModelsEnv {
+    return { installNodeModules: dshInstallNodeModules(loadSettings()) }
+}
 export function registerIpc(): void {
     const router = new Router()
 
@@ -125,7 +134,7 @@ export function registerIpc(): void {
             broadcast('settings:changed', d)
             return d
         })
-        // 界面语言：读/写 dsh settings.yaml 的 locale.preference（zh/en）。
+        // 界面语言：读/写 dsh 的 locale 配置（profile patch 的 config.preference，zh/en）。
         .get('/locale', () => resolveLocale(dshLocale(), app.getLocale()))
         .put('/locale', ({ body }) => {
             writeDshLocale(localeCodeOf(body))
@@ -224,12 +233,15 @@ export function registerIpc(): void {
             )
         )
 
-        // ---- 内置 pnpm（dsh 插件安装用；与 npm 同构，仅内置来源）----
+        // ---- pnpm（dsh 插件安装用；来源同 npm 一样可选：系统自带 / 内置）----
         .get('/pnpm/status', () => pnpmStatus())
         .get('/pnpm/versions', ({ query }) => listPnpmVersions(loadSettings(), query?.prerelease === true))
         .post('/pnpm/update', ({ body }) =>
             updatePnpm(
-                { version: typeof body?.version === 'string' && body.version ? body.version : undefined },
+                {
+                    source: body?.source === 'system' ? 'system' : 'bundled',
+                    version: typeof body?.version === 'string' && body.version ? body.version : undefined
+                },
                 (p) => broadcast('pnmenv:progress', installProgress(p))
             )
         )
@@ -284,9 +296,10 @@ export function registerIpc(): void {
             currentUserAgent: effectiveUserAgent()
         }))
         // 「设置 → 模型」：读取模型列表与各供应商用量（明文密钥绝不离开主进程）。
-        .get('/models/info', () => readModelsInfo())
+        // 未同意读取凭据时直接返回 no-consent，不读配置也不联网（与下面的余额接口同一开关）。
+        .get('/models/info', () => readModelsInfo(loadSettings().modelsCredConsent === true, modelsEnv()))
         // 底部状态栏：当前供应商余额（未同意读取时直接返回 null，不读配置也不联网）。
-        .get('/models/balance', () => readCurrentBalance(loadSettings().modelsCredConsent === true))
+        .get('/models/balance', () => readCurrentBalance(loadSettings().modelsCredConsent === true, modelsEnv()))
 
         // ---- 程序图标（设置 → 外观）----
         .get('/icons', () => listAppIcons())

@@ -5,6 +5,7 @@ import { configDir } from '../app/settings'
 import type { InstallKind } from '@shared/types'
 import { sortVersionsDesc } from './semver'
 import { readPkgVersion } from './fsutil'
+import { PNPM_MANIFEST_REL, isPnpmPackageReady } from './pnpmEntry'
 
 /**
  * 版本化安装目录：Node / npm / dsh 各自装到 `<configDir>/<kind>/<版本>/` 下，允许多版本并存；
@@ -66,11 +67,14 @@ function activeFile(kind: InstallKind): string {
 
 const VERSION_RE = /^v?\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$/
 
-/** 各安装类型的关键运行文件（相对版本目录）；缺了它就算「没装好」。 */
+/**
+ * 各安装类型的关键运行文件（相对版本目录）；缺了它就算「没装好」。
+ * pnpm 的判据在 `isVersionComplete` 里单独处理（入口文件名随大版本变过，见 pnpmEntry.ts）。
+ */
 function keyRelPath(kind: InstallKind): string {
     if (kind === 'node') return IS_WIN ? 'node.exe' : path.join('bin', 'node')
     if (kind === 'npm') return path.join('package', 'bin', 'npm-cli.js')
-    if (kind === 'pnpm') return path.join('package', 'bin', 'pnpm.cjs')
+    if (kind === 'pnpm') return PNPM_MANIFEST_REL // 兜底：调用方已按入口候选判过
     return path.join('node_modules', '@deepseek-ai', 'dsh', 'package.json')
 }
 
@@ -81,7 +85,11 @@ function keyRelPath(kind: InstallKind): string {
  */
 export function isVersionComplete(kind: InstallKind, version: string): boolean {
     try {
-        return fs.existsSync(path.join(versionDir(kind, version), keyRelPath(kind)))
+        const dir = versionDir(kind, version)
+        // pnpm 的入口在 12.0 换过名（bin/pnpm.cjs → bin/pnpm.mjs）：按候选判，
+        // 否则装好的 pnpm 12 会被当成残缺目录，进而连 .active 都不认。
+        if (kind === 'pnpm') return isPnpmPackageReady(dir)
+        return fs.existsSync(path.join(dir, keyRelPath(kind)))
     } catch {
         return false
     }

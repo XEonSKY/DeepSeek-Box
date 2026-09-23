@@ -14,7 +14,7 @@ export const messages: Record<ResolvedLocale, unknown> = {
     en
 }
 
-/** 内部语言码即 dsh settings.yaml 用的两字母码（zh/en）。 */
+/** 内部语言码即 dsh 的 locale 配置用的两字母码（zh/en）。 */
 export function localeCodeOf(locale: ResolvedLocale): LocaleCode {
     return locale
 }

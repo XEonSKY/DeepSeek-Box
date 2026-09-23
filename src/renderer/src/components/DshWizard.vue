@@ -1,24 +1,29 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeftOutlined, CloseOutlined, DownloadOutlined, FileTextOutlined, ReloadOutlined, SettingOutlined, ThunderboltOutlined } from '@antdv-next/icons'
+import { ArrowLeftOutlined, CloseOutlined, DownloadOutlined, ReloadOutlined, ThunderboltOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
-import type { ConfigDirInfo, EnvProbe, NodeRuntimeKind, NpmSource, ProxyProtocol, ProxyScope, RegistrySpeedResult } from '@shared/types'
-import { DEFAULT_SETTINGS } from '@shared/types'
+import type { EnvProbe, NodeRuntimeKind, NpmSource, RegistrySpeedResult } from '@shared/types'
 import { MIN_NODE_MAJOR, isPrerelease, nodeMajor } from '@shared/version'
 import { errorMessage } from '@shared/errors'
 import { useAppIcon } from '../lib/appIcon'
 import { formatDownload } from '../lib/format'
-import ProxyFields from './ProxyFields.vue'
-import WindowControls from './WindowControls.vue'
 import WizardSteps from './WizardSteps.vue'
 
 /**
- * @deepseek-ai/dsh 包缺失时的全屏安装向导。
+ * @deepseek-ai/dsh 包缺失时的安装向导（初始化页的主体）。
  *
- * 从 App.vue 抽出：它自带完整状态（四步流程 / 环境探测 / 版本选择 / 安装日志）与独立样式，
- * 与外壳其余部分只通过「是否显示」和「装完了」两点耦合，因此适合作为独立组件。
- * 由父组件用 `v-if="showMissing"` 控制挂载——每次挂载都会重新探测环境并把步骤归零。
+ * **顶部不再自带导航栏**：初始化页已是 App 里的独立路由（`/setup`，见 views/SetupView.vue），
+ * 与设置页同级叠在 web 宿主之上，顶部与底部就是全局 TitleBar 与 StatusBar。原先那条专属导航栏
+ * 只把**步骤条**下移到底部（`.wiz-footbar`），窗口按钮交还标题栏。
+ *
+ * **「安装设置」与「安装日志」两个入口已取消**：镜像源 / 配置目录 / 代理本就是设置页里的同一批
+ * 设置，dsh 的输出流也一直显示在设置页的「终端」里 —— 统一从标题栏进设置页看与改，向导不再
+ * 重复实现一份（也正因为标题栏不再被遮挡，安装前要配代理时直接去设置页即可）。
+ *
+ * 它自带完整状态（五步流程 / 环境探测 / 版本选择 / 安装进度），与外壳其余部分只通过「装完了」一点
+ * 耦合。每次挂载都会重新探测环境并把步骤归零：安装途中切去设置页再回来，界面会从头显示 —— 安装
+ * 本身跑在主进程，不受影响。
  */
 const emit = defineEmits<{ done: [] }>()
 
@@ -41,11 +46,6 @@ const installVersion = ref('')
 // dsh 来源(local/global)与 npm(source)：本页选择后、安装前会持久化到设置。
 const installSource = ref<'local' | 'global'>('local')
 const installNpm = ref<NpmSource>('system')
-// 安装过程的实时日志（本页展示，安装结束时保留以便回看）。
-const installLog = ref<string[]>([])
-// 是否打开全屏安装日志。
-const logFullscreen = ref(false)
-
 // ---- 首次安装引导 ---------------------------------------------------
 // 0 安装方式 · 1 镜像源 · 2 Node 环境 · 3 NPM 环境 · 4 DSH 环境
 // 第 0 步决定后面是「简易安装」自动跑完 1–4，还是「自定义安装」由用户逐步选择。
@@ -70,10 +70,6 @@ const STEP_KEYS = ['mode', 'source', 'node', 'npm', 'dsh'] as const
  * antdv-next 的 `a-select` 用 `:options` 而不是子组件 `<a-option>`：
  * 选项少且是纯数据时，一个数组比一层嵌套模板好读，也省掉每个选项一行 `$t`。
  */
-const registryOptions = computed(() => [
-    { value: 'npmjs', label: t('dshMissing.registryNpmjs') },
-    { value: 'npmmirror', label: t('dshMissing.registryNpmmirror') }
-])
 const npmVersionOptions = computed(() => npmVersions.value.map((v) => ({ value: v, label: v })))
 const dshVersionOptions = computed(() => installVersions.value.map((v) => ({ value: v, label: v })))
 /** 步骤条的分段：文字取自 i18n，与 STEP_KEYS 一一对应。 */
@@ -460,44 +456,15 @@ async function loadConfigDir(): Promise<void> {
     /* ignore */
     }
 }
-/** 同步向导里的配置目录展示；旧目录有内容时提示将在重启后迁移。 */
-function applyConfigDir(info: ConfigDirInfo): void {
-    cfgDir.value = info.current
-    cfgDefaultDir.value = info.default
-    if (info.pending) ElMessage.info(t('dshMissing.configDirPending'))
-}
-async function pickConfigDir(): Promise<void> {
-    const p = await window.api.post('/dialog/directory')
-    if (!p) return
-    applyConfigDir(await window.api.put('/config-dir', { body: { dir: p } }))
-}
-async function resetConfigDir(): Promise<void> {
-    applyConfigDir(await window.api.put('/config-dir', { body: { dir: null } }))
-}
-// ---- 安装设置（导航栏入口 → 全屏面板）----
-// 面板里收三样「装之前要定下来、且不必逐步选择」的东西：
-//   镜像源 · 配置目录（原先占满整个步骤，现已并入）· 代理。
-// 向导本身不铺开这些表单，只留一个入口 —— 大多数用户用默认值即可，
-// 需要改的人点开就是全部相关设置，不用在步骤之间来回找。
-// 代理为什么必须能在这里配：Node / npm / dsh 都要在线下载，
-// 「必须先能出网才能装、装完才能配代理」是个死锁；
-// 而每步执行前都会 persistWizard()，所以这里改完立刻作用于本次安装。
-const proxyEnabled = ref(DEFAULT_SETTINGS.proxyEnabled)
-const proxyProtocol = ref<ProxyProtocol>(DEFAULT_SETTINGS.proxyProtocol)
-const proxyHost = ref(DEFAULT_SETTINGS.proxyHost)
-const proxyPort = ref<number | null>(DEFAULT_SETTINGS.proxyPort)
-const proxyScope = ref<ProxyScope[]>([...DEFAULT_SETTINGS.proxyScope])
-/** 是否打开全屏安装设置（镜像源 + 配置目录 + 代理）。 */
-const settingsFull = ref(false)
+/** 配置目录只读展示：摘要要显示当前值与默认值，改则在设置页里改。 */
+// ---- 安装设置 ----
+// 镜像源 / 配置目录 / 代理**不在向导里提供编辑入口**：它们就是设置页里的同一批设置
+// （网络 / 环境等面板），统一从标题栏进设置页改 —— 标题栏现在不再被向导遮挡。
+// 向导只负责：读现值用于本次安装、把测速选出的镜像源写回去（见 persistWizard）。
+
 
 const back = (): void => {
     if (step.value > 0) step.value = step.value - 1
-}
-
-/** 关闭全屏安装设置：顺手落盘，避免用户「设置了却忘了按下一步」。 */
-async function closeInstallSettings(): Promise<void> {
-    settingsFull.value = false
-    await persistWizard()
 }
 
 /** 把向导当前选择持久化到设置。 */
@@ -510,12 +477,7 @@ async function persistWizard(): Promise<boolean> {
                 npmRegistry: installReg.value,
                 dshSource: installSource.value,
                 nodeRuntime: nodeRuntimeChoice.value,
-                npmSource: installSource.value === 'local' ? installNpm.value : cur.npmSource,
-                proxyEnabled: proxyEnabled.value,
-                proxyProtocol: proxyProtocol.value,
-                proxyHost: proxyHost.value,
-                proxyPort: proxyPort.value,
-                proxyScope: [...proxyScope.value]
+                npmSource: installSource.value === 'local' ? installNpm.value : cur.npmSource
             }
         })
         return true
@@ -527,7 +489,6 @@ async function persistWizard(): Promise<boolean> {
 
 /** 第 3 步：真正安装 dsh。 */
 async function performInstall(): Promise<boolean> {
-    installLog.value = []
     try {
         if (!(await persistWizard())) return false
         const r = await window.api.post('/dsh/install', {
@@ -750,19 +711,10 @@ watch(npmIncludePre, () => void loadNpmVersions())
 
 const quitShell = (): void => void window.api.post('/app/quit')
 
-let offLog: (() => void) | null = null
 let offDeploy: (() => void) | null = null
 let offNpm: (() => void) | null = null
 
 onMounted(() => {
-    // 安装时把主进程的 stdout/stderr 追加到本页日志。
-    offLog = window.api.on('dsh:log', (entry) => {
-        // 简易安装全程自动，installingDsh 一直是 false —— 只判断它会让日志面板空白。
-        if (!installingDsh.value && !simpleRunning.value) return
-        const line = (entry.k === 'e' ? '[err] ' : '') + entry.s
-        installLog.value.push(line)
-        if (installLog.value.length > 500) installLog.value.splice(0, installLog.value.length - 500)
-    })
     offDeploy = window.api.on('nodeenv:deploy-progress', (p) => {
         // 解压阶段只显示不确定动画，不显示百分比。
         nodeExtracting.value = p.phase === 'extract'
@@ -787,11 +739,6 @@ onMounted(() => {
             installSource.value = s.dshSource ?? 'local'
             installNpm.value = s.npmSource ?? 'system'
             nodeRuntimeChoice.value = s.nodeRuntime ?? 'local'
-            proxyEnabled.value = s.proxyEnabled === true
-            proxyProtocol.value = s.proxyProtocol ?? DEFAULT_SETTINGS.proxyProtocol
-            proxyHost.value = s.proxyHost ?? DEFAULT_SETTINGS.proxyHost
-            proxyPort.value = s.proxyPort ?? DEFAULT_SETTINGS.proxyPort
-            proxyScope.value = Array.isArray(s.proxyScope) ? [...s.proxyScope] : [...DEFAULT_SETTINGS.proxyScope]
             await loadConfigDir()
             await loadInstalledNode()
             await probeEnv()
@@ -803,41 +750,17 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-    offLog?.()
     offDeploy?.()
     offNpm?.()
 })
 </script>
 
 <template>
+    <!--
+        初始化页的舞台：顶部与底部是全局 TitleBar / StatusBar（本页不再自带导航栏与窗口控制），
+        因此只需铺满中间的内容区（.web-overlay）；步骤条在底部那条 .wiz-footbar 里。
+    -->
     <div class="missing-mask">
-        <!--
-            向导专属顶部导航栏：**步骤条在左，向导入口与窗口控制在右**。
-            向导是覆盖整个窗口的遮罩（z-index 高于应用标题栏），此时标题栏上的窗口按钮
-            被完全挡住 —— 安装期间窗口就既不能拖也不能最小化 / 关闭。这里复刻一份
-            （窗口按钮直接复用 WindowControls，行为与标题栏完全一致）。
-            导航栏整条可拖动窗口，按钮与步骤条区域不可拖。
-        -->
-        <header class="wiz-navbar">
-            <WizardSteps :steps="wizardSteps" :active="step" :percent="overallProgress" />
-
-            <!-- 只放图标按钮：文字按钮在窄窗口下会把步骤条挤扁 -->
-            <div class="wiz-navbar__acts">
-                <a-tooltip :title="$t('dshMissing.installSettings')" placement="bottom">
-                    <a-button type="text" class="nav-icon-btn" :aria-label="$t('dshMissing.installSettings')" @click="settingsFull = true">
-                        <template #icon><SettingOutlined /></template>
-                    </a-button>
-                </a-tooltip>
-                <a-tooltip :title="$t('dshMissing.viewLog')" placement="bottom">
-                    <a-button type="text" class="nav-icon-btn" :aria-label="$t('dshMissing.viewLog')" @click="logFullscreen = true">
-                        <template #icon><FileTextOutlined /></template>
-                    </a-button>
-                </a-tooltip>
-                <span class="divider" />
-                <WindowControls />
-            </div>
-        </header>
-
         <div class="missing-card">
             <div class="missing-icon"><img :src="appIcon" alt="DeepSeek Box" draggable="false" class="missing-logo" /></div>
             <h2 class="missing-title">{{ $t('dshMissing.title') }}</h2>
@@ -932,9 +855,8 @@ onBeforeUnmount(() => {
                             <span class="cfg-summary__k">{{ $t('dshMissing.configDir') }}</span>
                             <span class="cfg-summary__v" :title="cfgDir">{{ cfgDir || cfgDefaultDir }}</span>
                         </div>
-                        <a-button type="link" size="small" class="cfg-summary__edit" @click="settingsFull = true">
-                            {{ $t('dshMissing.installSettings') }}
-                        </a-button>
+                        <!-- 改这些设置请从标题栏进设置页：向导不再自带一份入口 -->
+                        <div class="wiz-hint cfg-summary__note">{{ $t('dshMissing.settingsGlobalHint') }}</div>
                     </div>
                 </div>
 
@@ -1177,82 +1099,37 @@ onBeforeUnmount(() => {
                     </a-button>
                 </div>
             </div>
-
-            <!--
-                全屏安装设置：镜像源 + 配置目录 + 代理。
-                代理字段与「设置 → 网络 → 代理」是同一批（共用 ProxyFields）。
-            -->
-            <transition name="fade">
-                <div v-if="settingsFull" class="net-full">
-                    <div class="net-full__head">
-                        <span class="net-full__title">{{ $t('dshMissing.installSettings') }}</span>
-                        <a-button :icon="CloseOutlined" text @click="closeInstallSettings">{{ $t('dshMissing.closeLog') }}</a-button>
-                    </div>
-                    <div class="net-full__body">
-                        <div class="wiz-hint net-full__intro">{{ $t('dshMissing.installSettingsHint') }}</div>
-                        <a-form layout="vertical">
-                            <!-- 镜像源 / 配置目录：从原来的「镜像源」步骤搬进来 -->
-                            <a-form-item :label="$t('dshMissing.registry')">
-                                <a-select v-model:value="installReg" :options="registryOptions" />
-                                <div class="nf-hint">{{ $t('dshMissing.registryHint') }}</div>
-                            </a-form-item>
-
-                            <a-form-item :label="$t('dshMissing.configDir')">
-                                <div class="cfg-row">
-                                    <a-input :value="cfgDir" readonly :placeholder="cfgDefaultDir" />
-                                    <a-button type="primary" @click="pickConfigDir">{{ $t('dshMissing.choose') }}</a-button>
-                                    <a-button v-if="cfgDir !== cfgDefaultDir" @click="resetConfigDir">{{ $t('dshMissing.restoreDefault') }}</a-button>
-                                </div>
-                                <div class="nf-hint">{{ $t('dshMissing.configDirHint') }}</div>
-                            </a-form-item>
-
-                            <a-divider class="net-full__sep">{{ $t('dshMissing.proxySettings') }}</a-divider>
-
-                            <ProxyFields
-                                v-model:enabled="proxyEnabled"
-                                v-model:protocol="proxyProtocol"
-                                v-model:host="proxyHost"
-                                v-model:port="proxyPort"
-                                v-model:scope="proxyScope"
-                            />
-                        </a-form>
-                        <div class="wiz-hint">{{ $t('dshMissing.netHint') }}</div>
-                    </div>
-                </div>
-            </transition>
-
-            <transition name="fade">
-                <div v-if="logFullscreen" class="log-full">
-                    <div class="log-full__head">
-                        <span class="log-full__title">{{ $t('dshMissing.installLog') }}</span>
-                        <div class="log-full__acts">
-                            <!-- 简易安装全程 installingDsh 为 false，只看它会导致安装中却没有指示 -->
-                            <div v-if="busy" class="log-full__mini">
-                                <div class="activity-bar" />
-                            </div>
-                            <a-button :icon="CloseOutlined" text @click="logFullscreen = false">{{ $t('dshMissing.closeLog') }}</a-button>
-                        </div>
-                    </div>
-                    <pre class="log-full__body">{{ installLog.length ? installLog.join('\n') : $t('dshMissing.logWaiting') }}</pre>
-                </div>
-            </transition>
         </div>
+
+        <!--
+            底部步骤栏：原先是窗口顶部那条专属导航栏（步骤条 + 安装设置/日志入口 + 窗口按钮），
+            现在只把**步骤条**搬到此地 —— 其余三样都由全局承接（窗口按钮在标题栏，设置与日志在
+            设置页），不再重复一份。整条即进度条（见 WizardSteps.vue）。
+        -->
+        <footer class="wiz-footbar">
+            <WizardSteps :steps="wizardSteps" :active="step" :percent="overallProgress" />
+        </footer>
     </div>
 </template>
 
 <style scoped>
+/*
+ * 初始化页的舞台：**只占 web 宿主区**（`.web-overlay` 内），顶部与底部留给全局 TitleBar / StatusBar。
+ * 原先是 fixed inset:0 + z-index 2000 的全屏遮罩（连标题栏一起盖住），所以必须自带一条导航栏；
+ * 标题栏交还全局后，它只剩底部那条步骤栏（.wiz-footbar），高度记在 --wiz-foot-h 里供内边距复用。
+ */
 .missing-mask {
-    position: fixed;
+    --wiz-foot-h: 40px;
+    position: absolute;
     inset: 0;
-    z-index: 2000;
+    z-index: 1;
     display: flex;
-    /* safe center：卡片比窗口高时不再把顶部裁掉（加了网络设置后第 0 步明显变长）；
-        高度够用时表现与 center 完全一致。 */
+    /* safe center：卡片比舞台高时不再把顶部裁掉；高度够用时表现与 center 完全一致。 */
     align-items: safe center;
     justify-content: center;
     overflow: auto;
-    /* 顶部让出专属导航栏的高度，否则卡片会被导航栏压住 */
-    padding: var(--titlebar-h, 52px) 0 24px;
+    /* 底部让出步骤栏的高度，滚到底时卡片不会被它压住 */
+    padding: 24px 0 calc(24px + var(--wiz-foot-h));
     background: var(--el-bg-color);
 }
 .missing-card {
@@ -1317,55 +1194,23 @@ onBeforeUnmount(() => {
 }
 /* ---- 首次安装引导 ---- */
 /*
- * 专属导航栏：高度与下边框都对齐应用标题栏（同一 --titlebar-h 变量），
- * 这样「向导盖住标题栏」时视觉上是同一条栏，不会跳一下。
- * 整条可拖动窗口；内部的按钮与步骤条各自关闭拖动。
+ * 底部步骤栏：贴在舞台底部的一条栏，高度与进度填充都由 WizardSteps 撑满
+ * （它把整个容器高度当作进度条的填充区，见 WizardSteps.vue）。
+ * 做成 absolute 而不是参与 flex 布局：舞台（.missing-mask）要滚动，步骤栏必须始终可见。
  */
-.wiz-navbar {
-    position: fixed;
-    top: 0;
+.wiz-footbar {
+    position: absolute;
     left: 0;
     right: 0;
-    z-index: 2001;
-    height: var(--titlebar-h, 52px);
+    bottom: 0;
+    height: var(--wiz-foot-h);
     display: flex;
     align-items: stretch;
-    /* 右侧不留内边距：窗口按钮像系统标题栏那样贴住窗口右边缘 */
-    padding: 0 10px 0 0;
-    /* 下边框用 inset 阴影画，不占布局高度（与 TitleBar 一致） */
-    box-shadow: inset 0 -1px 0 var(--el-border-color-light);
+    /* 上边框用 inset 阴影画，不占布局高度（与 TitleBar 一致） */
+    box-shadow: inset 0 1px 0 var(--el-border-color-light);
     background: var(--el-bg-color);
-    -webkit-app-region: drag;
     user-select: none;
     overflow: hidden;
-}
-/* 步骤条自带宽度与收缩策略（见 WizardSteps.vue），这里只保证它靠左不挤右侧按钮 */
-/* 按钮区浮在进度填充之上，自身不参与进度宽度的计算 */
-.wiz-navbar__acts {
-    position: relative;
-    z-index: 2;
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    padding-left: 12px;
-}
-/* 导航栏图标按钮：方形、无边框，悬停给一层浅底 */
-.nav-icon-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    font-size: 16px;
-    color: var(--el-text-color-regular);
-}
-.nav-icon-btn:hover {
-    color: var(--el-color-primary);
-}
-/* 导航栏里的按钮可点不可拖 */
-.wiz-navbar__acts :deep(.ant-btn) {
-    -webkit-app-region: no-drag;
 }
 .wiz-body {
     text-align: left;
@@ -1529,22 +1374,9 @@ onBeforeUnmount(() => {
     text-align: right;
     color: var(--el-text-color-regular);
 }
-/* 「安装设置」入口：右对齐，不抢摘要本身的视觉重量 */
-.cfg-summary__edit {
-    align-self: flex-end;
-    height: auto;
-    padding: 0;
-    font-size: 12px;
-}
-/* 安装设置面板顶部的说明 */
-.net-full__intro {
-    margin: 0 0 16px;
-}
-/* 安装设置面板里的分区标题 */
-.net-full__sep {
-    margin: 4px 0 16px;
-    font-size: 12px;
-    color: var(--el-text-color-secondary);
+/* 指引文案：跟在摘要末行之下，说明这些设置去哪里改 */
+.cfg-summary__note {
+    margin-top: 2px;
 }
 /* ---- 简易安装进度说明 ---- */
 .simple-note {
@@ -1719,96 +1551,5 @@ onBeforeUnmount(() => {
     100% {
     left: 100%;
     }
-}
-/* ---- 全屏面板 ---- */
-/* 全屏面板（代理设置）：与全屏日志同构，只是内容是表单而不是等宽文本 */
-.net-full {
-    position: fixed;
-    inset: 0;
-    z-index: 3000;
-    display: flex;
-    flex-direction: column;
-    background: var(--el-bg-color);
-}
-.net-full__head {
-    flex: 0 0 auto;
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    border-bottom: 1px solid var(--el-border-color-light);
-}
-.net-full__title {
-    font-weight: 600;
-    font-size: 15px;
-}
-/* 表单在宽屏下限宽居中，避免输入框被拉成一整行 */
-.net-full__body {
-    flex: 1 1 auto;
-    overflow: auto;
-    width: 100%;
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 20px 24px 28px;
-}
-.net-full__body :deep(.ant-form-item) {
-    margin-bottom: 14px;
-}
-.net-full__body :deep(.ant-form-item-label > label) {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--el-text-color-regular);
-}
-/* ---- 全屏安装日志 ---- */
-.log-full {
-    position: fixed;
-    inset: 0;
-    z-index: 3000;
-    display: flex;
-    flex-direction: column;
-    background: var(--el-bg-color);
-}
-.log-full__head {
-    flex: 0 0 auto;
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    border-bottom: 1px solid var(--el-border-color-light);
-}
-.log-full__title {
-    font-weight: 600;
-    font-size: 15px;
-}
-.log-full__acts {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-.log-full__mini {
-    width: 180px;
-}
-.log-full__body {
-    flex: 1 1 auto;
-    margin: 0;
-    overflow: auto;
-    padding: 12px 16px;
-    font-family: var(--el-font-family-mono);
-    font-size: 12.5px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-all;
-    color: var(--el-text-color-regular);
-}
-/* ---- 过渡 ---- */
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.18s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-    opacity: 0;
 }
 </style>

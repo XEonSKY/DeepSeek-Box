@@ -1,8 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { AppstoreOutlined, DeploymentUnitOutlined, DownloadOutlined, LinkOutlined, ReloadOutlined } from '@antdv-next/icons'
+import { AppstoreOutlined, CodeFilled, DeploymentUnitOutlined, DownloadOutlined, LinkOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
-import type { InstalledVersions, NodeRuntimeKind, NodeStatus, NpmRuntimeStatus, NpmSource, NpmStatus } from '@shared/types'
+import type {
+    InstallKind,
+    InstalledVersions,
+    NodeRuntimeKind,
+    NodeStatus,
+    NpmRuntimeStatus,
+    NpmSource,
+    NpmStatus,
+    PnpmRuntimeStatus,
+    PnpmSource,
+    PnpmStatus
+} from '@shared/types'
 import { MIN_NODE_MAJOR, nodeMajor, withV } from '@shared/version'
 import { errorMessage } from '@shared/errors'
 import { tt } from '../../lib/locales'
@@ -25,7 +36,7 @@ import { useInstallCancel } from './useInstallCancel'
 
 const { state, actions } = useSettingsStore()
 
-const open = ref<string[]>(['env-node', 'env-npm'])
+const open = ref<string[]>(['env-node', 'env-npm', 'env-pnpm'])
 
 /** 折叠面板：antdv 的 activeKey 不通过 v-model 更新，用 @change 同步（见 SystemPanel）。 */
 function onOpenChange(keys: string[]): void {
@@ -79,6 +90,7 @@ const deployPhase = ref<'download' | 'extract'>('download')
 const progressInfo = computed(() => formatDownload(total.value, downloaded.value, speed.value))
 let offNodeProgress: (() => void) | null = null
 let offNpmProgress: (() => void) | null = null
+let offPnpmProgress: (() => void) | null = null
 
 /** 内置 npm 的下载进度（非 bundled 来源不上报，用 progressSeen 区分）。 */
 const npmInstalling = ref(false)
@@ -108,17 +120,30 @@ onMounted(() => {
         npmTotal.value = p.total
         npmSpeed.value = p.speed
     })
+    // 内置 pnpm 下载 / 解压进度（只有 bundled 来源广播）。
+    offPnpmProgress = window.api.on('npmenv:progress', (p) => {
+        pnpmProgressSeen.value = true
+        pnpmPhase.value = p.phase
+        pnpmPercent.value = p.percent
+        pnpmDownloaded.value = p.downloaded
+        pnpmTotal.value = p.total
+        pnpmSpeed.value = p.speed
+    })
     void loadStatus()
     void loadVersions()
     void loadNpmStatus()
     void loadNpmVersions()
+    void loadPnpmStatus()
+    void loadPnpmVersions()
     void loadInstalledNode()
     void loadInstalledNpm()
+    void loadInstalledPnpm()
 })
 
 onBeforeUnmount(() => {
     offNodeProgress?.()
     offNpmProgress?.()
+    offPnpmProgress?.()
 })
 
 /** 探测未完成时统一显示省略号，而不是「未检测到」。 */
@@ -293,22 +318,32 @@ async function loadInstalledNpm(): Promise<void> {
     }
 }
 
+/** 切换 / 删除生效版本后要刷新什么：按工具分派（pnpm 与 npm 同构，node 另有部署状态）。 */
+async function reloadKind(kind: InstallKind): Promise<void> {
+    if (kind === 'node') {
+        await loadInstalledNode()
+        await loadStatus()
+        return
+    }
+    if (kind === 'npm') {
+        await loadInstalledNpm()
+        await loadNpmStatus()
+        return
+    }
+    await loadInstalledPnpm()
+    await loadPnpmStatus()
+}
+
 /** 切换生效版本只改指针、不重装；切换后刷新列表与状态。 */
-async function switchInstalled(kind: 'node' | 'npm', version: string): Promise<void> {
-    const switching = kind === 'node' ? switchingNode : switchingNpm
+async function switchInstalled(kind: InstallKind, version: string): Promise<void> {
+    const switching = kind === 'node' ? switchingNode : kind === 'npm' ? switchingNpm : switchingPnpm
     if (switching.value) return
     switching.value = version
     try {
         const r = await window.api.put('/versions/:kind/active', { params: { kind }, body: { version } })
         if (r.ok) {
             ElMessage.success(tt('sv.env.versionSwitched', { version: withV(r.version) }))
-            if (kind === 'node') {
-                await loadInstalledNode()
-                await loadStatus()
-            } else {
-                await loadInstalledNpm()
-                await loadNpmStatus()
-            }
+            await reloadKind(kind)
         } else {
             ElMessage.error(r.message || '')
         }
@@ -320,7 +355,7 @@ async function switchInstalled(kind: 'node' | 'npm', version: string): Promise<v
 }
 
 /** 删除已安装版本；删除前确认，删除生效版本时主进程会自动切到剩余最新版。 */
-async function removeInstalled(kind: 'node' | 'npm', version: string): Promise<void> {
+async function removeInstalled(kind: InstallKind, version: string): Promise<void> {
     const ok = await confirmDialog({
         title: tt('sv.env.removeVersion'),
         message: tt('sv.env.removeVersionConfirm', { version: withV(version) }),
@@ -331,17 +366,8 @@ async function removeInstalled(kind: 'node' | 'npm', version: string): Promise<v
     if (!ok) return // 用户取消
     try {
         const r = await window.api.delete('/versions/:kind/:version', { params: { kind, version } })
-        if (r.ok) {
-            if (kind === 'node') {
-                await loadInstalledNode()
-                await loadStatus()
-            } else {
-                await loadInstalledNpm()
-                await loadNpmStatus()
-            }
-        } else {
-            ElMessage.error(r.message || '')
-        }
+        if (r.ok) await reloadKind(kind)
+        else ElMessage.error(r.message || '')
     } catch (err) {
         ElMessage.error(errorMessage(err))
     }
@@ -472,6 +498,143 @@ async function installNpm(version?: string): Promise<void> {
         await loadNpmStatus()
         await loadNpmVersions()
         await loadInstalledNpm()
+    }
+}
+
+// ---- pnpm 来源（与 npm 同构：两个标签 = 两个来源；pnpm 没有「本地 Node 自带」这一档）----
+//
+// 为什么放这里而不是插件页：pnpm 就是「环境」的一部分（来源可选、可下载 / 更新、内置的可切换版本），
+// 插件页只回答「装哪些插件」，用哪个 pnpm 属于环境配置。
+
+const pnpmStatus = ref<PnpmStatus | null>(null)
+const pnpmProbed = ref(false)
+
+async function loadPnpmStatus(): Promise<void> {
+    try {
+        pnpmStatus.value = await window.api.get('/pnpm/status')
+    } catch {
+        pnpmStatus.value = null
+    } finally {
+        pnpmProbed.value = true
+    }
+}
+
+/** pnpm 标签即选项（与 npm 同一套 string 收窄写法）。 */
+const PNPM_SOURCES: readonly string[] = ['bundled', 'system']
+const pnpmTab = ref<string>(state.pnpmSource)
+watch(pnpmTab, (v) => {
+    if (PNPM_SOURCES.includes(v)) state.pnpmSource = v as PnpmSource
+})
+watch(
+    () => state.pnpmSource,
+    (v) => {
+        if (pnpmTab.value !== v) pnpmTab.value = v
+    }
+)
+
+/** 两个标签的内容同构（当前/最新 + 说明 + 按钮），用一份数据 + v-for 渲染。 */
+const PNPM_TABS = [
+    { key: 'bundled', labelKey: 'sv.env.pnpmBundled', hintKey: 'sv.env.pnpmBundledHint' },
+    { key: 'system', labelKey: 'sv.env.pnpmSystem', hintKey: 'sv.env.pnpmSystemHint' }
+] as const
+
+const pnpmVersions = ref<string[]>([])
+const pnpmVersionsLoading = ref(false)
+const pnpmIncludePre = ref(false)
+const pnpmSelected = ref('')
+const pnpmInstalling = ref(false)
+const pnpmProgressSeen = ref(false)
+const pnpmPhase = ref<'download' | 'extract'>('download')
+const pnpmPercent = ref(0)
+const pnpmDownloaded = ref(0)
+const pnpmTotal = ref(0)
+const pnpmSpeed = ref(0)
+const pnpmProgressInfo = computed(() => formatDownload(pnpmTotal.value, pnpmDownloaded.value, pnpmSpeed.value))
+
+async function loadPnpmVersions(): Promise<void> {
+    if (pnpmVersionsLoading.value) return
+    pnpmVersionsLoading.value = true
+    try {
+        pnpmVersions.value = await window.api.get('/pnpm/versions', { query: { prerelease: pnpmIncludePre.value } })
+        if (pnpmSelected.value && !pnpmVersions.value.includes(pnpmSelected.value)) pnpmSelected.value = ''
+    } catch {
+        pnpmVersions.value = []
+    } finally {
+        pnpmVersionsLoading.value = false
+    }
+}
+
+watch(pnpmIncludePre, () => void loadPnpmVersions())
+
+const installedPnpm = ref<InstalledVersions>({ installed: [], active: null })
+const switchingPnpm = ref('')
+
+async function loadInstalledPnpm(): Promise<void> {
+    try {
+        installedPnpm.value = await window.api.get('/versions/:kind', { params: { kind: 'pnpm' } })
+    } catch {
+        installedPnpm.value = { installed: [], active: null }
+    }
+}
+
+const pnpmLatestText = computed(() => (pnpmProbed.value ? withV(pnpmStatus.value?.latest) : PENDING))
+const pnpmLatestUnknown = computed(() => pnpmProbed.value && !pnpmStatus.value?.latest)
+
+/** 当前 pnpm 标签对应来源的状态。 */
+const pnpmCur = computed<PnpmRuntimeStatus | null>(() => pnpmStatus.value?.[state.pnpmSource] ?? null)
+
+function pnpmVersionText(src: PnpmSource): string {
+    if (!pnpmProbed.value) return PENDING
+    const s = pnpmStatus.value?.[src]
+    if (!s?.present) return tt(src === 'bundled' ? 'sv.env.pnpmNotDownloaded' : 'sv.env.notDetected')
+    return withV(s.version)
+}
+
+/** 该来源是否值得给按钮：还没就绪（未下载 / 未安装）或落后于最新版。 */
+function pnpmNeedsAction(src: PnpmSource): boolean {
+    if (!pnpmProbed.value) return false
+    const s = pnpmStatus.value?.[src]
+    return !s?.present || s.outdated === true
+}
+
+function pnpmActionLabel(src: PnpmSource): string {
+    if (pnpmInstalling.value) return tt('sv.env.pnpmWorking')
+    return pnpmStatus.value?.[src]?.present ? tt('sv.env.pnpmUpdate') : tt('sv.env.pnpmDownload')
+}
+
+/** a-select 的选项（label 内「（当前）」标注随当前版本重算）。 */
+const pnpmVersionOptions = computed(() =>
+    pnpmVersions.value.map((v) => ({
+        value: v,
+        label: sameVersion(v, pnpmCur.value?.version) ? v + tt('sv.env.currentSuffix') : v
+    }))
+)
+
+/** 下载 / 升级 pnpm：作用于**当前标签**表示的那个来源（内置走下载解压，系统走系统 npm 的全局安装）。 */
+async function installPnpm(version?: string): Promise<void> {
+    if (pnpmInstalling.value) return
+    const source = state.pnpmSource
+    pnpmInstalling.value = true
+    pnpmProgressSeen.value = false
+    pnpmPhase.value = 'download'
+    pnpmPercent.value = 0
+    pnpmDownloaded.value = 0
+    pnpmTotal.value = 0
+    pnpmSpeed.value = 0
+    try {
+        const r = await window.api.post('/pnpm/update', { body: version ? { source, version } : { source } })
+        // 用户主动取消不算失败，静默返回即可（不弹错误 toast）。
+        if (!r.canceled) {
+            if (r.ok) ElMessage.success(tt('sv.env.pnpmOk', { version: withV(r.version) }))
+            else ElMessage.error(r.message || tt('sv.env.pnpmFail'))
+        }
+    } catch (err) {
+        ElMessage.error(errorMessage(err))
+    } finally {
+        pnpmInstalling.value = false
+        await loadPnpmStatus()
+        await loadPnpmVersions()
+        await loadInstalledPnpm()
     }
 }
 </script>
@@ -776,6 +939,121 @@ async function installNpm(version?: string): Promise<void> {
                     </a-form-item>
                 </a-form>
                 <div class="hint">{{ $t('sv.env.npmNoRestart') }}</div>
+            </a-collapse-panel>
+
+            <!-- pnpm 来源：与 npm 同构（折叠卡片 → 两个标签 = 两个来源；pnpm 没有「本地 Node 自带」档） -->
+            <a-collapse-panel key="env-pnpm">
+                <template #header>
+                    <div class="sec__title"><CodeFilled /> {{ $t('sv.env.pnpmSource') }}</div>
+                </template>
+
+                <a-tabs v-model:active-key="pnpmTab">
+                    <a-tab-pane v-for="t in PNPM_TABS" :key="t.key" :tab="$t(t.labelKey)">
+                        <div class="kv">
+                            <span class="kv__k">{{ $t('sv.env.currentVersion') }}</span>
+                            <code class="kv__v">{{ pnpmVersionText(t.key) }}</code>
+                            <a-tag v-if="pnpmProbed && pnpmStatus?.[t.key]?.outdated" color="orange">
+                                {{ $t('sv.env.outdated') }}
+                            </a-tag>
+                            <a-tag v-else-if="pnpmProbed && pnpmStatus?.[t.key]?.present" color="green">
+                                {{ $t('sv.env.upToDate') }}
+                            </a-tag>
+                        </div>
+                        <div class="kv">
+                            <span class="kv__k">{{ $t('sv.env.latestVersion') }}</span>
+                            <code class="kv__v">{{ pnpmLatestText }}</code>
+                        </div>
+
+                        <div class="hint">{{ pnpmLatestUnknown ? $t('sv.env.latestUnknown') : $t(t.hintKey) }}</div>
+
+                        <div v-if="pnpmNeedsAction(t.key)" class="act">
+                            <a-button type="primary" :icon="DownloadOutlined" :loading="pnpmInstalling" @click="installPnpm()">
+                                {{ pnpmActionLabel(t.key) }}
+                            </a-button>
+                        </div>
+
+                        <!-- 只有内置来源是「版本化目录」，才有已安装列表可切换 / 删除 -->
+                        <div v-if="t.key === 'bundled'" class="iv">
+                            <div class="iv__title">{{ $t('sv.env.installedVersions') }}</div>
+                            <div v-if="!installedPnpm.installed.length" class="hint">{{ $t('sv.env.installedNone') }}</div>
+                            <div v-else class="iv__list">
+                                <div class="iv__thead">
+                                    <span class="iv__c1">{{ $t('sv.env.colVersion') }}</span>
+                                    <span class="iv__c2">{{ $t('sv.env.colStatus') }}</span>
+                                    <span class="iv__c3">{{ $t('sv.env.colActions') }}</span>
+                                </div>
+                                <div class="iv__tbody">
+                                    <div v-for="v in installedPnpm.installed" :key="v" class="iv__row">
+                                        <span class="iv__c1"><code class="iv__ver">{{ withV(v) }}</code></span>
+                                        <span class="iv__c2">
+                                            <a-tag v-if="v === installedPnpm.active" color="green">
+                                                {{ $t('sv.env.activeVersion') }}
+                                            </a-tag>
+                                            <span v-else class="iv__dash">—</span>
+                                        </span>
+                                        <span class="iv__c3">
+                                            <a-button v-if="v !== installedPnpm.active" :loading="switchingPnpm === v" @click="switchInstalled('pnpm', v)">
+                                                {{ $t('sv.env.switchVersion') }}
+                                            </a-button>
+                                            <a-button danger @click="removeInstalled('pnpm', v)">
+                                                {{ $t('sv.env.removeVersion') }}
+                                            </a-button>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </a-tab-pane>
+                </a-tabs>
+
+                <div v-if="pnpmInstalling" class="act">
+                    <a-progress
+                        v-if="pnpmProgressSeen"
+                        :percent="pnpmPhase === 'extract' ? 100 : pnpmPercent"
+                        :status="pnpmPhase === 'extract' ? 'active' : 'normal'"
+                        :show-info="pnpmPhase !== 'extract'"
+                        :stroke-width="6"
+                        class="dep-progress"
+                    />
+                    <div v-if="pnpmProgressSeen" class="hint dep-info">
+                        {{ pnpmPhase === 'extract' ? $t('sv.env.extracting') : pnpmProgressInfo }}
+                    </div>
+                    <a-button :loading="canceling" @click="cancelInstall()">
+                        {{ canceling ? $t('sv.env.canceling') : $t('sv.env.cancelInstall') }}
+                    </a-button>
+                </div>
+
+                <!-- 版本选择器放在标签之外共用：两个来源都能装任意版本 -->
+                <div class="upd-sep" />
+                <a-form layout="vertical" class="vm-in">
+                    <a-form-item :label="$t('sv.env.selectVersion')">
+                        <div class="vm-row">
+                            <a-select
+                                v-model:value="pnpmSelected"
+                                :options="pnpmVersionOptions"
+                                show-search
+                                :placeholder="$t('sv.env.selectPlaceholder')"
+                                class="vm-sel"
+                                :disabled="pnpmVersionsLoading || pnpmInstalling"
+                            />
+                            <a-button :icon="ReloadOutlined" :loading="pnpmVersionsLoading" @click="loadPnpmVersions()">
+                                {{ $t('sv.env.refresh') }}
+                            </a-button>
+                            <a-button
+                                type="primary"
+                                :icon="DownloadOutlined"
+                                :loading="pnpmInstalling"
+                                :disabled="pnpmInstalling || pnpmVersionsLoading || !pnpmSelected || sameVersion(pnpmSelected, pnpmCur?.version)"
+                                @click="installPnpm(pnpmSelected)"
+                            >
+                                {{ $t('sv.env.installVersion') }}
+                            </a-button>
+                        </div>
+                        <a-checkbox v-model:checked="pnpmIncludePre">{{ $t('sv.env.includePrerelease') }}</a-checkbox>
+                        <div class="hint">{{ $t('sv.env.pnpmListHint') }}</div>
+                    </a-form-item>
+                </a-form>
+                <div class="hint">{{ $t('sv.env.pnpmPluginNote') }}</div>
             </a-collapse-panel>
         </a-collapse>
     </div>

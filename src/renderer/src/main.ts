@@ -44,7 +44,7 @@ async function bootstrapConfirmWindow(): Promise<void> {
 }
 
 /**
- * 启动：读取本窗口元信息(是否核心窗口)与界面语言（dsh settings.yaml 的 locale.preference），
+ * 启动：读取本窗口元信息(是否核心窗口)与界面语言（dsh 的 locale 配置），
  * 据此挂载 vue-i18n、Element Plus 与 antdv-next。
  */
 async function bootstrap(): Promise<void> {

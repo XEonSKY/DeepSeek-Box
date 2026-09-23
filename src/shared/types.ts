@@ -66,6 +66,8 @@ export interface Settings {
    *  - 'localnode'：用部署在配置目录的本地 Node 自带的 npm（未部署时不可选）。
    */
     npmSource: NpmSource
+    /** dsh 插件安装用的 pnpm：'system' ｜ 'bundled'（默认，应用代管）。 */
+    pnpmSource: PnpmSource
     /** 代理开关。 */
     proxyEnabled: boolean
     /** 代理协议。 */
@@ -171,6 +173,13 @@ export type DownloadThreads = number | 'auto'
 /** 本地安装所用 npm：'system' ｜ 'bundled'(内置) ｜ 'localnode'(本地 Node 自带)。 */
 export type NpmSource = 'system' | 'bundled' | 'localnode'
 
+/**
+ * dsh 插件安装所用 pnpm：'system'（系统 PATH 上的 pnpm）｜ 'bundled'（应用代管的内置 pnpm）。
+ *
+ * 没有 'localnode' 这一档 —— Node 不自带 pnpm（对照 npm 的三档，见 NpmSource）。
+ */
+export type PnpmSource = 'system' | 'bundled'
+
 /** Which npm registry to use for dsh version listing / install. */
 export type NpmRegistry = 'npmjs' | 'npmmirror'
 
@@ -217,7 +226,7 @@ export interface Shortcut {
 }
 
 /**
- * dsh `settings.yaml` 里 `locale.preference` 使用的两字母语言码。
+ * dsh 的 `locale` 配置（patch 条目 `config.preference`）使用的两字母语言码。
  * 界面语言以此为单一存储来源（见 src/main/settings.ts 的 dsh locale 读写）。
  */
 export type LocaleCode = 'zh' | 'en'
@@ -250,6 +259,8 @@ export const DEFAULT_SETTINGS: Settings = {
     dshSource: 'local',
     nodeRuntime: 'local',
     npmSource: 'system',
+    // 系统上不一定装了 pnpm，而插件安装依赖它 —— 默认用应用代管的内置 pnpm 最稳。
+    pnpmSource: 'bundled',
     proxyEnabled: false,
     proxyProtocol: 'http',
     proxyHost: '',
@@ -473,7 +484,7 @@ export interface NpmStatus {
     localnode: NpmRuntimeStatus
 }
 
-/** 内置 pnpm（应用代管，供 dsh 插件安装转发给 pnpm 使用）的版本状态。 */
+/** 单个 pnpm 来源的版本状态（设置 → 环境页的 pnpm 一节）。 */
 export interface PnpmRuntimeStatus {
     present: boolean
     /** 形如 10.8.2；尚未下载时为 null。 */
@@ -482,10 +493,13 @@ export interface PnpmRuntimeStatus {
     outdated: boolean
 }
 
-/** 内置 pnpm 探测结果：当前版本 + registry 上的最新版。 */
+/** pnpm 来源探测结果：系统 / 内置的版本 + registry 上的最新版。 */
 export interface PnpmStatus {
     /** registry 上的最新 pnpm 版本（跟随 npmRegistry 设置）；取不到时为 null。 */
     latest: string | null
+    /** 系统 PATH 上的 pnpm（未安装 → present: false）。 */
+    system: PnpmRuntimeStatus
+    /** 应用下载到配置目录的内置 pnpm。 */
     bundled: PnpmRuntimeStatus
 }
 
@@ -601,7 +615,10 @@ export interface CurrentBalanceInfo {
 /** 「模型」页的数据：**每个令牌一行**的供应商列表（不再按模型展开）。密钥明文绝不进入该结构。 */
 export interface ModelsInfo {
     entries: ProviderEntryInfo[]
-    /** 顶层错误码：settings-missing ｜ settings-parse ｜ no-provider ｜ internal；正常为 null。 */
+    /**
+     * 顶层错误码：no-consent ｜ settings-missing ｜ dsh-missing ｜ settings-parse ｜ no-provider ｜
+     * internal；正常为 null。
+     */
     errorCode: string | null
 }
 

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ReloadOutlined, RobotFilled, SafetyCertificateFilled } from '@antdv-next/icons'
 import type { ModelBalanceInfo, ModelsInfo } from '@shared/types'
 import { errorMessage } from '@shared/errors'
 import { tt } from '../../lib/locales'
+import { SETUP_PATH } from '../../shell/viewnav'
 import { useSettingsStore } from './useSettingsStore'
 
 /**
@@ -13,9 +15,11 @@ import { useSettingsStore } from './useSettingsStore'
  *  - 同一密钥的多个路由由主进程合并成一个供应商，只展示一次（见 main/app/models.ts）；
  *  - 一行里没有模型名：列表按令牌展开，不按模型展开；
  *  - 页面**不展示任何密钥**，密钥只在主进程内用于向供应商接口查询余额；
- *  - 读取发生在用户同意之后：首次进入征求一次，结果持久化在 `settings.modelsCredConsent`。
+ *  - 读取发生在用户同意之后：首次进入征求一次，结果持久化在 `settings.modelsCredConsent`；
+ *    主进程用**同一个开关**把关（未授权时 `/models/info` 直接回 `no-consent`，不读凭据也不联网）。
  */
 const { state } = useSettingsStore()
+const router = useRouter()
 
 /** 主进程返回的模型列表；未同意或读取失败时为 null。 */
 const info = ref<ModelsInfo | null>(null)
@@ -50,6 +54,11 @@ async function load(): Promise<void> {
     }
 }
 
+/** dsh 尚未安装（主进程报 dsh-missing）：送去初始化页完成安装。 */
+function goSetup(): void {
+    void router.push(SETUP_PATH)
+}
+
 /** 同意读取：置位持久化开关并立刻读取。 */
 function grant(): void {
     dismissed.value = false
@@ -61,6 +70,10 @@ function grant(): void {
 const errorText = computed(() => {
     if (!info.value) return ''
     switch (info.value.errorCode) {
+        case 'no-consent':
+            return tt('sv.models.errNoConsent')
+        case 'dsh-missing':
+            return tt('sv.models.errDshMissing')
         case 'settings-missing':
             return tt('sv.models.errSettingsMissing')
         case 'settings-parse':
@@ -139,6 +152,10 @@ function balanceTitle(b: ModelBalanceInfo): string {
             </div>
             <a-alert v-if="loadError" type="error" :closable="false" show-icon :title="$t('sv.models.loadFail', { err: loadError })" />
             <a-alert v-else-if="errorText" type="info" :closable="false" show-icon :title="errorText" />
+            <!-- dsh 没装时给出明确去路：错误提示之外还有一步可做 -->
+            <div v-if="info?.errorCode === 'dsh-missing'" class="mp__go">
+                <a-button type="primary" @click="goSetup">{{ $t('sv.models.goInstall') }}</a-button>
+            </div>
             <div v-else-if="isEmpty" class="hint">{{ $t('sv.models.empty') }}</div>
             <div v-else-if="info" class="mp__list">
                 <div class="mp__head">
@@ -216,6 +233,10 @@ function balanceTitle(b: ModelBalanceInfo): string {
     font-size: 14px;
     font-weight: 600;
     color: var(--el-text-color-primary);
+}
+/* 「去完成安装」按钮：只在主进程报 dsh-missing 时出现 */
+.mp__go {
+    margin-bottom: 10px;
 }
 /* 工具栏：数量 + 刷新全部 */
 .mp__toolbar {

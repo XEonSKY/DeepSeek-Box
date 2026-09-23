@@ -8,8 +8,9 @@ import vueParser from 'vue-eslint-parser'
 import stylistic from '@stylistic/eslint-plugin'
 
 export default tseslint.config(
-    // 构建产物与依赖不参与检查
-    { ignores: ['out/**', 'dist/**', 'release/**', 'node_modules/**', '.vitepress/**', '**/.vitepress/**', '.vite/**', '**/*.tsbuildinfo'] },
+    // 构建产物与依赖不参与检查；`.agents/` 是技能文档与 agent 的临时目录
+    // （含上游 deepseek-harness 的参考克隆，动辄数万个 .ts），check 时必须跳过。
+    { ignores: ['out/**', 'dist/**', 'release/**', 'node_modules/**', '.agents/**', '.vitepress/**', '**/.vitepress/**', '.vite/**', '**/*.tsbuildinfo'] },
     js.configs.recommended,
     ...tseslint.configs.recommended,
     ...pluginVue.configs['flat/essential'],

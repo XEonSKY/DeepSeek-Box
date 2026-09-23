@@ -92,8 +92,8 @@ export function runNpmInstallGlobal(pkg: string, registry?: 'npmjs' | 'npmmirror
     return runNpm(args, `npm install -g ${pkg}`, signal)
 }
 
-/** Whether a system `npm` is available on PATH (or the Windows global prefix). */
-function hasSystemNpm(): boolean {
+/** Whether a system `npm` is available on PATH (or the Windows global prefix). 导出给 pnpm 的 system 来源复用。 */
+export function hasSystemNpm(): boolean {
     const dirs = pathEnv()
     if (IS_WIN) {
         dirs.push(path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'npm'))

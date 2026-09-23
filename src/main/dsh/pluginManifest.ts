@@ -56,15 +56,27 @@ export function readDependencyNames(manifest: ProfileManifestLike | null | undef
     return Object.keys(deps)
 }
 
+/** 只接受「普通对象」：数组与 null 都不算。 */
+function asObject(v: unknown): Record<string, unknown> | null {
+    return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
+}
+
+/**
+ * 组合包声明的 patch 文件（相对包目录），按应用顺序。
+ *
+ * dsh 允许 `dsh.bundle.patch` 是**一个路径或一个路径数组**（见 dsh 的 `bundlePatchFiles`），
+ * 数组形式按顺序依次叠加成多层，所以两种都要认；非法的声明一律当「没有 patch」。
+ */
+export function readBundlePatchFiles(manifest: unknown): string[] {
+    const patch = asObject(asObject(asObject(manifest)?.dsh)?.bundle)?.patch
+    if (typeof patch === 'string') return patch.length > 0 ? [patch] : []
+    if (Array.isArray(patch)) return patch.filter((v): v is string => typeof v === 'string' && v.length > 0)
+    return []
+}
+
 /** 某包 manifest 是否是一个组合包（声明了 dsh.bundle.patch）。 */
 export function isBundlePackage(manifest: unknown): boolean {
-    if (manifest === null || typeof manifest !== 'object') return false
-    const dsh = (manifest as { dsh?: unknown }).dsh
-    if (dsh === null || typeof dsh !== 'object') return false
-    const bundle = (dsh as { bundle?: unknown }).bundle
-    if (bundle === null || typeof bundle !== 'object') return false
-    const patch = (bundle as { patch?: unknown }).patch
-    return typeof patch === 'string' && patch.length > 0
+    return readBundlePatchFiles(manifest).length > 0
 }
 
 /**

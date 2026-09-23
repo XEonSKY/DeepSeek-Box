@@ -34,6 +34,7 @@ export const useSettingsStore = defineStore('settings', () => {
         dshSource: DEFAULT_SETTINGS.dshSource,
         nodeRuntime: DEFAULT_SETTINGS.nodeRuntime,
         npmSource: DEFAULT_SETTINGS.npmSource,
+        pnpmSource: DEFAULT_SETTINGS.pnpmSource,
         proxyEnabled: DEFAULT_SETTINGS.proxyEnabled,
         proxyProtocol: DEFAULT_SETTINGS.proxyProtocol,
         proxyHost: DEFAULT_SETTINGS.proxyHost,
@@ -88,6 +89,7 @@ export const useSettingsStore = defineStore('settings', () => {
         state.dshSource = v.dshSource
         state.nodeRuntime = v.nodeRuntime
         state.npmSource = v.npmSource
+        state.pnpmSource = v.pnpmSource
         state.proxyEnabled = s.proxyEnabled === true
         state.proxyProtocol = v.proxyProtocol
         state.proxyHost = v.proxyHost
@@ -208,14 +210,14 @@ export const useSettingsStore = defineStore('settings', () => {
     watch(() => JSON.stringify(payloadFrom(state)), scheduleSave)
     // 缩放即时生效（写主进程窗口 zoom；webview 缩放由 WebHost 订阅 settings:changed 同步）。
     watch(() => state.zoomPercent, (v) => void window.api.put('/windows/zoom', { body: { percent: v } }))
-    // 主题即时生效（dsh 自己 watch 同步的 settings.yaml，无需手动刷新）。
+    // 主题即时生效（写进 dsh 的 profile patch 后由 dsh 自行 reload，无需手动刷新）。
     watch(() => state.theme, (t: Theme) => applyTheme(t))
     // 配色方案即时生效（外部改动经 fillFrom 改 state 时这个 watch 也会跑）。
     watch(() => state.colorScheme, (id) => applyColorScheme(id))
     // 预发布开关或 npm 镜像源变化时重建版本列表。
     watch([() => state.autoCheckPrerelease, () => state.npmRegistry], () => void dshManageActions.loadVersions())
 
-    // ---- 外部配置自动同步：settings.json / dsh 的 settings.yaml 被外部改动。 ----
+    // ---- 外部配置自动同步：settings.json / dsh 的 profile patch 被外部改动。 ----
     const offSettingsChanged = window.api.on('settings:changed', (s) => {
         // 自己刚保存的那次回放跳过（见 lastSaveAt）：它是同一份内容、但比 state 旧一个保存周期。
         if (Date.now() - lastSaveAt < 400) return

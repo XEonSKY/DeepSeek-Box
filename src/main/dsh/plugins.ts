@@ -4,12 +4,13 @@ import path from 'node:path'
 import type { DshPluginResult, DshPluginsInfo, NodeDeployProgress } from '@shared/types'
 import { errorMessage } from '@shared/errors'
 import { loadSettings, mt } from '../app/settings'
+import { profileDir, profileManifestFile, profilesRoot } from './dshHome'
 import { resolveDshModule, nodeRuntimeForCfg } from './tools'
 import { runChild } from './child'
 import { pushLog } from './logbus'
 import { proxyEnv } from './net'
 import { beginCancelable, CANCELED_MESSAGE } from './cancel'
-import { bundledPnpmCli, ensureBundledPnpmReady, pnpmShimEnv } from './pnpmRunner'
+import { bundledPnpmCli, ensureBundledPnpmReady, pnpmShimEnv, pnpmStoreEnv, systemPnpmPath } from './pnpmRunner'
 import {
     buildPluginEntries,
     effectiveBundles,
@@ -28,26 +29,12 @@ import {
  * `dsh plugin --profile <name> <pnpm args>` 安装 / 卸载（dsh 会转发给 pnpm 并自行重建
  * bundles 列表；见 dsh 源码 apps/cli/src/plugin.ts）。
  *
- * pnpm 由内置 pnpm（pnpmRunner.ts）提供：dsh 找的是 PATH 上的字面量 `pnpm`，
+ * pnpm 的来源由设置决定（settings.pnpmSource）：系统自带则直接用 PATH 上的 `pnpm`；
+ * 内置（默认）时 dsh 找的是 PATH 上的字面量 `pnpm`，
  * 因此这里为子进程前置一个垫片目录（见 pnpmShimEnv）。
  *
  * profile 位于 `$DSH_HOME/profiles/<name>`，与 Box 的配置目录无关。
  */
-
-/** dsh harness home：`$DSH_HOME` 或 `~/.dsh`（与 models.ts / ptcNodeSync.ts 同规则）。 */
-function dshHomeDir(): string {
-    return process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
-}
-
-/** profiles 根目录。 */
-function profilesRoot(): string {
-    return path.join(dshHomeDir(), 'profiles')
-}
-
-/** 单个 profile 目录。 */
-function profileDir(name: string): string {
-    return path.join(profilesRoot(), name)
-}
 
 /** 列出已有 profile（目录名，排除 node_modules / 隐藏目录），'web' 优先。 */
 export function listDshProfiles(): string[] {
@@ -56,7 +43,7 @@ export function listDshProfiles(): string[] {
         names = fs.readdirSync(profilesRoot(), { withFileTypes: true })
             .filter((e) => e.isDirectory() && e.name !== 'node_modules' && !e.name.startsWith('.'))
             .map((e) => e.name)
-            .filter((n) => fs.existsSync(path.join(profilesRoot(), n, 'package.json')))
+            .filter((n) => fs.existsSync(profileManifestFile(n)))
     } catch {
         return []
     }
@@ -68,7 +55,7 @@ export function listDshProfiles(): string[] {
 /** 读 profile manifest；文件缺失或非法返回 null。 */
 function readManifest(name: string): ProfileManifestLike | null {
     try {
-        const raw = fs.readFileSync(path.join(profileDir(name), 'package.json'), 'utf8')
+        const raw = fs.readFileSync(profileManifestFile(name), 'utf8')
         const parsed = JSON.parse(raw) as unknown
         return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
             ? (parsed as ProfileManifestLike)
@@ -174,16 +161,26 @@ async function runDshPlugin(
     if (!resolved.present || !resolved.entry) {
         return { ok: false, message: mt('m.dsh.missingMsg') }
     }
-    // dsh 转发给 pnpm，所以先把内置 pnpm 备好（首次会在线下载）。
-    const ready = await ensureBundledPnpmReady(undefined, onProgress)
-    if (ready.canceled) return { ok: false, canceled: true, message: CANCELED_MESSAGE }
-    if (!ready.ok) return { ok: false, message: ready.message || mt('m.dsh.bundledPnpmFetchFail') }
-    const cli = bundledPnpmCli()
-    if (!fs.existsSync(cli)) return { ok: false, message: mt('m.dsh.bundledPnpmMissing') }
-
+    // dsh 会把参数转发给 pnpm：按设置挑来源。
+    //  - 系统来源：dsh 从 PATH 就能找到 `pnpm`，不需要垫片；系统上没装则回落到内置。
+    //  - 内置来源（默认）：先把内置 pnpm 备好（首次会在线下载），再用垫片目录把它的 JS 入口
+    //    以字面量 `pnpm` 的形式前置到 PATH。
     const rt = nodeRuntimeForCfg(cfg)
-    // dsh→pnpm 的联网走「DSH 本体」代理范围（pnpm 继承 dsh 的 HTTP(S)_PROXY）。
-    const env = { ...pnpmShimEnv(cli), ...proxyEnv(cfg, 'dsh') }
+    const sysPnpm = cfg.pnpmSource === 'system' ? systemPnpmPath() : null
+    let env: NodeJS.ProcessEnv
+    if (sysPnpm) {
+        pushLog('o', `[Manager] 使用系统 pnpm：${sysPnpm}`)
+        env = { ...process.env, ...pnpmStoreEnv(), ...proxyEnv(cfg, 'dsh') }
+    } else {
+        if (cfg.pnpmSource === 'system') pushLog('e', '[Manager] 未找到系统 pnpm，回落到内置 pnpm。')
+        const ready = await ensureBundledPnpmReady(undefined, onProgress)
+        if (ready.canceled) return { ok: false, canceled: true, message: CANCELED_MESSAGE }
+        if (!ready.ok) return { ok: false, message: ready.message || mt('m.dsh.bundledPnpmFetchFail') }
+        const cli = bundledPnpmCli()
+        if (!fs.existsSync(cli)) return { ok: false, message: mt('m.dsh.bundledPnpmMissing') }
+        // dsh→pnpm 的联网走「DSH 本体」代理范围（pnpm 继承 dsh 的 HTTP(S)_PROXY）。
+        env = { ...pnpmShimEnv(cli), ...proxyEnv(cfg, 'dsh') }
+    }
     const label = `dsh plugin --profile ${profile} ${args.join(' ')}`
     pushLog('o', `[Manager] ${label} …`)
     const r = await runChild(

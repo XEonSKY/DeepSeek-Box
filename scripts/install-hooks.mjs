@@ -4,11 +4,10 @@ import { execSync } from 'node:child_process'
 
 try {
     execSync('git config core.hooksPath .githooks', { stdio: 'inherit' })
-    // .githooks/pre-push 负责"推送 main 前把预发布版本 +1"，需要可执行位；
-    // Windows 上 git 会自行忽略该位，macOS / Linux 缺了会被静默跳过，故这里补一次。
+    // hook 需要可执行位：Windows 上 git 会自行忽略该位，macOS / Linux 缺了会被静默跳过，故这里补一次。
     try {
-        execSync('chmod +x .githooks/pre-commit .githooks/pre-push')
-        console.log('[hooks] 已确保 .githooks/* 可执行')
+        execSync('chmod +x .githooks/pre-commit')
+        console.log('[hooks] 已确保 .githooks/pre-commit 可执行')
     } catch {
         console.warn('[hooks] 跳过 chmod（Windows 上无需可执行位）')
     }

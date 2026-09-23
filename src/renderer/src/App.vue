@@ -2,7 +2,6 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElNotification } from 'element-plus'
-import DshWizard from './components/DshWizard.vue'
 import TitleBar from './components/TitleBar.vue'
 import StatusBar from './components/StatusBar.vue'
 import { applyAppUpdateEvent, checkAndNotify } from './lib/update'
@@ -11,6 +10,7 @@ import { initAppIcon } from './lib/appIcon'
 import { applyExtTranslation, applyLocaleChange, currentLocale, tt } from './lib/locales'
 import { AntdvRoot } from './lib/antdv'
 import { useView, useGoView, useToggleTerminal } from './shell/viewnav'
+import { dshMissing } from './shell/dshstate'
 import { webTabs, activeTab, activateTab, openTarget, setCoreRole, tabLabel } from './shell/tabs'
 import WebHost from './views/WebHost.vue'
 import { shellMeta } from './shell/shellmeta'
@@ -68,8 +68,9 @@ function onAppUpdateEvent(e: AppUpdateEvent): void {
     }
 }
 
-// dsh 未安装时由主进程通知 → 显示安装向导（向导组件自管全部安装状态与步骤）。
-const showMissing = ref(false)
+// dsh 是否缺失（未安装 / 未初始化）。**不再**用它强制弹向导 —— 初始化页是独立路由，
+// 只有「进入 dsh 页面」时才会把用户送过去（见下面的 watch）。
+// 状态放在 shell/dshstate 里共享，安装完成后由初始化页自己清掉。
 
 // ---- 配置目录迁移（重启引导阶段）：进度条 + 当前正在移动的文件 ----
 const migration = ref<ConfigMigrationPlan | null>(null)
@@ -128,7 +129,7 @@ async function boot(): Promise<void> {
     void initAppIcon()
     const ok = await window.api.get('/dsh/installed')
     if (!ok) {
-        showMissing.value = true // main does not start dsh when it is absent
+        dshMissing.value = true // main does not start dsh when it is absent
         // 「默认使用系统浏览器打开 DSH」开启时窗口启动即藏在托盘；dsh 缺失时没有浏览器可开，
         // 必须把窗口拉回来，否则安装向导无处可见。
         void window.api.post('/shell/focus-core')
@@ -136,6 +137,21 @@ async function boot(): Promise<void> {
     }
     if (s.autoCheckUpdate) void checkAndNotify({ prerelease: s.checkPrerelease })
 }
+
+/**
+ * 初始化页的入口：**进入 dsh 页面**（web 视图 + 激活的是 dsh 标签）时，若 dsh 还没装就送过去。
+ *
+ * 刻意不做成强制：只在「进入」这一刻跳一次，用户随后可以自由离开（切设置、切别的标签都不会被
+ * 拉回来）；配置目录迁移进行中也不跳 —— 向导的遮罩 z-index 比迁移层高，跳过去会把迁移进度盖住。
+ */
+watch([view, () => webTabs.activeId, () => activeTab()?.kind, dshMissing, migration], () => {
+    if (!shellMeta.isCore) return
+    if (migration.value) return
+    if (!dshMissing.value) return
+    if (view.value !== 'web') return
+    if (activeTab()?.kind !== 'home') return
+    go('setup')
+})
 
 onMounted(() => {
     // 仅核心窗口保留三固定站；非核心窗口不显示 dsh UI/网页/用量固定标签
@@ -162,12 +178,12 @@ onMounted(() => {
     })
     offToggle = window.api.on('ui:toggle-view', onToggle)
     offMissing = window.api.on('dsh:missing', () => {
-        showMissing.value = true
+        dshMissing.value = true
         void window.api.post('/shell/focus-core') // 同上：确保（可能藏在托盘的）窗口把向导显示出来
     })
     offAppUpdate = window.api.on('appupdate:event', onAppUpdateEvent)
     offMigration = window.api.on('configdir:migration', onMigrationProgress)
-    // dsh UI 内切换语言 → 外壳跟随（与主题同步同一套机制：语言存在 dsh 的 settings.yaml）
+    // dsh UI 内切换语言 → 外壳跟随（与主题同步同一套机制：都写在 dsh 的 profile patch 里）
     offLocale = window.api.on('settings:locale', (l) => {
         void (async () => {
             if (l === currentLocale()) return
@@ -206,8 +222,6 @@ onBeforeUnmount(() => {
 
             <!-- 底部状态栏（类似 VS Code）：空白占位，高度不计入内容区 16:9 -->
             <StatusBar />
-
-            <DshWizard v-if="showMissing && !migration" @done="showMissing = false" />
 
             <div v-if="migration" class="migrate">
                 <div class="migrate__card">

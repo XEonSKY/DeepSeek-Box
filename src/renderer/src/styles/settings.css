@@ -46,6 +46,8 @@ html.dark .settings .side {
     padding: 16px 10px;
     border-right: 1px solid var(--el-border-color-light);
     overflow-y: auto;
+    /* 侧边栏是导航而不是正文：禁止选中，免得点击 / 拖拽时把标题拖蓝 */
+    user-select: none;
 }
 .settings .side__cap {
     font-size: 12px;
@@ -154,6 +156,8 @@ html.dark .settings .side {
     gap: 8px;
     font-weight: 600;
     color: var(--el-text-color-primary);
+    /* 标题头同属外壳「装饰」层：不可选中，正文才允许拖选 / 复制 */
+    user-select: none;
 }
 /* 分组标题图标用次要色 */
 .settings .sec__title .anticon {

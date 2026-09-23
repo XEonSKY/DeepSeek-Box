@@ -1,4 +1,4 @@
-import type { ColorSchemeId, DownloadThreads, FunLocale, NewTabMode, NpmRegistry, NpmSource, NodeRuntimeKind, ProxyProtocol, ProxyScope, SearchEngineId, Settings, Shortcut, Theme } from '@shared/types'
+import type { ColorSchemeId, DownloadThreads, FunLocale, NewTabMode, NpmRegistry, NpmSource, NodeRuntimeKind, PnpmSource, ProxyProtocol, ProxyScope, SearchEngineId, Settings, Shortcut, Theme } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 
 /** Short, friendly OS label (pure) used by the About header. */
@@ -39,6 +39,8 @@ export interface SettingsState {
     nodeRuntime: NodeRuntimeKind
     /** 本地安装用的 npm：'system' ｜ 'bundled'(内置) ｜ 'localnode'(本地 Node 自带)。 */
     npmSource: NpmSource
+    /** dsh 插件安装用的 pnpm：'system' ｜ 'bundled'（内置，应用代管）。 */
+    pnpmSource: PnpmSource
     proxyEnabled: boolean
     proxyProtocol: ProxyProtocol
     proxyHost: string
@@ -128,6 +130,7 @@ export function payloadFrom(state: SettingsState): Settings {
         dshSource: state.dshSource,
         nodeRuntime: state.nodeRuntime,
         npmSource: state.npmSource,
+        pnpmSource: state.pnpmSource,
         proxyEnabled: state.proxyEnabled,
         proxyProtocol: state.proxyProtocol,
         proxyHost: state.proxyHost,

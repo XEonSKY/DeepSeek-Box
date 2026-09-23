@@ -10,7 +10,7 @@ export type { ResolvedLocale }
 /**
  * renderer 的 vue-i18n 单例（组合式 API，legacy:false）。
  * 文案与 main 共用同一份 shared/locales 目录。
- * 界面语言由 dsh settings.yaml 的 locale.preference 决定，语言码统一为 zh / en。
+ * 界面语言由 dsh 的 locale 配置决定，语言码统一为 zh / en。
  */
 export const i18n = createI18n({
     legacy: false,

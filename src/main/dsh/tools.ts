@@ -3,6 +3,7 @@ import os from 'node:os'
 import fs from 'node:fs'
 import { IS_WIN } from '../app/runtime'
 import { installRoot, listInstalled, resolveActive, versionDir } from './installs'
+import { nodeModulesRootOf } from './dshHome'
 import { probeVersion } from './child'
 import { readPkgVersion } from './fsutil'
 import type { NodeRuntimeKind } from '@shared/types'
@@ -143,6 +144,18 @@ export function resolveDshModule(cfg: { dshSource?: 'local' | 'global'; dshBin?:
     return { kind: 'local', present, moduleDir, version, entry }
 }
 
+/**
+ * dsh 安装目录下的 `node_modules`（解析它的**随附 bundle** 用）；解析不到返回 null。
+ *
+ * 由 `dshHome.nodeModulesRootOf` 从模块目录反推：`@deepseek-ai/dsh` 是 **scoped** 包，
+ * 所以不能简单地取一次 `dirname`（那会得到 `.../node_modules/@deepseek-ai`，
+ * 拼出来的 bundle 路径会多一层 `@deepseek-ai`，bundle 层全部找不到 → 模型页显示 0 个供应商）。
+ */
+export function dshInstallNodeModules(cfg: { dshSource?: 'local' | 'global'; dshBin?: string | null }): string | null {
+    const resolved = resolveDshModule(cfg)
+    return resolved.present && resolved.moduleDir ? nodeModulesRootOf(resolved.moduleDir) : null
+}
+
 /** Locate the system `node` binary on PATH / common install dirs. */
 export function findSystemNode(): string | null {
     const want = IS_WIN ? ['node.exe'] : ['node']
@@ -154,6 +167,18 @@ export function findSystemNode(): string | null {
 /** Locate the system `npm` launcher on PATH / the Windows global prefix. */
 export function findSystemNpm(): string | null {
     const want = IS_WIN ? ['npm.cmd', 'npm.bat'] : ['npm']
+    const dirs = pathEnv()
+    if (IS_WIN) dirs.push(path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'npm'))
+    return findInDirs(dirs, want) ?? null
+}
+
+/**
+ * Locate the system `pnpm` launcher on PATH / the Windows global prefix.
+ * pnpm 不在 Node 发行版里，通常由 `npm i -g pnpm` 装到与 npm 同一个全局目录，
+ * 也可能是 corepack 生成的垫片 —— 这里连同 `.exe` 一起找。
+ */
+export function findSystemPnpm(): string | null {
+    const want = IS_WIN ? ['pnpm.cmd', 'pnpm.exe', 'pnpm.bat'] : ['pnpm']
     const dirs = pathEnv()
     if (IS_WIN) dirs.push(path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'npm'))
     return findInDirs(dirs, want) ?? null

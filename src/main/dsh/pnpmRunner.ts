@@ -1,31 +1,38 @@
 import path from 'node:path'
 import fs from 'node:fs'
-import type { InstalledVersions, NodeDeployProgress, PnpmStatus, PnpmRuntimeStatus, Settings, ToolActionResult } from '@shared/types'
+import type { InstalledVersions, NodeDeployProgress, PnpmSource, PnpmStatus, PnpmRuntimeStatus, Settings, ToolActionResult } from '@shared/types'
 import { errorMessage } from '@shared/errors'
 import { IS_WIN } from '../app/runtime'
 import { loadSettings, mt, bundledPnpmDir, tempDownloadDir, tempNpmDir, tempPnpmStoreDir } from '../app/settings'
-import { nodeRuntimeForCfg, pathEnv, findInDirs } from './tools'
+import { nodeRuntimeForCfg, pathEnv, findInDirs, findSystemPnpm } from './tools'
+import { hasSystemNpm, runNpm } from './npmRunner'
 import { probeVersion, runChild } from './child'
 import { removeQuietly } from './fsutil'
 import { compareVersions, stripV, sortVersionsDesc } from './semver'
 import { pushLog } from './logbus'
 import { downloadFile } from './downloader'
+import { pnpmEntryIn } from './pnpmEntry'
 import { httpFetch } from './http'
 import { beginCancelable, CANCELED_MESSAGE } from './cancel'
 import { activeVersion, installRoot, listInstalled, prepareVersionDir, removeVersion, setActiveVersion, versionDir } from './installs'
 import { registryBase } from './registry'
 
 /**
- * 内置 pnpm 的安装 / 运行层：与内置 npm（npmRunner.ts）同一套「版本化目录 + 下载 tarball 解压」
- * 流程，供 dsh 插件管理（plugins.ts）把 `dsh plugin` 的参数转发给 pnpm。
+ * pnpm 的获取 / 运行层：与内置 npm（npmRunner.ts）同一套「版本化目录 + 下载 tarball 解压」流程，
+ * 供 dsh 插件管理（plugins.ts）把 `dsh plugin` 的参数转发给 pnpm。
  *
- * pnpm 以 npm 包形式发布，入口是 `package/bin/pnpm.cjs`，因此运行方式与内置 npm-cli.js 一致：
- * 用当前 Node 运行时直接执行该文件。
+ * **两种来源**（settings.pnpmSource）：
+ *  - `bundled`（默认）：应用把 pnpm 的 tarball 解压到 `<configDir>/pnpm/<版本>`，插件安装时用垫片让 dsh 找到它；
+ *  - `system`：直接用系统 PATH 上的 pnpm（dsh 本来就能找到），这里只负责探测版本 / 用系统 npm 升级它。
+ *
+ * pnpm 以 npm 包形式发布，运行方式与内置 npm-cli.js 一致：用当前 Node 运行时直接执行它的 JS 入口。
+ * **入口文件名别写死** —— pnpm 12 起是 `package/bin/pnpm.mjs`（manifest 的 bin 指向根级 `pnpm`，
+ * 那是个 sh 脚本，node 跑不了），≤ 11 才是 `bin/pnpm.cjs`：统一走 `pnpmEntry.ts` 的候选解析。
  */
 
-/** 内置 pnpm 的入口（`package/bin/pnpm.cjs`）；尚未下载时返回的路径不存在。 */
+/** 内置 pnpm 的入口（见 pnpmEntry.ts；尚未下载时返回的路径不存在）。 */
 export function bundledPnpmCli(): string {
-    return path.join(bundledPnpmDir(), 'package', 'bin', 'pnpm.cjs')
+    return pnpmEntryIn(bundledPnpmDir())
 }
 
 /** pnpm 的缓存 / store 环境：全部钉到配置目录下的临时区，不污染用户主目录。 */
@@ -49,6 +56,21 @@ function pnpmNode(): { exec: string; env: NodeJS.ProcessEnv } | null {
     } catch {
         return null
     }
+}
+
+/** 系统 pnpm 的版本（未安装 → null）。Windows 上 .cmd 必须经 shell 启动，且带空格的路径要加引号。 */
+function systemPnpmVersion(): Promise<string | null> {
+    const p = findSystemPnpm()
+    if (!p) return Promise.resolve(null)
+    return probeVersion(IS_WIN ? `"${p}"` : p, ['--version'], { ...process.env, ...pnpmStoreEnv() }, IS_WIN)
+}
+
+/**
+ * 系统 pnpm 的位置（`pnpmSource === 'system'` 时插件安装直接用它）。
+ * 找不到返回 null —— 调用方回落到内置 pnpm。
+ */
+export function systemPnpmPath(): string | null {
+    return findSystemPnpm()
 }
 
 /** registry 元数据的短缓存（键含 registry）。失败不缓存。 */
@@ -115,16 +137,16 @@ function bundledPnpmVersion(): Promise<string | null> {
     return n ? probeVersion(n.exec, [cli, '--version'], n.env) : Promise.resolve(null)
 }
 
-/** 内置 pnpm 探测结果：当前版本 + registry 最新版。 */
+/** pnpm 来源探测结果：系统 / 内置的版本 + registry 最新版。 */
 export async function pnpmStatus(): Promise<PnpmStatus> {
     const cfg = loadSettings()
-    const [latest, bundled] = await Promise.all([pnpmLatestVersion(cfg), bundledPnpmVersion()])
-    const st: PnpmRuntimeStatus = {
-        present: !!bundled,
-        version: bundled,
-        outdated: !!bundled && !!latest && compareVersions(stripV(bundled), stripV(latest)) < 0
-    }
-    return { latest, bundled: st }
+    const [latest, system, bundled] = await Promise.all([pnpmLatestVersion(cfg), systemPnpmVersion(), bundledPnpmVersion()])
+    const mk = (version: string | null): PnpmRuntimeStatus => ({
+        present: !!version,
+        version,
+        outdated: !!version && !!latest && compareVersions(stripV(version), stripV(latest)) < 0
+    })
+    return { latest, system: mk(system), bundled: mk(bundled) }
 }
 
 /** Locate a system `tar` (Windows ships tar.exe in System32). */
@@ -161,7 +183,7 @@ async function ensureBundledPnpm(
     if (!/^\d+\.\d+\.\d+/.test(target)) return { ok: false, message: `pnpm 版本号不合法：${target}` }
 
     const dest = versionDir('pnpm', target)
-    const cli = path.join(dest, 'package', 'bin', 'pnpm.cjs')
+    const cli = pnpmEntryIn(dest)
     if (fs.existsSync(cli)) {
         setActiveVersion('pnpm', target)
         return { ok: true, cli }
@@ -235,14 +257,30 @@ export async function ensureBundledPnpmReady(opts?: { version?: string }, onProg
     }
 }
 
-/** 下载 / 切换内置 pnpm 版本（不传 version 为最新版）。 */
-export async function updatePnpm(opts: { version?: string }, onProgress?: (p: NodeDeployProgress) => void): Promise<ToolActionResult> {
+/**
+ * 安装 / 切换到指定 pnpm 版本（不传 version 为最新版）。
+ * `source === 'system'` 时交给系统 npm 装全局 pnpm（pnpm 官方推荐的安装方式就是 `npm i -g pnpm`）。
+ */
+export async function updatePnpm(
+    opts: { source: PnpmSource; version?: string },
+    onProgress?: (p: NodeDeployProgress) => void
+): Promise<ToolActionResult> {
     const token = beginCancelable()
     try {
         const cfg = loadSettings()
         const target = opts.version ?? (await pnpmLatestVersion(cfg))
         if (!target) return { ok: false, message: mt('m.dsh.bundledPnpmFetchFail'), version: null }
         if (!/^\d+\.\d+\.\d+/.test(target)) return { ok: false, message: `pnpm 版本号不合法：${target}`, version: null }
+
+        if (opts.source === 'system') {
+            if (!hasSystemNpm()) return { ok: false, message: mt('m.dsh.noSystemNpm'), version: null }
+            const s = await runNpm(['install', '-g', `pnpm@${target}`], `npm install -g pnpm@${target}`, token.signal)
+            if (s.canceled) return { ok: false, canceled: true, message: CANCELED_MESSAGE, version: target }
+            return s.ok
+                ? { ok: true, message: `pnpm ${target} 已装入系统`, version: target }
+                : { ok: false, message: mt('m.dsh.systemPnpmFail'), version: target }
+        }
+
         const r = await ensureBundledPnpm(cfg, target, onProgress, token.signal)
         if (r.canceled) return { ok: false, canceled: true, message: CANCELED_MESSAGE, version: target }
         return r.ok
@@ -275,7 +313,7 @@ export function removeInstalledPnpmVersion(version: string): ToolActionResult {
  * 为 `dsh plugin` 准备一个带 pnpm 的进程环境：dsh 在 profile 目录里执行字面量 `pnpm`，
  * 而内置 pnpm 是 JS 入口，所以这里生成一个同名的 `pnpm` / `pnpm.cmd` 垫片目录并前置到 PATH。
  * 调用前必须已确保内置 pnpm 就绪（已下载到配置目录）。
- * @param cli - 内置 pnpm 的 pnpm.cjs 绝对路径。
+ * @param cli - 内置 pnpm 的入口绝对路径（见 pnpmEntry.ts）。
  * @returns 可直接作为 `dsh plugin` 子进程 env 的环境变量。
  */
 export function pnpmShimEnv(cli: string): NodeJS.ProcessEnv {

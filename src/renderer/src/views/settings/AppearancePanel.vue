@@ -28,7 +28,7 @@ const zoomOptions = ZOOMS.map((z) => ({ value: z, label: z + '%' }))
  */
 const dark = computed(() => isDark.value)
 
-// 界面语言单一来源是 dsh settings.yaml 的 locale.preference（zh/en）。
+// 界面语言单一来源是 dsh 的 locale 配置（zh/en）。
 const lang = ref<ResolvedLocale>(currentLocale())
 const isZh = computed(() => lang.value === 'zh')
 

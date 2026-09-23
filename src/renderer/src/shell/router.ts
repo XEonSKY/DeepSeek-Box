@@ -12,6 +12,8 @@ export const router = createRouter({
     history: createWebHashHistory(),
     routes: [
         { path: '/', name: 'web', component: () => import('../views/WebHost.vue') },
+        // 初始化页（安装向导）：与设置页同级，同样是盖在 web 之上的覆盖层。
+        { path: '/setup', name: 'setup', component: () => import('../views/SetupView.vue') },
         {
             // 父路由不命名：命名路由配上未命名的空路径子路由会触发 Vue Router 警告，
             // 且按名字导航无法落到空路径子路由。导航统一用 path，由子路由 name 区分。

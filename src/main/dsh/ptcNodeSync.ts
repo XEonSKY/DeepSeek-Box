@@ -1,15 +1,10 @@
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import writeFileAtomic from 'write-file-atomic'
 import type { NodeRuntimeKind } from '@shared/types'
 import { findSystemNode, localNodeExecPath } from './tools'
-import {
-    HOME_PATCH_FILENAME,
-    isValidNodeExecutable,
-    mergePtcNodePatch,
-    pickPtcNode
-} from './ptcNode'
+import { homePatchFile } from './dshHome'
+import { isValidNodeExecutable, mergePtcNodePatch, pickPtcNode } from './ptcNode'
 import type { NodeCandidate } from './ptcNode'
 
 /**
@@ -19,21 +14,12 @@ import type { NodeCandidate } from './ptcNode'
  * 该层由 dsh 应用在**每个 profile 之上**（profile-boot 里文档化），
  * 因此对 web / headless / 任何自定义 profile 一并生效，且不碰用户的 profile 文件。
  *
- * 为什么不写 `settings.yaml`：nodeExecutable 是**插件行的 config**，
- * 只能通过 patch 层覆盖，settings.yaml 管不了。
+ * 为什么不写 profile 的 `cordis.patch.yml`：nodeExecutable 是「本机装在哪」这种
+ * 机器级事实，跟用户在哪个 profile 里工作无关；而且 home 层优先级更高，能压过
+ * 任何 profile 层里被带过来的旧路径。
  *
  * 诊断背景见 docs/zh/dev/run-code-worker-exit-diagnosis.md。
  */
-
-/** dsh harness home：`$DSH_HOME` 或 `~/.dsh`。 */
-export function dshHomeDir(): string {
-    return process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
-}
-
-/** home 级 patch 文件路径。 */
-export function homePatchFile(): string {
-    return path.join(dshHomeDir(), HOME_PATCH_FILENAME)
-}
 
 /** 一个真正存在的文件才算可用候选。 */
 function exists(p: string | null | undefined): p is string {

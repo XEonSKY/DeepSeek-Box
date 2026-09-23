@@ -42,7 +42,11 @@
 ## 数据与配置位置
 
 - **应用设置**：配置目录下 `settings.json`（不是 Electron userData）。
-- **dsh 自身设置**：`~/.dsh/settings.yaml`；应用把主题 / 语言同步过去。
+- **dsh 的偏好与插件配置**：0.1.7 起全部落在 **Cordis patch 层**，没有 `settings.yaml`：
+  - **profile 层** `$DSH_HOME/profiles/<profile>/cordis.patch.yml` —— 该 profile 的用户覆盖，dsh UI 的设置表单也写这里（Box 承载 `web`）；
+  - **home 层** `$DSH_HOME/cordis.patch.yml` —— 对所有 profile 生效且**优先级更高**，放机器级覆盖（如 PTC 的 `nodeExecutable`）；
+  - 旧的 `~/.dsh/settings.yaml` 由 dsh 一次性导入进对应条目后改名为 `settings.yaml.imported`，Box 不再读写它。
+  - 条目形如 `- id: ui-theme` + `name` + `config`，`config` 是**整份替换**而非字段合并；纯文本处理见 `dsh/cordisPatch.ts`。
 - **Node / npm / dsh**：配置目录下按版本存放（见 references/main-process.md）。
 - **配置目录默认**：打包 `~/.dsbox/release`；开发 `~/.dsbox/dev`。
 - **覆盖指针**：`<userData>/config-dir`（与配置目录解耦，先于 `settings.json` 读取）。

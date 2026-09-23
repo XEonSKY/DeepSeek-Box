@@ -24,6 +24,7 @@ import {
 } from './runtime'
 import { registerShellWindow, hasCoreWindow, promoteNextToCore, windowByContentsId, listWindows } from './windowreg'
 import { attachContextMenu } from './contextmenu'
+import { dshInstalled } from '../dsh/manage'
 import { effectiveIconPath } from './appicon'
 
 /** 渲染层入口：dev 下是 Vite server URL，打包后是 index.html 的绝对路径。 */
@@ -243,9 +244,12 @@ function buildShellWindow(core: boolean, initialUrl?: string): BrowserWindow {
     // 对后开的窗口不触发，会导致窗口一直隐藏、看起来“没出现”）。ready-to-show 到达时再 show 一次也无害。
     //
     // 「默认使用系统浏览器打开 DSH」开启时，核心窗口启动即隐藏到系统托盘（dsh 地址就绪后由主进程在
-    // 默认浏览器里打开界面，见 dsh.ts）。托盘不可用时必须照常显示，否则用户没有召回入口；
-    // 配置目录迁移进行中也不隐藏——迁移进度只在窗口里可见。
-    const startHidden = core && loadSettings().openDshInBrowser && !configMigrationPlan()
+    // 默认浏览器里打开界面，见 dsh.ts）。但下面这些情况必须照常显示，不能藏进托盘：
+    //  - 托盘不可用：否则用户没有召回入口；
+    //  - 配置目录迁移进行中：迁移进度只在窗口里可见；
+    //  - **dsh 尚未安装**（未初始化）：此时窗口里是安装向导（DshWizard），藏起来等于把
+    //    初始化流程藏掉，用户只能对着托盘图标猜。
+    const startHidden = core && loadSettings().openDshInBrowser && !configMigrationPlan() && dshInstalled()
     if (core) {
         win.once('ready-to-show', () => {
             if (!(startHidden && getTray())) win.show()
@@ -310,6 +314,10 @@ function buildShellWindow(core: boolean, initialUrl?: string): BrowserWindow {
         })
         // 内嵌 webview（DeepSeek UI / 网页 / 动态标签）也要有复制粘贴菜单
         attachContextMenu(guest, win)
+        // guest 里不得再嵌一层 webview：标签页本身已经是一层内嵌，允许再嵌既会让任意
+        // 页面在我们的进程树里无限套娃，也绕开了这一层对 webview 的隔离设置
+        //（dsh 官方 desktop 的侧栏浏览器同样直接拒绝嵌套）。
+        guest.on('will-attach-webview', (gEvent) => gEvent.preventDefault())
         guest.setWindowOpenHandler(({ url, frameName, features }) => {
             // 本窗口的 webview 里新开：普通链接 → 本窗口新标签；真弹窗 → 独立窗口。
             openWebWindow(url, frameName, features, win)

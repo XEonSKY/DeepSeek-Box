@@ -23,7 +23,7 @@ import type { Component } from 'vue'
  * **不要随便挑一个相近的牌子顶上**：把 OpenAI 的图标挂在某个中转服务上，
  * 比没有图标更容易误导用户。
  *
- * 匹配是**按关键词包含**而不是全等：供应商 id 由用户的 settings.yaml 决定，
+ * 匹配是**按关键词包含**而不是全等：供应商 id 由用户的模型配置决定，
  * 常见形态有 `deepseek`、`deepseek-official`、`my-deepseek-proxy`、
  * `llm-pi-ai.providers.anthropic` 等，全等匹配会大面积漏掉。
  */

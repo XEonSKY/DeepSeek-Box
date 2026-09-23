@@ -35,6 +35,7 @@ import type {
     NodeStatus,
     NpmRegistry,
     NpmSource,
+    PnpmSource,
     NpmStatus,
     PnpmStatus,
     RegistrySpeedResult,
@@ -148,10 +149,11 @@ export interface ApiRoutes {
     'POST /npm/update': { body?: { source?: NpmSource; version?: string }; result: ToolActionResult }
     'POST /npm/ensure': { body?: { version?: string }; result: ToolActionResult }
 
-    // ---- 内置 pnpm（dsh 插件安装转发给 pnpm 时使用，应用代管）----
+    // ---- pnpm（dsh 插件安装转发给 pnpm 时使用；来源同 npm 一样可选：系统自带 / 内置）----
     'GET /pnpm/status': { result: PnpmStatus }
     'GET /pnpm/versions': { query: { prerelease?: boolean }; result: string[] }
-    'POST /pnpm/update': { body?: { version?: string }; result: ToolActionResult }
+    /** source 缺省为 'bundled'（应用代管）；'system' 时用系统 npm 装全局 pnpm。 */
+    'POST /pnpm/update': { body?: { source?: PnpmSource; version?: string }; result: ToolActionResult }
     'POST /pnpm/ensure': { body?: { version?: string }; result: ToolActionResult }
 
     // ---- 安装取消 / 版本管理（node · npm · dsh 通用）----

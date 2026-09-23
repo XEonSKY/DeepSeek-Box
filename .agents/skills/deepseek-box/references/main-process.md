@@ -9,7 +9,7 @@
 | `index.ts` | 应用入口 | 单实例锁、dev userData 隔离、whenReady 启动顺序、退出清理 |
 | `settings.ts` | 设置与配置目录 | `configDir` / `loadSettings` / `persistSettings`、迁移编排、临时目录、文件监听 |
 | `configmigrate.ts` | 配置目录迁移 | 计划持久化、`scanTree` / `migrateTree`、`rollbackMoves` |
-| `models.ts` | 模型与余额 | `readModelsInfo` / `readCurrentBalance`；读取 dsh 的 `settings.yaml` / `.credentials.yaml`；**不依赖 electron，密钥只留主进程** |
+| `models.ts` | 模型与余额 | `readModelsInfo(consented, env)` / `readCurrentBalance(consented, env)`；读 dsh 的**合成**配置（`dshPatchLayers`）+ `.credentials.yaml`；**不依赖 electron**（`installNodeModules` 由 `ipc.ts` 注入），密钥只留主进程。两个入口都以 `settings.modelsCredConsent` 为前置：未授权时直接回 `no-consent`，**不读配置、不读凭据文件、不联网**（把关在主进程，不靠渲染层自觉）。缺 dsh 安装（无 bundle 层）时退回只看凭据引用，并区分 `dsh-missing`（提示去装）与 `no-provider`（提示去配） |
 | `ipc.ts` | 全部 IPC 端点 | 用 `Router` 登记 REST 路由 |
 | `router.ts` | IPC 路由引擎 | Elysia 风格链式路由、`:name` 参数、唯一通道分发 |
 | `ui.ts` | 窗口 / 托盘 / 快捷键 | `createShellWindow` / `createTray` / `syncGlobalHotkey` |
@@ -29,22 +29,28 @@
 | `watchdog.ts` | 守护代码 | `WATCHDOG_CODE`（脱离本进程守护 dsh） |
 | `manage.ts` | 安装 / 更新 / 卸载 | `resolveInstall` / `dshInstalled` / `installDsh` / `updateDsh` / `uninstallDsh` / 版本管理 |
 | `nodeenv.ts` | Node 下载部署 | `deployLocalNode` / `listNodeVersions` / `nodeStatus` |
-| `npmRunner.ts` | npm 探测 / 执行 / 缓存 | `ensureBundledNpmReady` / `runNpm` / `npmCacheEnv` |
+| `npmRunner.ts` | npm 探测 / 执行 / 缓存 | `ensureBundledNpmReady` / `runNpm` / `npmCacheEnv`（`hasSystemNpm` 导出给 pnpm 的 system 来源复用） |
+| `pnpmRunner.ts` | pnpm 获取 / 运行（**两种来源**：系统自带 / 内置） | `pnpmStatus`（system + bundled）/ `updatePnpm({source})`（system 走 `npm i -g pnpm`，bundled 走 tarball）/ `systemPnpmPath` / `pnpmShimEnv`（内置的 PATH 垫片）；入口解析见 `pnpmEntry.ts` |
 | `downloader.ts` | 多线程下载 | `downloadFile`（HTTP Range 分段、去重、取消） |
 | `cancel.ts` | 取消令牌 | `beginCancelable` / `cancelActive` / `CANCELED_MESSAGE` |
 | `installs.ts` | 版本化目录 | 见下 |
+| `pnpmEntry.ts` | 内置 pnpm 入口解析（**纯逻辑**） | `pnpmEntryRel` / `pnpmEntryIn` / `isPnpmPackageReady`。⚠️ 入口名随 pnpm 大版本变（12+ = `package/bin/pnpm.mjs`，≤ 11 = `package/bin/pnpm.cjs`），**不要写死文件名**；manifest 的 `bin.pnpm` 在 12 指向根级 sh 脚本，node 跑不了 |
 | `tools.ts` | 路径解析 | `localNodeExecPath` / `nodeRuntimeFor` / `resolveDshModule` / `findSystemNode` |
 | `semver.ts` | 版本工具 | `sortVersionsDesc` / `filterByPrerelease` / `pickLatest` |
 | `registry.ts` | npm 源定义与挑选（**纯逻辑**） | `REGISTRY_IDS` / `registryBase` / `rankRegistries` / `pickFastestRegistry` |
 | `speed.ts` | 镜像源测速（走 `httpFetch`） | `measureRegistrySpeed` |
 | `http.ts` | 主进程 HTTP 出口（代理生效点） | `httpFetch(scope, url, init)` / `proxyConfigFor` |
 | `net.ts` | 代理辅助 | 代理配置相关 |
+| `cordisPatch.ts` | Cordis patch 层纯文本（**纯逻辑**） | `PATCH_FILENAME` / `parsePatchLayer` / `parsePatchEntries` / `composePatchEntries` / `composePatchConfig` / `readConfigString` / `mergePatchEntryConfig` |
+| `dshHome.ts` | dsh home 与 profile 路径（**纯逻辑**） | `DSH_PROFILE` / `dshHomeDir` / `homePatchFile` / `profilesRoot` / `profileDir` / `hostProfileDir` / `profilePatchFile` / `profileManifestFile`；home 解析语义对齐 dsh 的 `resolveDshHome`（空白覆盖视为未设置、展开 `~`、规范化为绝对路径，改之前先看该文件的注释） |
+| `providers.ts` | 供应商路由与服务商分组（**纯逻辑**） | `collectProviderRoutes` / `groupProviderRoutes` / `routesFromCredentials`（dsh 未安装时的凭据兜底） + `DEEPSEEK_BASE` / `isHttpURL` / `joinURL` / `defaultKeyEnv` |
+| `dshPatchLayers.ts` | 收集 dsh 的**有效** patch 层（**纯逻辑**） | `collectPatchLayers(installNodeModules)`（bundle 层 → profile 层 → home 层）、`composeMountedConfig(layers)`（**条目存在即入表**）。⚠️ dsh 的默认供应商写在 **bundle 层**（`dsh-base` 的 `agent-default-model`，以及只有 id/name、没有 config 的 `llm-deepseek`），只读用户层会让模型页显示「共 0 个供应商」 |
 
 ## settings.ts 关键导出（改设置必看）
 
 - 目录：`configDir` / `configDirInfo` / `setConfigDir` / `revertConfigDir` / `ensureDefaultConfigMigration` / `runConfigMigration` / `waitForConfigMigration` / `cancelConfigMigration` / `defaultWorkspaceDir`。
 - 读写：`readDiskSettings` / `loadSettings` / `persistSettings` / `normalizeNpmSource` / `normalizeDownloadThreads` / `normalizeProxyScope`。
-- i18n 与主题同步：`dshLocale` / `writeDshLocale` / `uiLocale` / `mt` / `syncDshTheme` / `syncNativeTheme`。
+- i18n 与主题同步：`dshLocale` / `writeDshLocale`（读写 dsh 的 `locale` 条目）/ `uiLocale` / `mt` / `syncDshTheme`（写 dsh 的 `ui-theme` 条目）/ `syncNativeTheme`；**都落在 profile 层的 `cordis.patch.yml`**（写 home 层会被 dsh 的设置表单拒绝）。
 - 监听：`startConfigWatchers` / `stopConfigWatchers` / `rewatchConfig`。
 - 临时目录：`tempDownloadDir`（`temp/download`）/ `tempNpmDir`（`temp/npm`）。
 
@@ -52,18 +58,19 @@
 
 ## installs.ts 与版本化目录
 
-`InstallKind` 取 `node` / `npm` / `dsh`：
+`InstallKind` 取 `node` / `npm` / `pnpm` / `dsh`：
 
 ```text
 <配置目录>/
 ├─ node/<版本>/           Node 运行时（含自带 npm）
 ├─ npm/<版本>/package/    应用代管的内置 npm
+├─ pnpm/<版本>/package/   应用代管的内置 pnpm（dsh 插件安装用）
 └─ dsh/<版本>/            内置 DeepSeek Harness
 ```
 
 每个根目录下 `.active` 记录当前生效版本。关键 API：`installRoot` / `versionDir` / `resolveActive` / `isVersionComplete` / `activeVersion` / `setActiveVersion` / `listInstalled` / `prepareVersionDir` / `removeVersion` / `migrateLegacyInstalls`。
 
-**完整性很关键**：搬迁时被占用的文件（典型是运行中的 `node.exe`）可能没搬进来。残缺目录一律当不存在；`moveFlatInto` 在关键文件未落位时拒绝写 `.active`。
+**完整性很关键**：搬迁时被占用的文件（典型是运行中的 `node.exe`）可能没搬进来。残缺目录一律当不存在；`moveFlatInto` 在关键文件未落位时拒绝写 `.active`。各类型的判据是 `keyRelPath`，**pnpm 例外** —— 它按入口候选判（见 `pnpmEntry.ts`）。
 
 ## 下载 / 取消 / 解压 / npm 缓存
 
@@ -78,3 +85,23 @@
 - 所有主进程 HTTP 走 `httpFetch(scope, url, init)`；`scope` 取 `app` / `update` / `dsh` / `npm` / `node` / `registry`，三处共用 `proxyConfigFor()`。
 - 新增出网点时：先确定属于哪个 scope，再接到对应落点，不要在别处裸 `fetch`。
 - 模型 / 余额凭据读取只留主进程，渲染层永远拿不到密钥明文。
+- **授权是主进程的前置，不是界面行为**：读凭据的入口都以 `settings.modelsCredConsent` 为门槛
+  （未授权 → `no-consent`，不读配置、不读 `.credentials.yaml`、不联网）。不要让「渲染层不请求」成为唯一防线。
+
+## 在无 electron 环境下验证主进程模块（探针套路）
+
+单测只覆盖纯函数；想验证**副作用行为**（读不读文件、走不走网络）时，用临时探针跑真实实现：
+
+1. 把被验证模块及其依赖链复制到 `.agents/temp/`，批量改写导入：
+   - `@shared/*` → 绝对 `file:///D:/Workspace/client/dsbox/src/shared/x.ts`；
+   - 源码里的相对导入没有扩展名，而 Node 的类型剥离模式**要求显式 `.ts`**，所以要改成 `./stage-x.ts`；
+   - `yaml` 这类包不用改 —— 从 `.agents/temp/` 向上能解析到工作区 `node_modules`。
+2. 依赖链里若有 `import 'electron'`（如 `dsh/http.ts`），把**那一条**换成存根（`export async function httpFetch() { throw new Error('stub') }`）——
+   探针环境没有 electron，整条链都加载不了。
+3. 要数「读了几次文件」，**在 `await import()` 完成之后再** patch `fs.readFileSync`：
+   否则 yaml 等依赖加载自己的源码会被算进业务读取（实测会多出 70+ 次假阳性）。
+4. 例：`.agents/temp/verify-models-consent.mjs`（`consented=false` 断言 0 次读取 / 0 次请求，
+   `consented=true` 断言读到 `.credentials.yaml` 且发起了余额查询）。
+5. 造「dsh 未安装 / 无凭据 / 无配置」这几种环境时，**把 `installNodeModules` 传 null** 并用
+   `process.env.DSH_HOME` 指向临时目录即可（`dshHomeDir()` 每次调用都读环境变量），不必动用户的真实目录。
+

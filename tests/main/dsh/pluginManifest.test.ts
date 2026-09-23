@@ -3,6 +3,7 @@ import {
     buildPluginEntries,
     effectiveBundles,
     isBundlePackage,
+    readBundlePatchFiles,
     readBundleList,
     readDependencyNames,
     readDisabledBundles,
@@ -48,6 +49,26 @@ describe('requiredBundles', () => {
         const a = requiredBundles('web')
         a.push('x')
         expect(requiredBundles('web')).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
+    })
+})
+
+describe('readBundlePatchFiles', () => {
+    it('字符串与数组两种声明都认（数组按顺序叠多层）', () => {
+        expect(readBundlePatchFiles({ dsh: { bundle: { patch: './a.yml' } } })).toEqual(['./a.yml'])
+        expect(readBundlePatchFiles({ dsh: { bundle: { patch: ['./a.yml', './b.yml'] } } })).toEqual(['./a.yml', './b.yml'])
+    })
+
+    it('非法声明一律当「没有 patch」', () => {
+        const bads = [
+            null,
+            {},
+            { dsh: {} },
+            { dsh: { bundle: {} } },
+            { dsh: { bundle: { patch: '' } } },
+            { dsh: { bundle: { patch: 42 } } },
+            { dsh: { bundle: { patch: [1, ''] } } }
+        ]
+        for (const bad of bads) expect(readBundlePatchFiles(bad)).toEqual([])
     })
 })
 

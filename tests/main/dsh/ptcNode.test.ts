@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import path from 'node:path'
 import { parse } from 'yaml'
-import {
-    HOME_PATCH_FILENAME,
-    isValidNodeExecutable,
-    mergePtcNodePatch,
-    pickPtcNode
-} from '@main/dsh/ptcNode'
+import { isValidNodeExecutable, mergePtcNodePatch, pickPtcNode } from '@main/dsh/ptcNode'
 import type { NodeCandidate } from '@main/dsh/ptcNode'
 
 /**
@@ -106,11 +101,5 @@ describe('mergePtcNodePatch', () => {
         for (const exec of paths) {
             expect(readExec(mergePtcNodePatch('', exec))).toBe(exec)
         }
-    })
-})
-
-describe('constants', () => {
-    it('patch 文件名是 dsh 认的 cordis.patch.yml', () => {
-        expect(HOME_PATCH_FILENAME).toBe('cordis.patch.yml')
     })
 })

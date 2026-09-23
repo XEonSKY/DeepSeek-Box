@@ -2,11 +2,13 @@ import { app, dialog, nativeTheme } from 'electron'
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
-import { parseDocument } from 'yaml'
 import { defu } from 'defu'
+import { PATCH_FILENAME, composePatchConfig, mergePatchEntryConfig, readConfigString } from '../dsh/cordisPatch'
+import { dshHomeDir, homePatchFile, profilePatchFile } from '../dsh/dshHome'
+import { PNPM_MANIFEST_REL } from '../dsh/pnpmEntry'
 import writeFileAtomic from 'write-file-atomic'
 import { DEFAULT_SETTINGS, COLOR_SCHEME_IDS, PROXY_SCOPE_IDS, SETTINGS_VERSION } from '@shared/types'
-import type { ConfigDirInfo, ConfigMigrationPlan, ConfigMigrationProgress, Settings, Theme, ResolvedLocale, LocaleCode, ColorSchemeId, ProxyScope } from '@shared/types'
+import type { ConfigDirInfo, ConfigMigrationPlan, ConfigMigrationProgress, Settings, ResolvedLocale, LocaleCode, ColorSchemeId, ProxyScope } from '@shared/types'
 import { resolveLocale, t as tl } from '@shared/i18n'
 import { broadcast } from './runtime'
 import { clearMigrationPlan, migrateTree, readMigrationPlan, rollbackMoves, scanTree, writeMigrationPlan } from './configmigrate'
@@ -339,7 +341,9 @@ export function bundledNpmDir(): string {
 /** 当前生效的内置 pnpm 目录：`<configDir>/pnpm/<版本>`。 */
 export function bundledPnpmDir(): string {
     const root = path.join(configDir(), 'pnpm')
-    return activeSubdir(root, path.join('package', 'bin', 'pnpm.cjs')) ?? root
+    // 用包清单定位：入口文件名随 pnpm 大版本变过（bin/pnpm.cjs → bin/pnpm.mjs），
+    // 而 package.json 任何版本都有（见 dsh/pnpmEntry.ts）。
+    return activeSubdir(root, PNPM_MANIFEST_REL) ?? root
 }
 
 /** pnpm 的独立 store 目录：`<工作目录>/temp/pnpm-store`（不污染 ~/.pnpm-store）。 */
@@ -399,6 +403,11 @@ function resolvePortSetting(raw: unknown): number | null {
 export function normalizeNpmSource(v: unknown): Settings['npmSource'] {
     if (v === 'bundled' || v === 'localnode') return v
     return 'system'
+}
+
+/** 归一化 pnpm 来源：只认 'system'，其余（脏值 / 缺失 / 老配置）落到默认的 'bundled'。 */
+export function normalizePnpmSource(v: unknown): Settings['pnpmSource'] {
+    return v === 'system' ? 'system' : 'bundled'
 }
 
 /**
@@ -514,6 +523,7 @@ export function loadSettings(): Settings {
         downloadThreads: normalizeDownloadThreads(disk.downloadThreads, legacy),
         nodeRuntime: normalizeNodeRuntime(merged.nodeRuntime),
         npmSource: normalizeNpmSource(merged.npmSource),
+        pnpmSource: normalizePnpmSource(merged.pnpmSource),
         proxyScope: normalizeProxyScope(disk.proxyScope, legacy),
         shortcuts: Array.isArray(merged.shortcuts) ? merged.shortcuts : DEFAULT_SETTINGS.shortcuts,
         colorScheme: COLOR_SCHEME_IDS.includes(merged.colorScheme as ColorSchemeId)
@@ -523,56 +533,95 @@ export function loadSettings(): Settings {
 }
 
 // ---------------------------------------------------------------------------
-// dsh `settings.yaml` 的 `locale.preference`（界面语言的单一存储来源）
+// dsh 的界面偏好（语言 / 主题）——写在 profile 的 `cordis.patch.yml` 里
 // ---------------------------------------------------------------------------
+//
+// 0.1.7 起 dsh 不再有 `settings.yaml`：插件配置全部落在 Cordis patch 层，用户可见的
+// 偏好就是 patch 条目里的 `config`（条目 id 即插件名）：
+//
+//   - id: locale      config: { preference: zh }    ← 界面语言
+//   - id: ui-theme    config: { preference: dark }   ← 主题（同条目还有 fontSize）
+//
+// 为什么写 **profile 层**（`profiles/<name>/cordis.patch.yml`）而不是 home 层：
+// home 层优先级更高，dsh 自己的设置表单一旦发现要写的值被 home 层覆盖就会**拒绝写入**
+// （dsh 会抛 "overridden by a home patch or command-line overlay"）。dsh UI 里的切换
+// 也写 profile 层，两边必须落在同一个文件里才能互相看见。
+//
+// 界面语言的单一存储来源仍是 dsh 的这一条配置：外壳读写它，未设置时按系统语言回退。
+
+/** 界面语言所在的 patch 条目（id / name 与 dsh 的 bundle 层一致）。 */
+const LOCALE_ENTRY = { id: 'locale', name: '@deepseek-ai/dsh-client-locale' }
+/** 主题所在的 patch 条目。 */
+const THEME_ENTRY = { id: 'ui-theme', name: '@deepseek-ai/dsh-client-ui-theme' }
 
 const LOCALE_CODES = new Set(['zh', 'en'])
+const UI_THEME_VALUES = new Set(['system', 'light', 'dark'])
 
-/** 从 dsh settings.yaml 文本读取 locale.preference（zh/en），缺失返回 null。 */
-function readDshLocalePref(text: string): LocaleCode | null {
-    const doc = parseDocument(text || '')
-    const v = doc.getIn(['locale', 'preference'])
-    const s = v == null ? '' : String(v)
-    return LOCALE_CODES.has(s) ? (s as LocaleCode) : null
+/** 本应用承载的 profile 的用户 patch 层（dsh UI 也写这里）。 */
+function dshPatchFile(): string {
+    return profilePatchFile()
 }
 
-/** 读取当前 dsh 语言偏好码；文件不存在/不可读返回 null。 */
-export function dshLocale(): LocaleCode | null {
+/** 读一个 patch 文件的文本；不存在 / 不可读按空层处理。 */
+function readPatchLayer(file: string): string {
     try {
-        return readDshLocalePref(fs.readFileSync(dshSettingsFile(), 'utf8'))
+        return fs.readFileSync(file, 'utf8')
     } catch {
-        return null
-    }
-}
-
-/** 当 shell 自身写 locale 时抑制 watcher 回声。 */
-let lastSelfLocaleWrite = 0
-
-/** 把语言码写入 dsh settings.yaml 的 locale.preference（保留其它键/注释）。 */
-export function writeDshLocale(code: LocaleCode): void {
-    try {
-        const file = dshSettingsFile()
-        let text = ''
-        try {
-            text = fs.readFileSync(file, 'utf8')
-        } catch {
-            /* not created yet */
-        }
-        const doc = parseDocument(text || '')
-        doc.setIn(['locale', 'preference'], code)
-        const next = doc.toString().replace(/\s+$/, '') + '\n'
-        if (next !== text) {
-            fs.mkdirSync(path.dirname(file), { recursive: true })
-            writeFileAtomic.sync(file, next, 'utf8')
-        }
-        lastSelfLocaleWrite = Date.now()
-    } catch (err) {
-        console.error('[Manager] failed to write locale to dsh settings.yaml:', err)
+        return ''
     }
 }
 
 /**
- * 解析当前界面语言（main 侧）：来源是 dsh settings.yaml 的 locale.preference；
+ * 按 dsh 的层叠顺序（低 → 高）取出用户自己的 patch 层：profile 层 → home 层。
+ * 读的是**有效值**，所以 home 层里更靠前的覆盖也会被算进来。
+ */
+function dshUserPatchLayers(): string[] {
+    return [readPatchLayer(dshPatchFile()), readPatchLayer(homePatchFile())]
+}
+
+/** 读 dsh 某个偏好条目的字符串字段；未配置返回 null。 */
+function readDshPreference(entryId: string, field: string): string | null {
+    return readConfigString(composePatchConfig(dshUserPatchLayers()), entryId, field)
+}
+
+/** 写盘抑制窗口（毫秒）：自己写的 patch 不该触发自己的 watcher。
+ *  语言与主题同写一个文件，因此共用一个时间戳。 */
+let lastSelfPatchWrite = 0
+
+/**
+ * 把某个偏好字段写进 profile patch 的对应条目（保留其它条目、注释与同行其它字段）。
+ * @returns 是否真的写入了（内容没变时不写，避免无谓地触发 dsh 的文件监听）。
+ * 失败不抛：偏好同步是尽力而为，坏了不该把启动流程带崩。
+ */
+function writeDshPreference(entry: { id: string; name: string }, field: string, value: string): boolean {
+    try {
+        const file = dshPatchFile()
+        const cur = readPatchLayer(file)
+        const next = mergePatchEntryConfig(cur, entry.id, { [field]: value }, entry.name)
+        if (next === cur) return false
+        fs.mkdirSync(path.dirname(file), { recursive: true })
+        writeFileAtomic.sync(file, next, 'utf8')
+        lastSelfPatchWrite = Date.now()
+        return true
+    } catch (err) {
+        console.error(`[Manager] failed to write ${entry.id}.${field} to dsh profile patch:`, err)
+        return false
+    }
+}
+
+/** 读取当前 dsh 语言偏好码；未配置 / 非法返回 null。 */
+export function dshLocale(): LocaleCode | null {
+    const s = readDshPreference(LOCALE_ENTRY.id, 'preference')
+    return s && LOCALE_CODES.has(s) ? (s as LocaleCode) : null
+}
+
+/** 把语言码写入 dsh 的 locale 条目。 */
+export function writeDshLocale(code: LocaleCode): void {
+    writeDshPreference(LOCALE_ENTRY, 'preference', code)
+}
+
+/**
+ * 解析当前界面语言（main 侧）：来源是 dsh 的 locale 配置；
  * 未设置时按 app.getLocale()（系统）回退。
  */
 export function uiLocale(): ResolvedLocale {
@@ -585,57 +634,22 @@ export function mt(path: string, params?: Record<string, unknown>): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sync UI theme into dsh's own settings.yaml (ui-theme.preference)
+// 把外壳主题同步进 dsh（ui-theme 条目的 preference）
 // ---------------------------------------------------------------------------
 
-const UI_THEME_VALUES = new Set(['system', 'light', 'dark'])
-
-function dshSettingsFile(): string {
-    return path.join(process.env.DSH_HOME || path.join(os.homedir(), '.dsh'), 'settings.yaml')
-}
-
-/** 用 `yaml` 库设置顶层 ui-theme.preference，保留其它键/注释，避免手写文本补丁的脆弱性。 */
-function patchUiTheme(text: string, pref: string): string {
-    const doc = parseDocument(text || '')
-    doc.setIn(['ui-theme', 'preference'], pref)
-    return doc.toString().replace(/\s+$/, '') + '\n'
-}
-
+/** 上一次同步出去的主题，避免重复写盘。 */
 let lastSyncedTheme = ''
-/** When the app itself writes the dsh theme we suppress the watcher echo. */
-let lastSelfThemeWrite = 0
-/** Timestamp of the last settings.json write performed by this process. */
-let lastSelfSettingsWrite = 0
 
-/** Read ui-theme.preference from dsh's settings.yaml (via the yaml library). */
-function readUiThemePref(text: string): Theme | null {
-    const doc = parseDocument(text || '')
-    const v = doc.getIn(['ui-theme', 'preference'])
-    const s = v == null ? '' : String(v)
-    return UI_THEME_VALUES.has(s) ? (s as Theme) : null
+/** 读 dsh 的主题偏好；未配置 / 非法返回 null。 */
+function dshThemePref(): string | null {
+    const s = readDshPreference(THEME_ENTRY.id, 'preference')
+    return s && UI_THEME_VALUES.has(s) ? s : null
 }
 
-/** Write the app theme into dsh's settings.yaml so the dsh UI matches. */
+/** 把外壳主题写进 dsh，让 dsh UI 跟随。 */
 export function syncDshTheme(theme: string): void {
     if (!UI_THEME_VALUES.has(theme) || theme === lastSyncedTheme) return
-    try {
-        const file = dshSettingsFile()
-        let text = ''
-        try {
-            text = fs.readFileSync(file, 'utf8')
-        } catch {
-            /* not created yet */
-        }
-        const next = patchUiTheme(text, theme)
-        if (next !== text) {
-            fs.mkdirSync(path.dirname(file), { recursive: true })
-            writeFileAtomic.sync(file, next, 'utf8')
-        }
-        lastSyncedTheme = theme
-        lastSelfThemeWrite = Date.now()
-    } catch (err) {
-        console.error('[Manager] failed to sync theme to dsh settings.yaml:', err)
-    }
+    if (writeDshPreference(THEME_ENTRY, 'preference', theme)) lastSyncedTheme = theme
 }
 
 /** 把外壳主题同步到 Electron 的 nativeTheme.themeSource，使所有内嵌 webview 的
@@ -643,6 +657,9 @@ export function syncDshTheme(theme: string): void {
 export function syncNativeTheme(theme: string): void {
     if (theme === 'dark' || theme === 'light' || theme === 'system') nativeTheme.themeSource = theme
 }
+
+/** Timestamp of the last settings.json write performed by this process. */
+let lastSelfSettingsWrite = 0
 
 export function persistSettings(s: Settings): void {
     try {
@@ -659,7 +676,7 @@ export function persistSettings(s: Settings): void {
 // ---------------------------------------------------------------------------
 // External-config watchers
 // ---------------------------------------------------------------------------
-// When settings.json / dsh's settings.yaml are changed on disk by someone other
+// When settings.json / dsh's profile patch are changed on disk by someone other
 // than this app, tell the renderer to re-sync automatically. Echoes caused by
 // our own writes are suppressed via the lastSelf* timestamps.
 // ---------------------------------------------------------------------------
@@ -701,23 +718,21 @@ export function startConfigWatchers(): void {
         if (Date.now() - lastSelfSettingsWrite < 400) return
         broadcast('settings:changed', loadSettings())
     })
-    // DSH settings.yaml：当 ui-theme.preference / locale.preference 在 shell 之外被改动
-    //（例如在 dsh UI 内切换主题/语言）时广播，让 shell 采用。
-    watchConfigFile('settings.yaml', path.dirname(dshSettingsFile()), () => {
-        if (Date.now() - lastSelfThemeWrite < 400 || Date.now() - lastSelfLocaleWrite < 400) return
-        try {
-            const text = fs.readFileSync(dshSettingsFile(), 'utf8')
-            const theme = readUiThemePref(text)
-            if (theme) {
-                syncNativeTheme(theme) // webview 深浅色随外壳
-                broadcast('settings:theme', theme)
-            }
-            const localePref = readDshLocalePref(text)
-            if (localePref) broadcast('settings:locale', localePref)
-        } catch {
-            /* file not (yet) readable */
+    // dsh 的 patch 层：主题 / 语言被 shell 之外的改动（例如在 dsh UI 里切换主题或语言）
+    // 时广播，让外壳采用。dsh 只写 profile 层，但 home 层优先级更高、同样会影响有效值，
+    // 所以两层都监听。
+    const onPatchChange = (): void => {
+        if (Date.now() - lastSelfPatchWrite < 400) return
+        const theme = dshThemePref()
+        if (theme) {
+            syncNativeTheme(theme) // webview 深浅色随外壳
+            broadcast('settings:theme', theme)
         }
-    })
+        const localePref = dshLocale()
+        if (localePref) broadcast('settings:locale', localePref)
+    }
+    watchConfigFile(PATCH_FILENAME, path.dirname(dshPatchFile()), onPatchChange)
+    watchConfigFile(PATCH_FILENAME, dshHomeDir(), onPatchChange)
 }
 
 export function stopConfigWatchers(): void {

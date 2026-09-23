@@ -29,10 +29,9 @@ DeepSeek Box —— DeepSeek Harness 的 Electron 桌面外壳（Electron 44 + V
 ## 分支与发布
 
 - 开发改动推 `dev`；**发行才推 `main`**，且任何 `git push` 都要先说明目标并征得同意。
-- **推送 `main` 前若版本是预发布（alpha / beta / rc），自动把通道序号 +1**：由 `.githooks/pre-push` 改写
-  `package.json` 并提交一条 `chore(release): <新版本>`，随后要**重跑一次 `git push`** 把该提交带上去
-  （正式版 `X.Y.Z` 不 +1）。该 hook 只动 `package.json` 一处，**不做**版本号规范里的"四处同步"、也不复读推送；
-  推送 `v*` 标签、删除远程分支一律放行。紧急情况用 `git push --no-verify` 跳过。
+- **版本号由发布者主动指定**：推 `main` 前自己按版本号规范把四处改齐（`package.json`、`package-lock.json` 的
+  顶层与 `packages[""]`、技能 `metadata.version`），**没有任何 hook 会自动改版本号**，也不需要事后重推。
+  推送 `v*` 标签、删除远程分支不额外加门禁。
 
 ## 必读
 
@@ -49,7 +48,8 @@ DeepSeek Box —— DeepSeek Harness 的 Electron 桌面外壳（Electron 44 + V
 - UI 组件优先 `antdv-next`（`<a-*>`），禁止新增 `el-*`；按需引入由构建器自动注入，不要手动 import 组件或全量注册。
 - 缩进 4 个空格，注释用简要中文。
 - 纯逻辑（shared 工具、主进程的版本 / 路径 / 归一化 / 迁移判定）必须配 `*.test.ts` 单元测试；测试放 `tests/` 下按层分目录，源码目录里不得出现测试文件。
-- agent 缓存 / 临时文件放 `.agents/temp/`，用完即删。
+- agent 缓存 / 临时文件一律放 `.agents/temp/`；**临时目录不必每次清理**，允许跨任务保留复用（避免重复下载 / 克隆），需要时再手动清。
+- `.agents/temp/deepseek-harness/` 常备一份 `https://github.com/deepseek-ai/deepseek-harness.git` 的克隆（查上游 dsh 实现 / 契约用），**不要删除**；需要最新代码时 `git -C .agents/temp/deepseek-harness pull`，仅目录缺失才重新 clone。
 - 改动推送 `dev`，发行才推 `main`；推送远程前必须征得确认。
 - 一个提交只做一件事；提交信息用 Conventional Commits。
 - agent 只做 typecheck + lint，**不要主动跑测试**（不跑 `npm run check` / `npm run test`）；单元测试、`npm run check` 与运行时行为由用户运行验证。
@@ -67,4 +67,4 @@ DeepSeek Box —— DeepSeek Harness 的 Electron 桌面外壳（Electron 44 + V
 | `npm run build` | 构建到 `out/` |
 | `npm run docs:dev` / `docs:build` | 文档站 |
 
-Git hooks 由 `npm install` 的 `prepare` 自动启用；若未生效，运行 `git config core.hooksPath .githooks`（必要时 `chmod +x .githooks/pre-commit .githooks/pre-push`）。
+Git hooks 由 `npm install` 的 `prepare` 自动启用；若未生效，运行 `git config core.hooksPath .githooks`（必要时 `chmod +x .githooks/pre-commit`）。
