@@ -44,7 +44,8 @@ import {
  * ## 二进制的三级定位
  *
  * 1. 用户在面板里**指定**的路径（存扩展自己的配置文件，最高优先）；
- * 2. 核心目录里**已下载**的二进制（`<扩展所在目录>/core`）；
+ * 2. 核心目录里**已下载**的二进制（`<扩展数据目录>/core`，**散装** —— 二进制
+ *    直接平铺在 core 根下，下载解压用 `e` 命令展平，不保留包内子目录）；
  * 3. **系统已装**的 7-Zip（各平台常见安装位）。
  *
  * 定位结果会缓存；`locate` 动作与改路径时清缓存。
@@ -126,9 +127,10 @@ export function activate(ctx: ExtContext): void {
 
         const target = currentTarget()
         if (target) {
-            // 核心目录下：既试包内相对位置（Windows 的 x64/7za.exe），也试裸文件名。
-            out.push(path.join(coreDir, target.binary))
+            // 核心目录下：散装布局是裸文件名（core/7za.exe）；也兼容旧版按包内
+            // 相对位置（x64/7za.exe）留下来的安装。
             out.push(path.join(coreDir, path.basename(target.binary)))
+            out.push(path.join(coreDir, target.binary))
         }
 
         if (process.platform === 'win32') {
@@ -215,15 +217,17 @@ export function activate(ctx: ExtContext): void {
         if (!dl.ok) return { ok: false, message: dl.message ?? 'download failed' }
 
         // 解开：Windows 的 extra.7z / Linux 与 macOS 的 .tar.xz。
+        // 用 **e（展平解压）**：包内文件全部撒到 core 根下 —— 二进制以**散装**形式
+        // 落位（core/7za.exe、core/7zz），不保留包内的 x64/ 等子目录结构。
         // 优先用「已存在的 7z」解（可能是系统装的，也可能是上一次下好的核心）；
-        // 类 Unix 还可退回系统 tar。
+        // 类 Unix 还可退回系统 tar（这两个发行包的二进制本来就在包根，天然散装）。
         const { path: bin } = locateBinaryPath()
         let extracted = false
 
         // 注意排除「刚下载的这个包」，它不能解自己。
         const usable7z = bin && path.resolve(bin) !== path.resolve(dl.file)
         if (usable7z) {
-            const r = await run7z(['x', '-y', `-o${coreDir}`, dl.file])
+            const r = await run7z(['e', '-y', `-o${coreDir}`, dl.file])
             extracted = r.ok
         } else if (!process.platform.startsWith('win')) {
             const tar = await procCall<{ ok: boolean; stdout: string; stderrTail: string }>('run', 'tar', ['-xf', dl.file, '-C', coreDir], {
@@ -236,7 +240,7 @@ export function activate(ctx: ExtContext): void {
             ok: true,
             file: dl.file,
             extracted,
-            message: extracted ? undefined : 'downloaded, but auto-extract failed; extract it into the core directory manually'
+            message: extracted ? undefined : 'downloaded, but auto-extract failed; extract the binary flat into the core directory manually'
         }
     }
 
