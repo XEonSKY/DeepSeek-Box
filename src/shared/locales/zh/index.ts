@@ -165,7 +165,7 @@ export default {
     /** 设置页（sv = Settings View） */
     sv: {
         cap: '设置',
-        nav: { general: '常规', system: '系统与性能', appearance: '外观', network: '网络', env: '环境', dsh: 'DeepSeek Harness', plugins: '插件', models: '模型', extensions: '扩展', log: '终端', hotkeys: '快捷键', about: '关于' },
+        nav: { general: '常规', system: '系统与性能', appearance: '外观', network: '网络', env: '环境', dsh: 'DeepSeek Harness', plugins: '插件', models: '模型', log: '终端', hotkeys: '快捷键', about: '关于' },
         intro: {
             general: '工作目录、端口与标签页/搜索等基础行为。',
             system: '开机自启、浏览器打开方式、图形加速与内嵌页面的浏览器标识。',
@@ -175,7 +175,6 @@ export default {
             dsh: 'DeepSeek Harness 的来源、npm 来源与更新。',
             plugins: '管理各 profile 的 dsh 插件（组合包），选择启动时加载哪些。',
             models: '令牌列表：每个密钥（令牌）一行，显示所属供应商与余额，不显示密钥。',
-            extensions: '扩展：系统 / 内置 / 外部三级，可查看状态、启停外部扩展、退出安全模式。',
             log: 'DeepSeek Box 的实时输出（stdout / stderr）。',
             hotkeys: '键盘快捷键：系统全局的与常用的操作。',
             about: '关于应用与 DeepSeek Harness，以及更新检查。'
@@ -191,30 +190,6 @@ export default {
             dir: '所在目录',
             reveal: '打开所在目录',
             tabs: '该扩展提供的标签页'
-        },
-        extpage: {
-            refresh: '刷新',
-            exitSafe: '退出安全模式',
-            enable: '启用',
-            disable: '停用',
-            forgive: '清除崩溃记录',
-            forgiven: '已清除崩溃记录，重启后可重试。',
-            restartHint: '已保存，重启后生效。',
-            safeMode: '已进入安全模式',
-            safeModeDesc: '内置 / 外部扩展本次未加载。可排查后逐个启用，或直接删除对应目录。',
-            safeExited: '已退出安全模式，重启后重新加载全部扩展。',
-            empty: '还没有发现任何扩展。',
-            listTitle: '全部扩展',
-            colName: '名称',
-            colKind: '来源',
-            colStatus: '状态',
-            stActive: '运行中',
-            stDisabled: '已停用',
-            stFailed: '加载失败',
-            stSkipped: '已跳过',
-            kindSystem: '系统',
-            kindBuiltin: '内置',
-            kindExternal: '外部'
         },
         plugins: {
             pnpmPreparing: '正在准备 pnpm（首次会从镜像源下载，来源见「设置 → 环境」）…',

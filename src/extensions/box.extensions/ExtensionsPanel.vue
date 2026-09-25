@@ -47,7 +47,7 @@ async function toggle(ext: ExtInfo): Promise<void> {
             params: { id: ext.id },
             body: { enabled: ext.status === 'disabled' }
         })
-        ElMessage.success(extT('sv.extpage.restartHint'))
+        ElMessage.success(extT('ext.boxExtensions.page.restartHint'))
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
     }
@@ -57,7 +57,7 @@ async function toggle(ext: ExtInfo): Promise<void> {
 async function forgive(ext: ExtInfo): Promise<void> {
     try {
         info.value = await extApi.post('/extensions/:id/forgive', { params: { id: ext.id } })
-        ElMessage.success(extT('sv.extpage.forgiven'))
+        ElMessage.success(extT('ext.boxExtensions.page.forgiven'))
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
     }
@@ -67,7 +67,7 @@ async function forgive(ext: ExtInfo): Promise<void> {
 async function exitSafeMode(): Promise<void> {
     try {
         info.value = await extApi.post('/extensions/exit-safe-mode')
-        ElMessage.success(extT('sv.extpage.safeExited'))
+        ElMessage.success(extT('ext.boxExtensions.page.safeExited'))
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
     }
@@ -90,7 +90,7 @@ function statusColor(status: ExtInfo['status']): string {
     return 'orange'
 }
 
-/** 状态标签的文案键（外层统一加 `sv.extpage.` 前缀）。 */
+/** 状态标签的文案键（外层统一加 `ext.boxExtensions.page.` 前缀）。 */
 const STATUS_KEY: Record<ExtInfo['status'], string> = {
     active: 'stActive',
     disabled: 'stDisabled',
@@ -117,22 +117,22 @@ onBeforeUnmount(() => offChanged?.())
         <div class="dsh-brand">
             <div class="dsh-brand__icon"><AppstoreOutlined style="font-size: 34px" /></div>
             <div class="dsh-brand__txt">
-                <div class="dsh-brand__name">{{ $t('sv.nav.extensions') }}</div>
-                <div class="dsh-brand__desc">{{ $t('sv.intro.extensions') }}</div>
+                <div class="dsh-brand__name">{{ $t('ext.boxExtensions.nav') }}</div>
+                <div class="dsh-brand__desc">{{ $t('ext.boxExtensions.intro') }}</div>
             </div>
         </div>
 
-        <a-alert v-if="info?.safeMode" type="error" show-icon :message="$t('sv.extpage.safeMode')">
-            <template #description>{{ $t('sv.extpage.safeModeDesc') }}</template>
+        <a-alert v-if="info?.safeMode" type="error" show-icon :message="$t('ext.boxExtensions.page.safeMode')">
+            <template #description>{{ $t('ext.boxExtensions.page.safeModeDesc') }}</template>
         </a-alert>
 
         <!-- 标题与操作同一行：标题左、按钮右；按钮用标准大小的按钮组，组内只留图标与必要文字。 -->
         <div class="extpage__bar">
-            <div class="extpage__head">{{ $t('sv.extpage.listTitle') }}</div>
+            <div class="extpage__head">{{ $t('ext.boxExtensions.page.listTitle') }}</div>
             <a-space :size="8">
                 <a-button @click="reload">
                     <template #icon><ReloadOutlined /></template>
-                    {{ $t('sv.extpage.refresh') }}
+                    {{ $t('ext.boxExtensions.page.refresh') }}
                 </a-button>
                 <!-- 打开扩展目录：图标 + 目录路径；路径过长时省略，完整值放 title。 -->
                 <a-button @click="openDir">
@@ -140,18 +140,18 @@ onBeforeUnmount(() => offChanged?.())
                     <span class="extpage__dir" :title="info?.externalDir">{{ info?.externalDir }}</span>
                 </a-button>
                 <a-button v-if="info?.safeMode" danger @click="exitSafeMode">
-                    {{ $t('sv.extpage.exitSafe') }}
+                    {{ $t('ext.boxExtensions.page.exitSafe') }}
                 </a-button>
             </a-space>
         </div>
 
         <div class="iv extpage__list">
-            <div v-if="info && !info.entries.length" class="hint">{{ $t('sv.extpage.empty') }}</div>
+            <div v-if="info && !info.entries.length" class="hint">{{ $t('ext.boxExtensions.page.empty') }}</div>
             <div v-else class="iv__list">
                 <div class="iv__thead">
-                    <span class="iv__c-name">{{ $t('sv.extpage.colName') }}</span>
-                    <span class="iv__c-kind">{{ $t('sv.extpage.colKind') }}</span>
-                    <span class="iv__c-status">{{ $t('sv.extpage.colStatus') }}</span>
+                    <span class="iv__c-name">{{ $t('ext.boxExtensions.page.colName') }}</span>
+                    <span class="iv__c-kind">{{ $t('ext.boxExtensions.page.colKind') }}</span>
+                    <span class="iv__c-status">{{ $t('ext.boxExtensions.page.colStatus') }}</span>
                     <span class="iv__c4">{{ $t('sv.env.colActions') }}</span>
                 </div>
                 <div class="iv__tbody">
@@ -162,20 +162,20 @@ onBeforeUnmount(() => offChanged?.())
                             <span v-if="item.message" class="extpage__msg" :title="item.message">{{ item.message }}</span>
                         </span>
                         <span class="iv__c-kind">
-                            <a-tag>{{ $t('sv.extpage.' + KIND_KEY[item.kind]) }}</a-tag>
+                            <a-tag>{{ $t('ext.boxExtensions.page.' + KIND_KEY[item.kind]) }}</a-tag>
                         </span>
                         <span class="iv__c-status">
-                            <a-tag :color="statusColor(item.status)">{{ $t('sv.extpage.' + STATUS_KEY[item.status]) }}</a-tag>
+                            <a-tag :color="statusColor(item.status)">{{ $t('ext.boxExtensions.page.' + STATUS_KEY[item.status]) }}</a-tag>
                         </span>
                         <span class="iv__c4">
                             <a-button v-if="item.removable" @click="toggle(item)">
-                                {{ item.status === 'disabled' ? $t('sv.extpage.enable') : $t('sv.extpage.disable') }}
+                                {{ item.status === 'disabled' ? $t('ext.boxExtensions.page.enable') : $t('ext.boxExtensions.page.disable') }}
                             </a-button>
                             <a-button
                                 v-if="item.removable && item.status !== 'disabled' && item.status !== 'active'"
                                 @click="forgive(item)"
                             >
-                                {{ $t('sv.extpage.forgive') }}
+                                {{ $t('ext.boxExtensions.page.forgive') }}
                             </a-button>
                         </span>
                     </div>

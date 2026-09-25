@@ -26,6 +26,8 @@
         "src/renderer/src/**/*.vue",
         "src/shared/**/*",
         "src/extensions/**/*.vue",
-        "src/extensions/*.ts"
-    ]
+        "src/extensions/*.ts",
+        "src/extensions/*/**/*.ts"
+    ],
+    "exclude": ["src/extensions/**/main.ts"]
 }

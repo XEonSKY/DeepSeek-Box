@@ -1,7 +1,7 @@
 import { createI18n } from 'vue-i18n'
 import zh from '@shared/locales/zh'
 import en from '@shared/locales/en'
-import { catalogForLocale, styleLocaleOf } from '@shared/locales/ext'
+import { catalogForLocale, styleLocaleOf, deepMergeDict } from '@shared/locales/ext'
 import type { ResolvedLocale } from '@shared/types'
 import type { ExtStyle } from '@shared/locales/ext'
 
@@ -38,6 +38,19 @@ const setLocaleMessages = i18n.global.setLocaleMessage as unknown as (
 /** 把 vue-i18n 切到某语言（不写盘；持久化走 setUiLocale）。 */
 export function setLocale(locale: ResolvedLocale): void {
     i18n.global.locale.value = locale
+}
+
+/**
+ * 把一张增量字典**合并进**当前消息目录（不重建、不切语言）。
+ *
+ * 与 `applyLocaleChange` 的整体重建互补：重建走 `catalogForLocale`（扩展层已并入），
+ * 而启动早期还没有任何重建发生时，扩展框架用本函数把扩展键立即补进消息，
+ * 不必等第一次重建、也不依赖「重建一定会发生」的时序巧合。
+ */
+export function mergeLocaleMessages(locale: ResolvedLocale, dict: Record<string, unknown>): void {
+    const cur = i18n.global.getLocaleMessage(locale) as unknown as Record<string, unknown>
+    setLocaleMessages(locale, deepMergeDict(cur, dict))
+    pingRefresh()
 }
 
 /** 当前界面语言（与 setLocale 对称；供外部读取，避免直接访问 i18n.global）。 */

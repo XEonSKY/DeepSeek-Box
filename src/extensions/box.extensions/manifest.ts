@@ -18,6 +18,6 @@ export const manifest: ExtManifest = {
     version: '1.0.0',
     apiVersion: 1,
     contributions: {
-        settings: [{ key: 'extensions', titleKey: 'sv.nav.extensions', view: 'extensions', icon: 'app' }]
+        settings: [{ key: 'extensions', titleKey: 'ext.boxExtensions.nav', view: 'extensions', icon: 'app' }]
     }
 }
