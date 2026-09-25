@@ -120,23 +120,26 @@ onBeforeUnmount(() => offChanged?.())
             <template #description>{{ $t('sv.extpage.safeModeDesc') }}</template>
         </a-alert>
 
+        <!-- 标题与操作同一行：标题左、按钮右；按钮用标准大小的按钮组，组内只留图标与必要文字。 -->
         <div class="extpage__bar">
-            <a-button size="small" @click="reload">
-                <template #icon><ReloadOutlined /></template>
-                {{ $t('sv.extpage.refresh') }}
-            </a-button>
-            <a-button size="small" @click="openDir">
-                <template #icon><FolderOpenOutlined /></template>
-                {{ $t('sv.extpage.openDir') }}
-            </a-button>
-            <a-button v-if="info?.safeMode" size="small" danger @click="exitSafeMode">
-                {{ $t('sv.extpage.exitSafe') }}
-            </a-button>
-            <span class="extpage__dir" :title="info?.externalDir">{{ info?.externalDir }}</span>
+            <div class="extpage__head">{{ $t('sv.extpage.listTitle') }}</div>
+            <a-space :size="8">
+                <a-button @click="reload">
+                    <template #icon><ReloadOutlined /></template>
+                    {{ $t('sv.extpage.refresh') }}
+                </a-button>
+                <!-- 打开扩展目录：图标 + 目录路径；路径过长时省略，完整值放 title。 -->
+                <a-button @click="openDir">
+                    <template #icon><FolderOpenOutlined /></template>
+                    <span class="extpage__dir" :title="info?.externalDir">{{ info?.externalDir }}</span>
+                </a-button>
+                <a-button v-if="info?.safeMode" danger @click="exitSafeMode">
+                    {{ $t('sv.extpage.exitSafe') }}
+                </a-button>
+            </a-space>
         </div>
 
         <div class="iv extpage__list">
-            <div class="iv__title">{{ $t('sv.extpage.listTitle') }}</div>
             <div v-if="info && !info.entries.length" class="hint">{{ $t('sv.extpage.empty') }}</div>
             <div v-else class="iv__list">
                 <div class="iv__thead">
@@ -177,21 +180,33 @@ onBeforeUnmount(() => offChanged?.())
 </template>
 
 <style scoped>
+/*
+ * 标题与操作同一行。标题左对齐、按钮组右对齐，整行用 align-items:center 对齐基线；
+ * 按钮换用标准尺寸（不再 size="small"），所以这里不再压缩行高。
+ */
 .extpage__bar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin: 4px 0 12px;
+    gap: 12px;
+    margin: 2px 0 14px;
+    flex: 0 0 auto;
 }
+.extpage__head {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+    flex: 0 0 auto;
+}
+/* 目录路径作为「打开扩展目录」按钮内的文字：过长时省略，完整值由 title 提供。 */
 .extpage__dir {
-    margin-left: auto;
-    font-size: 12px;
-    color: var(--el-text-color-secondary);
-    max-width: 45%;
+    display: inline-block;
+    max-width: 260px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    direction: rtl;
+    vertical-align: bottom;
+    font-family: var(--el-font-family-mono);
+    font-size: 12px;
 }
 
 /*

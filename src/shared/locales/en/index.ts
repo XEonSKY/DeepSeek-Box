@@ -187,7 +187,6 @@ export default {
         },
         extpage: {
             refresh: 'Refresh',
-            openDir: 'Open extensions folder',
             exitSafe: 'Leave safe mode',
             enable: 'Enable',
             disable: 'Disable',

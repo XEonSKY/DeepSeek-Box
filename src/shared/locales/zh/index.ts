@@ -194,7 +194,6 @@ export default {
         },
         extpage: {
             refresh: '刷新',
-            openDir: '打开扩展目录',
             exitSafe: '退出安全模式',
             enable: '启用',
             disable: '停用',
