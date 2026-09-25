@@ -150,3 +150,50 @@ export function ensureExtDataDir(id: string): string {
     fs.mkdirSync(dir, { recursive: true })
     return dir
 }
+
+// ---------------------------------------------------------------------------
+// 压缩包形态的外部扩展（*.zip / *.xeonsky-ext）
+// ---------------------------------------------------------------------------
+
+/**
+ * 压缩包扩展的**暂存目录**：`~/.dsbox/{channel}/.remapper/extensions/<包名>/`。
+ *
+ * 为什么不放 `extensions/` 下：那是用户手装**文件夹扩展**的领地，自动解压产物混进去
+ * 会与用户目录混淆，也可能被当成手装扩展。`.remapper/extensions` 独立成区，每次启动
+ * 都会从包文件**重新解压覆盖** —— 包文件是权威来源，改包后刷新即生效。
+ */
+export function pkgStagingRoot(): string {
+    return path.join(configDir(), '.remapper', 'extensions')
+}
+
+/** 外部扩展包文件的扩展名（大小写不敏感；`.xeonsky-ext` 是本项目的 zip 变种）。 */
+export const PKG_EXTENSIONS = ['.zip', '.xeonsky-ext'] as const
+
+/** 一个已发现的压缩包扩展（文件名去掉扩展名即包名）。 */
+export interface DiscoveredPkg {
+    /** 包文件绝对路径。 */
+    file: string
+    /** 包名（文件名去掉扩展名，解压暂存目录用它）。 */
+    stem: string
+}
+
+/** 列出外部扩展根目录下的压缩包（*.zip / *.xeonsky-ext，按文件名排序）。 */
+export function discoverPkgs(): DiscoveredPkg[] {
+    let names: fs.Dirent[]
+    try {
+        names = fs.readdirSync(externalRoot(), { withFileTypes: true })
+    } catch {
+        return []
+    }
+    const out: DiscoveredPkg[] = []
+    for (const entry of names) {
+        if (!entry.isFile()) continue
+        const lower = entry.name.toLowerCase()
+        const hit = PKG_EXTENSIONS.find((ext) => lower.endsWith(ext))
+        if (!hit) continue
+        // stem 保留原始大小写（解压目录用它）；多扩展名条目取最长命中，避免 .xeonsky-ext 被截断出怪名。
+        out.push({ file: path.join(externalRoot(), entry.name), stem: entry.name.slice(0, -hit.length) })
+    }
+    out.sort((a, b) => a.stem.localeCompare(b.stem) || a.file.localeCompare(b.file))
+    return out
+}

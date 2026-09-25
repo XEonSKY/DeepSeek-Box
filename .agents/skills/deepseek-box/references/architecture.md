@@ -74,6 +74,16 @@ node 侧收全部 TS（顶层 `renderer-api.ts` 除外 —— 它引用 `window`
 按名记账 —— 卸载时逐名精确摘除（`revokeName`），不用按 owner 扫全表的 `revoke`，
 避免误伤同 owner 的其它登记。重复提供同一能力名 = 装配冲突，直接抛错。
 
+**压缩包形态的外部扩展**（`*.zip` / `*.xeonsky-ext` —— 后者是本项目的 zip 变种）：
+由内置扩展 **`xeonsky.extm`（扩展包管理器）** 提供解压能力（内部转发 `ext:xeonsky.zip`
+的 7-Zip 核心），加载器的**第二阶段**（`loadPkgExtensions`，在全部普通扩展加载结束后、
+安全模式下不运行）处理：扫描包文件 → 解压到暂存目录 `<配置目录>/.remapper/extensions/<包名>/`
+（每次重新解压覆盖，包文件是权威来源）→ 定位 manifest（包根或唯一子目录）→
+按外部扩展激活。**包名冲突则不加载**：与 `extensions/` 下已装文件夹同名、包之间同名、
+manifest id 与已发现扩展重复，三者任一命中即记 skipped。**7-Zip 是 extm 的软依赖**：
+`xeonsky.zip` 被停用 / 加载失败时 extm 照常激活但 status 自报不可用，加载器据此
+**整体禁用压缩包加载**（只登记原因，不读取任何包文件，也不算崩溃失败）。
+
 **扩展数据目录**：`ctx.dataDir`（懒创建 getter，首次访问才在磁盘建目录），
 路径 `<配置目录>/data/extensions/<extId>`。放运行期产生的数据（下载的核心、状态文件、
 缓存），与 `dir`（代码目录，外部扩展在 `extensions/<dirName>/`）**分离** ——

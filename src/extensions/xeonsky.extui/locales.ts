@@ -1,9 +1,9 @@
 import type { ExtensionLocaleTable } from '@shared/locales/ext'
 
 /**
- * 内置扩展 `box.extensions` 的**自有语言文件**。
+ * 内置扩展 `xeonsky.extui` 的**自有语言文件**。
  *
- * 键统一挂在 `ext.boxExtensions.*` 命名空间下，由渲染层扩展框架在启动时合并进
+ * 键统一挂在 `ext.xeonskyExtui.*` 命名空间下，由渲染层扩展框架在启动时合并进
  * 文案目录（机制见 `shared/locales/ext.ts` 与 `renderer/src/extensions/locales.ts`）。
  * 这里原先放在外壳 `sv.nav.extensions` / `sv.intro.extensions` / `sv.extpage.*` 下，
  * 现迁回扩展自己的目录 —— 扩展的文案归扩展管，外壳不再替它记账。
@@ -14,7 +14,7 @@ import type { ExtensionLocaleTable } from '@shared/locales/ext'
 export const extLocales: ExtensionLocaleTable = {
     zh: {
         ext: {
-            boxExtensions: {
+            xeonskyExtui: {
                 nav: '扩展',
                 intro: '扩展：系统 / 内置 / 外部三级，可查看状态、启停外部扩展、退出安全模式。',
                 page: {
@@ -39,14 +39,21 @@ export const extLocales: ExtensionLocaleTable = {
                     stSkipped: '已跳过',
                     kindSystem: '系统',
                     kindBuiltin: '内置',
-                    kindExternal: '外部'
+                    kindExternal: '外部',
+                    pkgTitle: '扩展包',
+                    pkgHint: '把 .zip 或 .xeonsky-ext 扩展包放进扩展目录，重启后自动解压并加载；包名与已有扩展冲突时不会加载。',
+                    pkgDisabled: '7-Zip 扩展不可用，压缩包扩展加载已禁用。',
+                    pkgUnavailable: '扩展包管理器未就绪，无法列出扩展包。',
+                    pkgEmpty: '扩展目录里还没有扩展包。',
+                    pkgColName: '包',
+                    pkgColFormat: '格式'
                 }
             }
         }
     },
     en: {
         ext: {
-            boxExtensions: {
+            xeonskyExtui: {
                 nav: 'Extensions',
                 intro: 'Extensions: system / built-in / external tiers — inspect status, enable or disable external ones, leave safe mode.',
                 page: {
@@ -71,7 +78,14 @@ export const extLocales: ExtensionLocaleTable = {
                     stSkipped: 'Skipped',
                     kindSystem: 'System',
                     kindBuiltin: 'Built-in',
-                    kindExternal: 'External'
+                    kindExternal: 'External',
+                    pkgTitle: 'Extension packages',
+                    pkgHint: 'Drop a .zip or .xeonsky-ext package into the extensions directory; it is extracted and loaded on restart. Packages whose name conflicts with an existing extension are skipped.',
+                    pkgDisabled: 'The 7-Zip extension is unavailable; package-based extensions are disabled.',
+                    pkgUnavailable: 'The package manager extension is not ready; packages cannot be listed.',
+                    pkgEmpty: 'No extension packages in the extensions directory yet.',
+                    pkgColName: 'Package',
+                    pkgColFormat: 'Format'
                 }
             }
         }

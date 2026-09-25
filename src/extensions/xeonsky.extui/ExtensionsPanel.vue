@@ -16,7 +16,7 @@ import { extApi, extErrorMessage, extT } from '../renderer-api'
  * 列出的是主进程裁决的**全部**条目（含失败 / 跳过 / 停用），
  * 因为排查时最需要知道的是"为什么它没跑起来"。
  *
- * 本文件是内置扩展 `box.extensions` 的渲染层实现，与它的主进程入口（同目录 `main.ts`）
+ * 本文件是内置扩展 `xeonsky.extui` 的渲染层实现，与它的主进程入口（同目录 `main.ts`）
  * 和清单（同目录 `manifest.ts`）放在一起 —— 三者构成这个扩展的完整定义，改它不必去别处找。
  * 挂载入口见 `renderer/src/extensions/panels.ts` 的 `LOCAL_VIEWS`。
  *
@@ -27,6 +27,41 @@ import { extApi, extErrorMessage, extT } from '../renderer-api'
 const info = ref<ExtensionsInfo | null>(null)
 const loading = ref(false)
 let offChanged: (() => void) | null = null
+
+// ---- 扩展包（zip / xeonsky-ext 形态的外部扩展） -----------------------------
+
+/** 一个扩展包（经 extui 主进程的包管理 IPC 返回）。 */
+interface PkgEntry {
+    file: string
+    stem: string
+    format: string
+}
+/** 本扩展主进程侧 IPC 的通道前缀。 */
+const PKG_CHANNEL = 'ext:xeonsky.extui'
+/** 包管理功能是否就绪（extm 未激活时为 false，页面降级少一个区块）。 */
+const pkgReady = ref(false)
+/** 7-Zip 是否可用（不可用 = 压缩包扩展加载被禁用）。 */
+const zipAvailable = ref(true)
+/** 已放置的包文件列表。 */
+const packages = ref<PkgEntry[]>([])
+
+/** 拉取包管理状态与包列表（失败一律降级为「不可用」，不让包区块拖垮整页）。 */
+async function reloadPackages(): Promise<void> {
+    try {
+        const st = await extApi.ext.invoke(`${PKG_CHANNEL}:pkgStatus`) as { available: boolean; zipAvailable: boolean }
+        pkgReady.value = st.available
+        zipAvailable.value = st.zipAvailable
+        if (!st.available || !info.value?.externalDir) {
+            packages.value = []
+            return
+        }
+        const r = await extApi.ext.invoke(`${PKG_CHANNEL}:listPackages`, { dir: info.value.externalDir }) as { packages: PkgEntry[] }
+        packages.value = r.packages ?? []
+    } catch {
+        pkgReady.value = false
+        packages.value = []
+    }
+}
 
 /** 拉取扩展列表。 */
 async function reload(): Promise<void> {
@@ -47,7 +82,7 @@ async function toggle(ext: ExtInfo): Promise<void> {
             params: { id: ext.id },
             body: { enabled: ext.status === 'disabled' }
         })
-        ElMessage.success(extT('ext.boxExtensions.page.restartHint'))
+        ElMessage.success(extT('ext.xeonskyExtui.page.restartHint'))
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
     }
@@ -57,7 +92,7 @@ async function toggle(ext: ExtInfo): Promise<void> {
 async function forgive(ext: ExtInfo): Promise<void> {
     try {
         info.value = await extApi.post('/extensions/:id/forgive', { params: { id: ext.id } })
-        ElMessage.success(extT('ext.boxExtensions.page.forgiven'))
+        ElMessage.success(extT('ext.xeonskyExtui.page.forgiven'))
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
     }
@@ -67,7 +102,7 @@ async function forgive(ext: ExtInfo): Promise<void> {
 async function exitSafeMode(): Promise<void> {
     try {
         info.value = await extApi.post('/extensions/exit-safe-mode')
-        ElMessage.success(extT('ext.boxExtensions.page.safeExited'))
+        ElMessage.success(extT('ext.xeonskyExtui.page.safeExited'))
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
     }
@@ -90,7 +125,7 @@ function statusColor(status: ExtInfo['status']): string {
     return 'orange'
 }
 
-/** 状态标签的文案键（外层统一加 `ext.boxExtensions.page.` 前缀）。 */
+/** 状态标签的文案键（外层统一加 `ext.xeonskyExtui.page.` 前缀）。 */
 const STATUS_KEY: Record<ExtInfo['status'], string> = {
     active: 'stActive',
     disabled: 'stDisabled',
@@ -107,7 +142,11 @@ const KIND_KEY: Record<ExtInfo['kind'], string> = {
 
 onMounted(() => {
     void reload()
-    offChanged = extApi.on('extensions:changed', () => void reload())
+    void reloadPackages()
+    offChanged = extApi.on('extensions:changed', () => {
+        void reload()
+        void reloadPackages()
+    })
 })
 onBeforeUnmount(() => offChanged?.())
 </script>
@@ -117,22 +156,22 @@ onBeforeUnmount(() => offChanged?.())
         <div class="dsh-brand">
             <div class="dsh-brand__icon"><AppstoreOutlined style="font-size: 34px" /></div>
             <div class="dsh-brand__txt">
-                <div class="dsh-brand__name">{{ $t('ext.boxExtensions.nav') }}</div>
-                <div class="dsh-brand__desc">{{ $t('ext.boxExtensions.intro') }}</div>
+                <div class="dsh-brand__name">{{ $t('ext.xeonskyExtui.nav') }}</div>
+                <div class="dsh-brand__desc">{{ $t('ext.xeonskyExtui.intro') }}</div>
             </div>
         </div>
 
-        <a-alert v-if="info?.safeMode" type="error" show-icon :message="$t('ext.boxExtensions.page.safeMode')">
-            <template #description>{{ $t('ext.boxExtensions.page.safeModeDesc') }}</template>
+        <a-alert v-if="info?.safeMode" type="error" show-icon :message="$t('ext.xeonskyExtui.page.safeMode')">
+            <template #description>{{ $t('ext.xeonskyExtui.page.safeModeDesc') }}</template>
         </a-alert>
 
         <!-- 标题与操作同一行：标题左、按钮右；按钮用标准大小的按钮组，组内只留图标与必要文字。 -->
         <div class="extpage__bar">
-            <div class="extpage__head">{{ $t('ext.boxExtensions.page.listTitle') }}</div>
+            <div class="extpage__head">{{ $t('ext.xeonskyExtui.page.listTitle') }}</div>
             <a-space :size="8">
                 <a-button @click="reload">
                     <template #icon><ReloadOutlined /></template>
-                    {{ $t('ext.boxExtensions.page.refresh') }}
+                    {{ $t('ext.xeonskyExtui.page.refresh') }}
                 </a-button>
                 <!-- 打开扩展目录：图标 + 目录路径；路径过长时省略，完整值放 title。 -->
                 <a-button @click="openDir">
@@ -140,18 +179,46 @@ onBeforeUnmount(() => offChanged?.())
                     <span class="extpage__dir" :title="info?.externalDir">{{ info?.externalDir }}</span>
                 </a-button>
                 <a-button v-if="info?.safeMode" danger @click="exitSafeMode">
-                    {{ $t('ext.boxExtensions.page.exitSafe') }}
+                    {{ $t('ext.xeonskyExtui.page.exitSafe') }}
                 </a-button>
             </a-space>
         </div>
 
+        <!--
+            扩展包区块：zip / xeonsky-ext 形态的外部扩展。包管理器（xeonsky.extm）未激活时
+            整块降级为一条提示；7-Zip 不可用时明确告知「压缩包加载已禁用」。
+        -->
+        <template v-if="pkgReady">
+            <div class="extpage__bar extpage__bar--pkg">
+                <div class="extpage__head">{{ $t('ext.xeonskyExtui.page.pkgTitle') }}</div>
+            </div>
+            <a-alert v-if="!zipAvailable" type="warning" show-icon :message="$t('ext.xeonskyExtui.page.pkgDisabled')" class="extpage__pkg-alert" />
+            <div v-else class="iv extpage__pkgs">
+                <div v-if="!packages.length" class="hint">{{ $t('ext.xeonskyExtui.page.pkgEmpty') }}</div>
+                <div v-else class="iv__list extpage__pkgs-list">
+                    <div class="iv__thead">
+                        <span class="iv__c-name">{{ $t('ext.xeonskyExtui.page.pkgColName') }}</span>
+                        <span class="iv__c-kind">{{ $t('ext.xeonskyExtui.page.pkgColFormat') }}</span>
+                    </div>
+                    <div class="iv__tbody">
+                        <div v-for="p in packages" :key="p.file" class="iv__row">
+                            <span class="iv__c-name"><code class="extpage__id" :title="p.file">{{ p.file }}</code></span>
+                            <span class="iv__c-kind"><a-tag>{{ p.format }}</a-tag></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="hint extpage__pkg-hint">{{ $t('ext.xeonskyExtui.page.pkgHint') }}</div>
+        </template>
+        <a-alert v-else type="info" show-icon :message="$t('ext.xeonskyExtui.page.pkgUnavailable')" class="extpage__pkg-alert" />
+
         <div class="iv extpage__list">
-            <div v-if="info && !info.entries.length" class="hint">{{ $t('ext.boxExtensions.page.empty') }}</div>
+            <div v-if="info && !info.entries.length" class="hint">{{ $t('ext.xeonskyExtui.page.empty') }}</div>
             <div v-else class="iv__list">
                 <div class="iv__thead">
-                    <span class="iv__c-name">{{ $t('ext.boxExtensions.page.colName') }}</span>
-                    <span class="iv__c-kind">{{ $t('ext.boxExtensions.page.colKind') }}</span>
-                    <span class="iv__c-status">{{ $t('ext.boxExtensions.page.colStatus') }}</span>
+                    <span class="iv__c-name">{{ $t('ext.xeonskyExtui.page.colName') }}</span>
+                    <span class="iv__c-kind">{{ $t('ext.xeonskyExtui.page.colKind') }}</span>
+                    <span class="iv__c-status">{{ $t('ext.xeonskyExtui.page.colStatus') }}</span>
                     <span class="iv__c4">{{ $t('sv.env.colActions') }}</span>
                 </div>
                 <div class="iv__tbody">
@@ -162,20 +229,20 @@ onBeforeUnmount(() => offChanged?.())
                             <span v-if="item.message" class="extpage__msg" :title="item.message">{{ item.message }}</span>
                         </span>
                         <span class="iv__c-kind">
-                            <a-tag>{{ $t('ext.boxExtensions.page.' + KIND_KEY[item.kind]) }}</a-tag>
+                            <a-tag>{{ $t('ext.xeonskyExtui.page.' + KIND_KEY[item.kind]) }}</a-tag>
                         </span>
                         <span class="iv__c-status">
-                            <a-tag :color="statusColor(item.status)">{{ $t('ext.boxExtensions.page.' + STATUS_KEY[item.status]) }}</a-tag>
+                            <a-tag :color="statusColor(item.status)">{{ $t('ext.xeonskyExtui.page.' + STATUS_KEY[item.status]) }}</a-tag>
                         </span>
                         <span class="iv__c4">
                             <a-button v-if="item.removable" @click="toggle(item)">
-                                {{ item.status === 'disabled' ? $t('ext.boxExtensions.page.enable') : $t('ext.boxExtensions.page.disable') }}
+                                {{ item.status === 'disabled' ? $t('ext.xeonskyExtui.page.enable') : $t('ext.xeonskyExtui.page.disable') }}
                             </a-button>
                             <a-button
                                 v-if="item.removable && item.status !== 'disabled' && item.status !== 'active'"
                                 @click="forgive(item)"
                             >
-                                {{ $t('ext.boxExtensions.page.forgive') }}
+                                {{ $t('ext.xeonskyExtui.page.forgive') }}
                             </a-button>
                         </span>
                     </div>
@@ -213,6 +280,31 @@ onBeforeUnmount(() => offChanged?.())
     vertical-align: bottom;
     font-family: var(--el-font-family-mono);
     font-size: 12px;
+}
+
+/*
+ * 扩展包区块：固定高度（不参与 flex:1 争抢），包列表超长时自己内部滚动，
+ * 不影响下方「全部扩展」列表占满剩余高度的布局链。
+ */
+.extpage__bar--pkg {
+    margin-top: 6px;
+}
+.extpage__pkg-alert {
+    flex: 0 0 auto;
+    margin-bottom: 10px;
+}
+.extpage__pkgs {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+}
+.extpage__pkgs-list {
+    max-height: 168px;
+    overflow: auto;
+}
+.extpage__pkg-hint {
+    flex: 0 0 auto;
+    margin-top: 8px;
 }
 
 /*

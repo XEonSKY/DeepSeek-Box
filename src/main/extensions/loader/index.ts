@@ -35,9 +35,10 @@ import { createContext, channelOf, releaseOwner, type ExtContext, type ExtModule
 import { parseManifest, missingDependencies, isSafeContributionKey } from './manifest'
 import { topoSort, reverseForUnload, type SortableItem } from './ordering'
 import { decideSafeMode, recordCrash, clearCrashesAfterCleanBoot } from './safemode'
-import { discoverExternal, externalRoot, currentChannel, staticExts, ensureExtDataDir } from './sources'
+import { discoverExternal, externalRoot, currentChannel, staticExts, ensureExtDataDir, discoverPkgs, pkgStagingRoot } from './sources'
 import { loadState, saveState } from './state'
 import { logger } from '../../kernel/logger'
+import { removeTree } from '../../kernel/treeops'
 
 const log = logger('[ext]')
 
@@ -377,8 +378,191 @@ function recordDrops(drops: Array<{ id: string; dir: string; kind: ExtKind; reas
 }
 
 // ---------------------------------------------------------------------------
-// 对外流程
+// 第二阶段：压缩包形态的外部扩展（*.zip / *.xeonsky-ext）
 // ---------------------------------------------------------------------------
+
+/**
+ * 包扩展解压能力的**约定能力名**。
+ *
+ * 由内置扩展 `xeonsky.extm`（扩展包管理器）提供（它再经 `ext:xeonsky.zip` 的
+ * 7-Zip 核心解压）。加载器不 import 具体扩展（分层约束），只按这个名字查能力槽。
+ *
+ * **兜底策略**：`xeonsky.extm` 声明硬依赖 `xeonsky.zip` —— 7-Zip 扩展被用户**停用**、
+ * 加载失败或依赖链断裂时，extm 本身就不会激活，这里查能力槽必然为空，于是全部
+ * 压缩包记为 skipped、**不做任何读取**（不触碰包文件内容，只登记原因）。
+ */
+const PKGS_CAPABILITY = 'ext:xeonsky.extm'
+
+/** 解压产物里定位扩展目录：manifest 在包根，或在唯一的子目录里。 */
+function locateManifestDir(root: string): string | null {
+    if (fs.existsSync(path.join(root, 'manifest.json'))) return root
+    let subs: fs.Dirent[]
+    try {
+        subs = fs.readdirSync(root, { withFileTypes: true })
+    } catch {
+        return null
+    }
+    for (const d of subs) {
+        if (!d.isDirectory()) continue
+        const dir = path.join(root, d.name)
+        if (fs.existsSync(path.join(dir, 'manifest.json'))) return dir
+    }
+    return null
+}
+
+/** 登记一个压缩包扩展的「被跳过 / 失败」条目（还没有 manifest，展示名用包名）。 */
+function putPkgSkipped(pkg: { stem: string; file: string }, message: string, status: 'skipped' | 'failed'): void {
+    putEntry({
+        id: pkg.stem,
+        name: pkg.stem,
+        version: '',
+        kind: 'external',
+        status,
+        message,
+        capabilities: [],
+        dependencies: [],
+        dir: pkg.file,
+        removable: true
+    })
+}
+
+/**
+ * 加载压缩包形态的外部扩展。**必须在全部普通扩展加载结束之后调用**：
+ *
+ *  - 解压要经内置扩展 `xeonsky.pkgs`（它声明硬依赖 `xeonsky.zip`，拓扑序保证
+ *    7-Zip 先就位）—— 所以这里的时序是「7-Zip 加载完、普通扩展加载完」才轮到包扩展；
+ *  - 包扩展的 id / 依赖冲突要拿第一轮的结果来判。
+ *
+ * 冲突规则（用户约定：**包名冲突则不加载**）：
+ *  1. 包名（去扩展名的文件名）与 `extensions/` 下已安装的**文件夹扩展**同名 → 文件夹优先，包跳过；
+ *  2. 包名与其它压缩包重复（含 `foo.zip` 与 `foo.xeonsky-ext` 并存）→ 先处理的生效，后者跳过；
+ *  3. 包内 manifest 的 id 与任何已发现扩展重复 → 跳过。
+ *
+ * 每次启动都把包**重新解压覆盖**到暂存目录（`.remapper/extensions/<包名>/`）——
+ * 包文件是权威来源，改包后重启/刷新即生效。
+ *
+ * @param available 第一轮已激活的扩展 id 集合（输入，包扩展激活成功后也会加入）
+ * @returns 本阶段是否出现了失败（参与崩溃计数的清零判定）
+ */
+async function loadPkgExtensions(available: Set<string>): Promise<boolean> {
+    const pkgs = discoverPkgs()
+    if (pkgs.length === 0) return false
+
+    const table = capability.actionsOf(PKGS_CAPABILITY)
+    const extm = table && typeof table.extract === 'function'
+        ? (table as unknown as {
+            extract: (o: { file: string; destDir: string }) => Promise<{ ok: boolean; disabled?: boolean; message?: string }>
+            status: () => { zipAvailable: boolean; formats: string[] }
+        })
+        : null
+    if (!extm) {
+        // extm 自己没激活（被停用 / 激活失败）。这是用户可感知的配置状态而非故障，
+        // 不计入 anyFailure（不保留崩溃计数）。
+        for (const pkg of pkgs) {
+            putPkgSkipped(pkg, '扩展包管理器 xeonsky.extm 未激活，压缩包不加载', 'skipped')
+        }
+        return false
+    }
+    // **7-Zip 不可用 → 压缩包扩展加载整体禁用**（用户约定）：extm 的 status 实时探测
+    // ext:xeonsky.zip（被停用 / 加载失败都算不可用）。此时只登记原因，不读取任何包文件。
+    let zipOk = true
+    try {
+        zipOk = extm.status().zipAvailable
+    } catch (err) {
+        log.warn({ err }, 'failed to query pkg manager status')
+    }
+    if (!zipOk) {
+        for (const pkg of pkgs) {
+            putPkgSkipped(pkg, '7-Zip 扩展不可用，压缩包扩展加载已禁用', 'skipped')
+        }
+        return false
+    }
+
+    const staging = pkgStagingRoot()
+    fs.mkdirSync(staging, { recursive: true })
+    const takenStems = new Set<string>()
+    let anyFailure = false
+
+    for (const pkg of pkgs) {
+        const stemKey = pkg.stem.toLowerCase()
+        if (takenStems.has(stemKey)) {
+            putPkgSkipped(pkg, `包名与其它压缩包重复：${pkg.stem}`, 'skipped')
+            continue
+        }
+        if (fs.existsSync(path.join(externalRoot(), pkg.stem))) {
+            putPkgSkipped(pkg, `包名与已安装的扩展目录冲突（文件夹优先）：${pkg.stem}`, 'skipped')
+            continue
+        }
+        takenStems.add(stemKey)
+
+        const dest = path.join(staging, pkg.stem)
+        // 清空上一次的解压产物再解：包文件是权威来源，过期残留不该被加载。
+        try {
+            await removeTree(dest)
+        } catch (err) {
+            log.warn({ err }, `failed to clean pkg staging dir: ${dest}`)
+        }
+        let r: { ok: boolean; disabled?: boolean; message?: string }
+        try {
+            r = await extm.extract({ file: pkg.file, destDir: dest })
+        } catch (err) {
+            r = { ok: false, message: err instanceof Error ? err.message : String(err) }
+        }
+        if (!r.ok) {
+            // disabled = 7-Zip 在本轮启动中途变得不可用：这是配置状态，不算包扩展的失败。
+            putPkgSkipped(pkg, r.disabled ? (r.message ?? '压缩包加载已禁用') : `解压失败：${r.message ?? '未知错误'}`, r.disabled ? 'skipped' : 'failed')
+            if (!r.disabled) anyFailure = true
+            continue
+        }
+
+        const dir = locateManifestDir(dest)
+        if (!dir) {
+            putPkgSkipped(pkg, '包内找不到 manifest.json（不是有效的扩展包）', 'skipped')
+            continue
+        }
+        const parsed = readDiskManifest(dir)
+        if (!parsed.ok) {
+            putPkgSkipped(pkg, parsed.reason, 'skipped')
+            continue
+        }
+        const m = parsed.manifest
+        const id = m.id
+        if (state.entries.has(id) || available.has(id)) {
+            putPkgSkipped(pkg, `扩展 id 与已加载扩展重复：${id}`, 'skipped')
+            continue
+        }
+        if (m.apiVersion !== undefined && m.apiVersion !== EXT_API_VERSION) {
+            putPkgSkipped(pkg, `扩展 API 版本不兼容：需要 ${m.apiVersion}，当前 ${EXT_API_VERSION}`, 'skipped')
+            continue
+        }
+        if (state.disk.disabled.includes(id)) {
+            putPkgSkipped(pkg, '已被停用', 'skipped')
+            continue
+        }
+        const missing = missingDependencies(m, available)
+        if (missing.length > 0) {
+            putPkgSkipped(pkg, `缺少依赖扩展：${missing.join(', ')}`, 'skipped')
+            anyFailure = true
+            recordCrash(state.disk.crashes, id, `缺少依赖扩展：${missing.join(', ')}`)
+            continue
+        }
+
+        const loaded = await activateOne(
+            { id, dependencies: m.dependencies, dir, kind: 'external', manifest: m, module: null },
+            grantOf({ id, dependencies: m.dependencies, dir, kind: 'external', manifest: m, module: null })
+        )
+        if (loaded) {
+            state.loaded.push(loaded)
+            available.add(id)
+        } else {
+            anyFailure = true
+            recordCrash(state.disk.crashes, id, state.reasons[id] ?? '未知错误')
+        }
+    }
+    return anyFailure
+}
+
+
 
 /**
  * 启动加载器。在 `runModuleReady()` 之后、建窗之前调用。
@@ -453,6 +637,15 @@ export async function startLoader(): Promise<ExtensionsInfo> {
     }
 
     recordDrops(drops)
+
+    // 第二阶段：压缩包形态的外部扩展（*.zip / *.xeonsky-ext）。
+    // 必须在全部普通扩展加载结束之后 —— 解压经内置扩展 xeonsky.extm（它依赖
+    // xeonsky.zip 的 7-Zip 核心），且包扩展的 id / 依赖冲突要拿第一轮结果来判。
+    // 安全模式下与其它内置 / 外部扩展一样不加载。
+    if (!state.safeMode) {
+        const pkgFailure = await loadPkgExtensions(available)
+        anyFailure = anyFailure || pkgFailure
+    }
 
     // 这次启动是否有失败：有则保留计数（下次可能就够阈值了），没有则视为「这次好了」清零。
     if (!anyFailure) {

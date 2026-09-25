@@ -3,7 +3,7 @@
  *
  * 本文件位于 `src/extensions/` 根下（不在任何具体扩展目录里）：它是**公共设施**，
  * 供所有扩展的渲染层实现使用，所以刻意与各扩展目录平级、文件名带 `-api` 后缀以示区别。
- * 各扩展则在 `src/extensions/<id>/` 下自成一体（如 `box.extensions/`）。
+ * 各扩展则在 `src/extensions/<id>/` 下自成一体（如 `xeonsky.extui/`）。
  *
  * ## 为什么需要这一层
  *
