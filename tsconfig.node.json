@@ -5,7 +5,7 @@
         "module": "ESNext",
         "moduleResolution": "Bundler",
         "lib": ["ES2022"],
-        "types": ["node", "vitest/globals"],
+        "types": ["node"],
         "strict": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true,
@@ -25,14 +25,6 @@
         "electron.vite.config.ts",
         "src/main/**/*",
         "src/preload/**/*",
-        "src/shared/**/*",
-        // 单元测试独立在 tests/ 下，且全部跑在 node 环境，由本工程统一负责类型检查。
-        "tests/**/*",
-        // composite 工程要求列出所有被引用的文件：tests/renderer/ 里的用例 import 了渲染层源码，
-        // 而渲染层源码整体归 tsconfig.web.json，故这里逐个补上被测试引用的文件。
-        "src/renderer/src/lib/format.ts",
-        "src/renderer/src/lib/providerIcon.ts",
-        "src/renderer/src/lib/tagLabel.ts",
-        "src/renderer/src/lib/versionIndicator.ts"
+        "src/shared/**/*"
     ]
 }

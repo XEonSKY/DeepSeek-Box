@@ -6,7 +6,7 @@
 
 - **缩进 4 个空格**（ESLint `@stylistic/indent` + `vue/html-indent`，`SwitchCase: 1`）；CSS / `<style>` 块、JSON 配置同样是 4 空格。
 - **YAML 例外**：`.github/workflows/*.yml` 用 2 空格——YAML 的序列项子键必须与 `- name:` 对齐（`uses:` 不能再缩进一层），机械改成 4 空格会直接破坏工作流。改 YAML 后务必用 `node -e "require('yaml').parse(require('fs').readFileSync(f,'utf8'))"` 之类的方式验证可解析。
-- TypeScript 严格模式；类型检查 `npm run typecheck`（node + web 两份），单元测试 `npm run test`。
+- TypeScript 严格模式；类型检查 `npm run typecheck`（node + web 两份），静态门禁 `npm run check`（typecheck + lint；本仓库无单测）。
 - 提交前跑 `npm run lint`，要求 **0 error**（既有 warning 可忽略）。
 - 别名：`@shared` → `src/shared`（三端都可用）；`@` → `src/renderer/src`（仅渲染层）。
 
@@ -29,8 +29,8 @@
 - 单一来源：`src/shared/locales/{zh,en}/index.ts`，中英**逐键对齐**（键名、顺序、`{占位符}` 都一致）。
 - `zh/hant.ts` 与 `zh/{anime,wenyan}.ts`、`en/{pirate,shakespeare}.ts` 一样是**只写差异的覆盖层**，由 `shared/locales/ext.ts` 深合并到基础文案。
 - **新增键时只需改 zh / en 两处**；hant **无需同步补充**，未覆盖的键自动回落到简体基座。
-- **删除键时三处都要删**：`tests/shared/locales/i18n-sync.test.ts` 守着「en 与 zh 逐键对齐」与
-  「hant 必须是 zh 的子集」——只删 zh 会让 hant 留下孤儿键，测试直接红（新增两处、删除三处，方向不同）。
+- **删除键时三处都要删**：hant 必须是 zh 的**子集**——只删 zh 会让 hant 留下孤儿键。
+  本仓库已无单测守护这条，务必**人工核对**（新增两处、删除三处，方向不同）。
 - 文案是程序的一部分（`src/shared/locales/` 不算文档），可随功能一起改。
 
 ## 文档
@@ -49,7 +49,7 @@
 - 不维护 `CHANGELOG.md`，变更记录以 GitHub Release notes 为准。
 - **推送远程前必须请求确认**：任何 `git push`（普通、`--force`、`--tags`、删除远程分支 / 标签、移动标签）都要先说明目标（哪个分支、是否强推）并征得同意，不得自动推送。
 - 破坏性远程操作尤其要先确认。
-- **质量门禁**：`npm run check`（typecheck + lint + 单测）必须通过 —— 由用户、`.githooks/pre-commit` 或 CI（`.github/workflows/quality.yml`）执行，**agent 不主动跑**。
+- **质量门禁**：`npm run check`（typecheck + lint；本仓库无单测）必须通过 —— 由用户或 CI（`.github/workflows/quality.yml`）执行；本仓库不启用 Git hooks，提交前请自行跑一次。
 
 ## 依赖 / 日志 / 安全
 
@@ -76,35 +76,19 @@
 - **可用时把多条命令堆叠进同一次调用**（用 `;` / `&&` 串联，或写成一段脚本一次跑完），减少无谓的往返；互不依赖的只读命令也尽量合并到一次调用，而不是反复单独发起。
 - 串联时让失败可见：用 `&&` 串联，或显式检查 `$LASTEXITCODE`；不要用 `;` 把前面命令的失败藏掉。
 
-## 自动化测试与验证边界
+## 验证边界（本仓库无自动化测试）
 
-- 单元测试用 **Vitest**，配置 `vitest.config.mjs`（注意是 **.mjs 不是 .ts**：配置里没有需要类型检查的内容，纯 JS 可省掉 Vite 加载配置时的一次 esbuild 转译）。
-- 测试环境是 **node**，不加载 Electron 运行时。**可测的是纯逻辑**：
-  - `src/shared/**` —— 三端共享工具（version / i18n / hotkeys / errors）；
-  - `src/main/**` —— 不 import `electron` 的部分（semver 比较、fsutil、设置归一化函数）；
-  - 渲染层只测纯函数（如 `lib/format.ts`）。
-- **测试独立于源码目录，统一收在 `tests/` 下**，按被测模块所在层分目录：
-
-  | 测试目录 | 对应源码 |
-  |---|---|
-  | `tests/shared/` | `src/shared/` |
-  | `tests/main/` | `src/main/` |
-  | `tests/renderer/` | `src/renderer/src/` |
-
-  文件名保持与被测模块同名（`src/main/dsh/semver.ts` → `tests/main/dsh/semver.test.ts`）。
-  **源码目录里不允许出现 `*.test.ts`** —— 这条由 `tests/shared/version-convention.test.ts` 守护。
-- 目录内部相对层级**镜像被测源码**，因此整份测试可以原样搬运而不改相对路径。
-- 测试里一律用别名 import，不用跨目录相对路径：
-  - `@shared/*` → `src/shared/*`
-  - `@main/*` → `src/main/*`（**只在测试与 `tsconfig.node.json` 中配置**，主进程源码自身仍用相对路径）
-  - `@/*` → `src/renderer/src/*`
-- 命令：`npm run test`（跑一次）、`test:watch`、`test:coverage`（输出到 `.agents/temp/coverage`）。
-- **新写的纯逻辑必须带测试**；修 bug 时优先补一条能复现该 bug 的用例。
-- 常见陷阱：
-  - 模块顶层 `import { app } from 'electron'` 会让整条测试链路去加载 Electron，**别测这类模块**（例如 `app/settings.ts` 只测其中不依赖 Electron 的归一化函数，测试里按名导入即可）；
-  - 打包时别把 `electron` 卷进来 —— 一旦卷进来，CI 上会触发 Electron 二进制下载。
-- agent 的验证边界：只跑 `npm run typecheck` + `npm run lint`（必要时再 `npm run build`）。**不要主动跑测试**（`npm run check` / `npm run test`）—— 测试与 `npm run check` 由用户执行。
-- **运行时行为（窗口、托盘、下载、迁移、代理、自更新）仍由用户验证**：不要自行 `npm run dev` 启动应用；交付说明里写清需要用户验证的步骤。
+- **本仓库不含单元测试**：`tests/`、`scripts/`、`vitest.config.mjs`、`.githooks/` 与 `vitest` 依赖均已移除，
+  `package.json` 里也没有 `test` / `test:watch` / `test:coverage` 脚本。
+- **质量门禁只有静态检查**：`npm run check` = `typecheck` + `lint`；CI（`.github/workflows/quality.yml`）
+  在 `dev` 分支与 PR 上跑同一套。提交前请自行执行（本仓库不启用 Git hooks）。
+- agent 可跑 `npm run check` / `typecheck` / `lint`（必要时 `npm run build`）。
+- **纯逻辑改动没有单测兜底**（`src/shared/**` 的 version / i18n / hotkeys / errors，`src/main/**` 的
+  版本比较 / 路径与文件助手 / 设置归一化等）。需要验证副作用行为时，写**一次性探针脚本**放 `.agents/temp/`
+  （见 references/main-process.md 的「在无 electron 环境下验证主进程模块」），验证完保留即可，不必删。
+- **不要新建 `tests/` 目录或 `*.test.ts` 文件**。
+- **运行时行为（窗口、托盘、下载、迁移、代理、自更新、界面）仍由用户验证**：不要自行 `npm run dev`
+  启动应用；交付说明里写清需要用户验证的步骤。
 
 ## 版本与发布
 
@@ -112,7 +96,7 @@
   - 三段数字**正常递增**（`0.1.6` 就是 `0.1.6`），不要用 `0.0.0` 之类的占位值——那会让「哪个版本更新」需要额外解释；
   - 通道只有 `alpha` / `beta` / `rc` 三种，序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；
   - semver 的预发布比较是**字典序优先**，故 `alpha < beta < rc`，升级链天然正确；
-  - 该规范由 `tests/shared/version-convention.test.ts` 守护（同时校验四处版本号一致、以及测试目录规范），改规范要同步改测试。
+  - 原来由 `tests/shared/version-convention.test.ts` 守护（含「四处版本号一致」）；**该测试已随 `tests/` 移除**，现须人工核对四处一致。
 - 升版本要**同时改四处**（均由发布者手动指定，没有自动改版本的 hook）：`package.json` 的 `version`、`package-lock.json` 顶层的 `version` 与 `packages[""].version`、技能 `SKILL.md` 的 `metadata.version`（跟随应用版本）。
 - 版本号一律**不带 `v` 前缀**（`v` 只出现在 Git tag 上）。
 - CI 校验 **Git tag（`v` + 版本号）== package.json 版本**；是否预发布由版本号是否包含 `-` 决定 —— `build-release.yml` 据此选 `publish.releaseType`，应用内 `isPrerelease()` 是同一判据，三者必须一致。

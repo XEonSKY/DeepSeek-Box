@@ -39,26 +39,21 @@ Before changing code or documentation, please follow these conventions.
 - When adding a key, add it to **zh / en / hant together**, otherwise Traditional Chinese users see Simplified text or the raw key;
 - Strings are **part of the program** (`src/shared/locales/**` does not count as documentation) and may change together with the feature.
 
-## Tests
+## Verification
 
-Unit tests use **Vitest** (`vitest.config.mjs`, **`.mjs` rather than `.ts`**: the config contains nothing that needs type checking, and plain JS avoids an extra esbuild transpile when loading it), running in the node environment.
+This repository ships **no unit tests** (`tests/`, `scripts/`, `vitest.config.mjs` and the `vitest` dependency have all been removed, and `package.json` has no `test` script).
 
-**Tests are independent of the source tree and all live under `tests/`**, mirroring the layers of the code under test:
+The only static gate is **typecheck + lint**:
 
-| Test directory | Source | Alias |
-|---|---|---|
-| `tests/shared/` | `src/shared/` | `@shared/*` |
-| `tests/main/` | `src/main/` | `@main/*` |
-| `tests/renderer/` | `src/renderer/src/` | `@/*` |
+```bash
+npm run check        # = npm run typecheck && npm run lint
+```
 
-- The file is named after the module, and the structure inside `tests/` mirrors the source, so **moving a test never means rewriting relative paths**;
-- Tests always import through aliases; `@main` is configured **only for tests and `tsconfig.node.json`** — main-process source keeps using relative paths;
-- **No `*.test.ts` may appear inside `src/`** — enforced by `tests/shared/version-convention.test.ts`;
-- What is testable is **pure logic** (shared utilities; version / path / normalization / migration decisions in main; pure functions in the renderer). A module-level `import { app } from 'electron'` drags the whole chain into loading Electron, so do not test such modules wholesale — import the pure functions from them by name instead;
-- Commands: `npm run test` / `test:watch` / `test:coverage` (output to `.agents/temp/coverage`);
-- **New pure logic must come with tests**; when fixing a bug, add a case that reproduces it first.
+- CI (`.github/workflows/quality.yml`) runs the same set on `dev` and on PRs;
+- This repository **enables no Git hooks**, so run it yourself before committing;
+- Pure logic (shared utilities; version / path / normalization / migration decisions in main) has **no automated safety net** — verify it by hand after changing it. To check side-effecting behaviour, write a one-off probe script under `.agents/temp/` (see the verification recipe in [Main-process modules](/en/dev/modules)).
 
-Runtime behaviour (window, tray, downloads, migrations, proxy, self-update) is still verified manually.
+Runtime behaviour (window, tray, downloads, migrations, proxy, self-update, UI) is still verified manually.
 
 ## Known issues and TODOs
 

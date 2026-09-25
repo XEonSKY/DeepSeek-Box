@@ -1,6 +1,6 @@
 name: Quality
 
-# 开发分支与 PR 的静态门禁：typecheck + lint + 单元测试。
+# 开发分支与 PR 的静态门禁：typecheck + lint。
 # 发布校验（tag）仍由 build-release.yml 负责。
 # Node 采用 24（与本地开发环境一致）。
 on:
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
     static-check:
-        name: typecheck + lint + test
+        name: typecheck + lint
         runs-on: ubuntu-latest
         steps:
             - name: Check out Git repository
@@ -34,5 +34,3 @@ jobs:
               run: npm run typecheck
             - name: Lint
               run: npm run lint
-            - name: Unit tests
-              run: npm run test

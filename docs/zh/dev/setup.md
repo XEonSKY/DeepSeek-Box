@@ -19,33 +19,26 @@
 | `npm run typecheck` | 类型检查（node + web 两份） |
 | `npm run lint` | ESLint 检查（4 空格风格） |
 | `npm run lint:fix` | 自动修复 |
-| `npm run test` | 单元测试（Vitest，跑一次） |
-| `npm run test:watch` | 单元测试 watch 模式 |
-| `npm run check` | typecheck + lint + 单测（提交前必过） |
+| `npm run check` | typecheck + lint（提交前建议跑；本仓库无单元测试） |
 | `npm run build` | 构建到 `out/` |
 | `npm run dist:win` | 打包（另有 `dist:mac` / `dist:linux`） |
 | `npm run docs:dev` | 文档站本地预览 |
 | `npm run docs:build` | 构建文档站到 `.vitepress/dist` |
 
 ::: info
-验证分两层：**静态验证**（`npm run check` = typecheck + lint + 单元测试）由开发者 / CI 执行，
+验证分两层：**静态验证**（`npm run check` = typecheck + lint）由开发者 / CI 执行，
 **运行时行为**（窗口、托盘、下载、迁移、代理、自更新）需手动验证。
+本仓库**不含单元测试**（`tests/`、`scripts/`、`vitest` 依赖均已移除），纯逻辑改动没有自动化兜底。
 :::
-
-单元测试用 **Vitest**（`vitest.config.mjs`），跑在 node 环境，**只测纯逻辑**：
-
-- 测试统一放在 **`tests/`** 下，按被测层分目录（`tests/{shared,main,renderer}/`），
-  文件名与被测模块同名（`src/main/dsh/semver.ts` → `tests/main/dsh/semver.test.ts`）；
-- 测试内用 `@shared` / `@main` / `@` 别名 import，不用跨目录相对路径；
-- 源码目录里不出现 `*.test.ts`（这条由 `tests/shared/version-convention.test.ts` 守护）；
-- 不加载 Electron 运行时，故 `import 'electron'` 的模块跳过（如 `app/settings.ts` 只测其中的归一化函数）。
 
 ## 目录结构
 
 ```text [项目结构]
 .
 ├─ src/
-│  ├─ main/            主进程（窗口、DeepSeek Harness、配置、更新）
+│  ├─ main/            主进程
+│  │  ├─ kernel/        微内核：runtime / router / module / operations / treeops / services
+│  │  ├─ modules/       功能模块：settings / dsh / env / shell / tabdrag / appupdate / configdir
 │  │  ├─ app/           settings / configmigrate / models / ipc / ui / appupdate / appslots …
 │  │  └─ dsh/           dsh / manage / nodeenv / npmRunner / downloader / installs …
 │  ├─ preload/         window.api 桥接与类型

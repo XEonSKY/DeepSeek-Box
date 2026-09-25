@@ -60,9 +60,9 @@ metadata:
 5. **密钥不出主进程**：模型 / 余额相关的凭据读取只留在主进程，渲染层拿不到明文。
 6. **设置派生状态必须订阅 `settings:changed`**：否则表现为「改完要重启才生效」；发起保存的窗口忽略回放（靠 store 的 `lastSaveAt`）。
 7. **归一化必须保留 `legacy` 判断**：`loadSettings()` 按 `settingsVersion`（当前 3）做一次性迁移，不能反复改写用户手填值。
-8. **i18n 两处同步**：新增文案要同时改 `src/shared/locales/zh/index.ts` 与 `en/index.ts`，键名 / 顺序 / 占位符都对齐。`zh/hant.ts` 是**差异覆盖目录，无需同步补充**（新增键不补繁体，运行时自动回落到简体基座）。**删键例外**：删除文案时 zh / en / hant 三处都要删——hant 必须是 zh 的子集，留孤儿键会让 `tests/shared/locales/i18n-sync.test.ts` 失败。
-9. **代码风格**：缩进 **4 个空格**（`src/**`、`.vitepress/**`、`scripts/**` 的 ts/vue/js/css/mts 与 `package.json`、`tsconfig*.json` 全部统一）；注释与 JSDoc 用**简要中文**。**YAML 例外**：`.github/workflows/*.yml` 保持 2 空格（缩进敏感 + Actions 惯例），见 `.editorconfig`。
-10. **agent 只做静态验证**：只跑 `npm run typecheck` / `npm run lint`（必要时 `npm run build`）。**不要主动跑测试**（`npm run check` / `npm run test` / `test:watch` / `test:coverage` 一律由用户执行）；运行时行为（窗口 / 托盘 / 下载 / 迁移 / 自更新）由用户验证，**不要自行启动应用**。
+8. **i18n 两处同步**：新增文案要同时改 `src/shared/locales/zh/index.ts` 与 `en/index.ts`，键名 / 顺序 / 占位符都对齐。`zh/hant.ts` 是**差异覆盖目录，无需同步补充**（新增键不补繁体，运行时自动回落到简体基座）。**删键例外**：删除文案时 zh / en / hant 三处都要删——hant 必须是 zh 的子集，留孤儿键会让 hant 与 zh 失配（本仓库已无单测守护，须人工核对）。
+9. **代码风格**：缩进 **4 个空格**（`src/**`、`.vitepress/**`、`package.json`、`tsconfig*.json` 全部统一）；注释与 JSDoc 用**简要中文**。**YAML 例外**：`.github/workflows/*.yml` 保持 2 空格（缩进敏感 + Actions 惯例），见 `.editorconfig`。
+10. **质量门禁只有静态检查**：`npm run check` = `typecheck` + `lint`，必须通过；CI（`.github/workflows/quality.yml`）跑同一套。**本仓库不含单元测试**（`tests/`、`scripts/`、`.githooks/` 均已移除）——纯逻辑改动没有单测兜底，只能靠 typecheck 与**人工验证**。agent 可跑 `npm run check` / `typecheck` / `lint`，但**不要自行启动应用**（运行时行为由用户验证）。
 11. **agent 产生的缓存 / 临时文件统一放 `.agents/temp/`**，不要散落到工作区根或 `docs/`；**临时目录不必每次用完即删**——允许跨任务保留复用（省掉重复下载 / 克隆），需要时再手动清理。
 12. **分支与推送**：改动推送至 `dev`，**发行时才推 `main`**；任何 `git push`（含 `--force` / `--tags` / 删远程分支标签）都要先说明目标并征得同意；本地 `add`/`commit`/`branch`/`merge`/`checkout` 可直接做。**版本号由发布者主动指定**：推 `main` 前自己按版本号规范把四处改齐，**没有**任何 hook 会自动改版本号。
 13. **一个提交只做一件事**，禁止顺手改无关文件；不维护 `CHANGELOG.md`，变更记录以 GitHub Release notes 为准。
@@ -70,10 +70,9 @@ metadata:
 15. **用户可见文案必须 i18n**（主进程 `mt()`、渲染层 `t()`），日志走统一入口，禁止硬编码文案。
 16. **`settings.json` 结构变更必须向后兼容**：升 `settingsVersion` 并保留旧值迁移；发布保持 A/B 版本槽 + 自动回退能力。
 17. **技能维护**：`deepseek-box` 攒一批再统一更新；`metadata.version` 跟随应用版本。
-18. **版本号规范：正式版 `X.Y.Z`，预发布 `X.Y.Z-{alpha|beta|rc}.N`**：主次修订三段正常递增，**预发布通道限定为 alpha / beta / rc**，通道内序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；遵守 semver 字典序，故 `alpha < beta < rc` 升级链天然正确，且同段预发布低于正式版（`0.1.6-beta.2` < `0.1.6`，正式版才能覆盖 beta 用户）。**是否预发布只看版本号是否含 `-`**：CI 的 `build-release.yml` 据此选 `publish.releaseType`，应用内 `isPrerelease()` 与 `tests/shared/version-convention.test.ts` 必须同一判据。改版本要**同时改四处**：`package.json`、`package-lock.json` 顶层与 `packages[""]`、技能 `metadata.version`；一律不带 `v` 前缀（`v` 只在 Git tag 上）。四处必须**手动**同时改齐 —— 不存在自动改版本号的 hook，改完直接推送即可。
+18. **版本号规范：正式版 `X.Y.Z`，预发布 `X.Y.Z-{alpha|beta|rc}.N`**：主次修订三段正常递增，**预发布通道限定为 alpha / beta / rc**，通道内序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；遵守 semver 字典序，故 `alpha < beta < rc` 升级链天然正确，且同段预发布低于正式版（`0.1.6-beta.2` < `0.1.6`，正式版才能覆盖 beta 用户）。**是否预发布只看版本号是否含 `-`**：CI 的 `build-release.yml` 据此选 `publish.releaseType`，应用内 `isPrerelease()` 必须同一判据。改版本要**同时改四处**：`package.json`、`package-lock.json` 顶层与 `packages[""]`、技能 `metadata.version`；一律不带 `v` 前缀（`v` 只在 Git tag 上）。四处必须**手动**同时改齐 —— 不存在自动改版本号的 hook，改完直接推送即可。
 19. **提交信息用 Conventional Commits**：`feat:` / `fix:` / `docs:` / `refactor:` / `chore:` 等。
-20. **质量门禁**：`npm run check`（typecheck + lint + 单元测试）必须通过 —— 由用户或 `.githooks/pre-commit`（`npm install` 的 `prepare` 自动启用 core.hooksPath）、CI（`.github/workflows/quality.yml`）执行，**agent 不主动跑**；仅紧急情况用 `--no-verify`。
-21. **纯逻辑必须配单测**：`src/shared/**` 与 `src/main/**` 里不依赖 Electron 的纯函数（版本比较、路径与文件助手、设置归一化、i18n 解析）改动时必须补 `*.test.ts`。**测试统一收在 `tests/` 下、按被测层分目录**（`tests/{shared,main,renderer}/`，文件名与被测模块同名），**源码目录里不得出现 `*.test.ts`**；测试内用 `@shared` / `@main` / `@` 别名，不用跨目录相对路径。组件渲染与运行时行为仍由用户验证。
+20. **无单测：靠 typecheck + 人工验证**：本仓库已移除 `tests/`、`scripts/`、`vitest` 依赖与 `.githooks/`。改 `src/shared/**` 与 `src/main/**` 的纯逻辑（版本比较、路径与文件助手、设置归一化、i18n、快捷键、错误信息）后，**必须人工验证或写一次性探针脚本**（放 `.agents/temp/`），不要再期望有 `*.test.ts` 兜底，也不要新建测试目录。
 22. **`.agents` 入库策略**：`.agents/skills/**` 纳入版本管理；`.agents/temp/` 忽略（仅保留 `.gitkeep`）。
 23. **文档同步节奏**：开发期只维护技能；`docs/` 中英在**发布时**统一更新，并同时整理技能。
 24. **UI 组件优先 antdv-next**：新功能一律用 `antdv-next`（`<a-*>` 前缀），**禁止新增 `el-*` 组件**；样式与主题优先走 antdv 的 token。
@@ -109,9 +108,7 @@ metadata:
 | `npm install` | 安装依赖 |
 | `npm run dev` | 开发态（electron-vite，主进程改动自动重启、渲染层 HMR） |
 | `npm run typecheck` | 类型检查（node + web 两份） |
-| `npm run check` | typecheck + lint + 单测（用户 / pre-commit 执行；agent 不主动跑） |
-| `npm run test` | 只跑单元测试（用户执行；agent 不主动跑） |
-| `npm run test:watch` | 单元测试 watch 模式（用户执行） |
+| `npm run check` | typecheck + lint（本仓库无单测；agent 与用户都可跑） |
 | `npm run lint` / `lint:fix` | ESLint（0 error 为通过） |
 | `npm run build` | 构建到 `out/` |
 | `npm run dist:win` / `dist:mac` / `dist:linux` | 打包安装包 |
@@ -128,7 +125,7 @@ metadata:
 - [ ] 设置项是否处理了 `legacy` 与 `settingsVersion`？派生 UI 是否订阅 `settings:changed`？
 - [ ] 文案是否 zh / en 两处对齐（hant 无需补充；**删键时 hant 也要删**）？
 - [ ] 缩进 4 空格、注释中文、无新增裸 `fetch` / 裸 `webContents.send`？
-- [ ] 新增 / 改动的纯逻辑是否补了 `tests/` 下的 `*.test.ts`（未落在源码目录），且 agent 侧 `npm run typecheck` + `npm run lint` 通过？（单测不主动跑，交给用户）
+- [ ] 新增 / 改动的纯逻辑是否**人工验证过**（本仓库无单测兜底），且 `npm run typecheck` + `npm run lint` 通过？
 - [ ] 有需要人工验证的运行时行为，是否在最终说明里写清复现步骤？
 - [ ] 新依赖是否装对位置（前端 → `devDependencies`；主进程运行时 → `dependencies`）？
 - [ ] 缩进是否 4 空格（YAML 除外）？改过 YAML 是否验证过可解析？

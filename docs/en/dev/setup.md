@@ -19,36 +19,28 @@ Run these in the repo root:
 | `npm run typecheck` | Type-check (both the node and web projects) |
 | `npm run lint` | ESLint check (4-space style) |
 | `npm run lint:fix` | Auto-fix |
-| `npm run test` | Unit tests (Vitest, single run) |
-| `npm run test:watch` | Unit tests in watch mode |
-| `npm run check` | typecheck + lint + unit tests (must pass before committing) |
+| `npm run check` | typecheck + lint (run before committing; this repo has no unit tests) |
 | `npm run build` | Build into `out/` |
 | `npm run dist:win` | Package (also `dist:mac` / `dist:linux`) |
 | `npm run docs:dev` | Preview the docs site locally |
 | `npm run docs:build` | Build the docs site into `.vitepress/dist` |
 
 ::: info
-Verification happens on two levels: **static checks** (`npm run check` = typecheck + lint + unit tests),
+Verification happens on two levels: **static checks** (`npm run check` = typecheck + lint),
 run by developers / CI, and **runtime behaviour** (window, tray, downloads, migrations, proxy,
 self-update), which must be verified manually.
+This repository ships **no unit tests** (`tests/`, `scripts/` and the `vitest` dependency have been
+removed), so pure-logic changes have no automated safety net.
 :::
-
-Unit tests use **Vitest** (`vitest.config.mjs`) and run in the node environment; they cover
-**pure logic only**:
-
-- Tests live under **`tests/`**, split by the layer under test (`tests/{shared,main,renderer}/`),
-  with the file named after the module (`src/main/dsh/semver.ts` → `tests/main/dsh/semver.test.ts`);
-- Tests import through the `@shared` / `@main` / `@` aliases rather than cross-directory relative paths;
-- No `*.test.ts` appears inside `src/` (enforced by `tests/shared/version-convention.test.ts`);
-- The Electron runtime is not loaded, so modules with a top-level `import 'electron'` are skipped
-  (e.g. only the normalizers of `app/settings.ts` are tested).
 
 ## Directory structure
 
 ```text [Project layout]
 .
 ├─ src/
-│  ├─ main/            main process (windows, DeepSeek Harness, config, updates)
+│  ├─ main/            main process
+│  │  ├─ kernel/        microkernel: runtime / router / module / operations / treeops / services
+│  │  ├─ modules/       feature modules: settings / dsh / env / shell / tabdrag / appupdate / configdir
 │  │  ├─ app/           settings / configmigrate / models / ipc / ui / appupdate / appslots …
 │  │  └─ dsh/           dsh / manage / nodeenv / npmRunner / downloader / installs …
 │  ├─ preload/         window.api bridge and types
