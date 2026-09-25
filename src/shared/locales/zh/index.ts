@@ -204,7 +204,18 @@ export default {
             safeMode: '已进入安全模式',
             safeModeDesc: '内置 / 外部扩展本次未加载。可排查后逐个启用，或直接删除对应目录。',
             safeExited: '已退出安全模式，重启后重新加载全部扩展。',
-            empty: '还没有发现任何扩展。'
+            empty: '还没有发现任何扩展。',
+            listTitle: '全部扩展',
+            colName: '名称',
+            colKind: '来源',
+            colStatus: '状态',
+            stActive: '运行中',
+            stDisabled: '已停用',
+            stFailed: '加载失败',
+            stSkipped: '已跳过',
+            kindSystem: '系统',
+            kindBuiltin: '内置',
+            kindExternal: '外部'
         },
         plugins: {
             pnpmPreparing: '正在准备 pnpm（首次会从镜像源下载，来源见「设置 → 环境」）…',

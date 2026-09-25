@@ -98,13 +98,36 @@ html.dark .settings .side {
     flex: 1 1 auto;
     min-height: 0;
 }
+/*
+ * 让面板内的 `flex:1`（如扩展页的列表）真的有高度可用。
+ *
+ * el-scrollbar 自带 `.el-scrollbar{height:100%}` 与 `.el-scrollbar__wrap{height:100%;overflow:auto}`
+ * （见 theme-chalk/el-scrollbar.css），所以只要 `.main__scroll` 这个根拿到确定高度，
+ * 里面的 wrap 就自动撑满，view 再 `height:100%` 即可。
+ *
+ * 两个踩过的坑：
+ *   1. **view 不能用 `min-height:100%`** —— 那只设下限，内容多时 view 会一路长到 1281px，
+ *      把整个页面撑出滚动条，而列表自己反而不滚。必须用 `height:100%` 把它钉住。
+ *   2. **不要给 wrap 加 `position:absolute`** —— 它本来就是负责滚动的那层，
+ *      改成绝对定位反而会弄坏组件自己的滚动逻辑（高度已够，不需要额外手段）。
+ *
+ * `.cols` 再 `flex:1` 把剩余高度分给面板，列表就在有界高度内滚动，页面不再出现第二条滚动条。
+ */
 .settings .main__scroll .el-scrollbar__view {
     padding: 22px 24px 40px;
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
 }
 .settings .cols {
     width: 100%;
     max-width: 760px;
     margin: 0 auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 /* ---- 正文分区：每个分组一个独立边框盒（antdv collapse），组间留间距 ----

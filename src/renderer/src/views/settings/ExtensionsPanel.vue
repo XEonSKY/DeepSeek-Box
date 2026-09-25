@@ -84,6 +84,21 @@ function statusColor(status: ExtInfo['status']): string {
     return 'orange'
 }
 
+/** 状态标签的文案键（外层统一加 `sv.extpage.` 前缀）。 */
+const STATUS_KEY: Record<ExtInfo['status'], string> = {
+    active: 'stActive',
+    disabled: 'stDisabled',
+    failed: 'stFailed',
+    skipped: 'stSkipped'
+}
+
+/** 来源（三级）的文案键。 */
+const KIND_KEY: Record<ExtInfo['kind'], string> = {
+    system: 'kindSystem',
+    builtin: 'kindBuiltin',
+    external: 'kindExternal'
+}
+
 onMounted(() => {
     void reload()
     offChanged = window.api.on('extensions:changed', () => void reload())
@@ -120,41 +135,44 @@ onBeforeUnmount(() => offChanged?.())
             <span class="extpage__dir" :title="info?.externalDir">{{ info?.externalDir }}</span>
         </div>
 
-        <a-list :data-source="info?.entries ?? []" size="small">
-            <template #renderItem="{ item }">
-                <a-list-item>
-                    <a-list-item-meta>
-                        <template #title>
+        <div class="iv extpage__list">
+            <div class="iv__title">{{ $t('sv.extpage.listTitle') }}</div>
+            <div v-if="info && !info.entries.length" class="hint">{{ $t('sv.extpage.empty') }}</div>
+            <div v-else class="iv__list">
+                <div class="iv__thead">
+                    <span class="iv__c-name">{{ $t('sv.extpage.colName') }}</span>
+                    <span class="iv__c-kind">{{ $t('sv.extpage.colKind') }}</span>
+                    <span class="iv__c-status">{{ $t('sv.extpage.colStatus') }}</span>
+                    <span class="iv__c4">{{ $t('sv.env.colActions') }}</span>
+                </div>
+                <div class="iv__tbody">
+                    <div v-for="item in info?.entries ?? []" :key="item.id" class="iv__row">
+                        <span class="iv__c-name">
                             <span class="extpage__name">{{ item.name }}</span>
-                            <a-tag :color="statusColor(item.status)" class="extpage__tag">{{ item.status }}</a-tag>
-                            <a-tag>{{ item.kind }}</a-tag>
-                        </template>
-                        <template #description>
-                            <div class="extpage__id">{{ item.id }}<span v-if="item.version"> · {{ item.version }}</span></div>
-                            <div v-if="item.message" class="extpage__msg">{{ item.message }}</div>
-                        </template>
-                    </a-list-item-meta>
-                    <template #actions>
-                        <a-button
-                            v-if="item.removable"
-                            size="small"
-                            @click="toggle(item)"
-                        >
-                            {{ item.status === 'disabled' ? $t('sv.extpage.enable') : $t('sv.extpage.disable') }}
-                        </a-button>
-                        <a-button
-                            v-if="item.removable && item.status !== 'disabled' && item.status !== 'active'"
-                            size="small"
-                            @click="forgive(item)"
-                        >
-                            {{ $t('sv.extpage.forgive') }}
-                        </a-button>
-                    </template>
-                </a-list-item>
-            </template>
-        </a-list>
-
-        <a-empty v-if="info && info.entries.length === 0" :description="$t('sv.extpage.empty')" />
+                            <code class="extpage__id">{{ item.id }}<template v-if="item.version"> · {{ item.version }}</template></code>
+                            <span v-if="item.message" class="extpage__msg" :title="item.message">{{ item.message }}</span>
+                        </span>
+                        <span class="iv__c-kind">
+                            <a-tag>{{ $t('sv.extpage.' + KIND_KEY[item.kind]) }}</a-tag>
+                        </span>
+                        <span class="iv__c-status">
+                            <a-tag :color="statusColor(item.status)">{{ $t('sv.extpage.' + STATUS_KEY[item.status]) }}</a-tag>
+                        </span>
+                        <span class="iv__c4">
+                            <a-button v-if="item.removable" @click="toggle(item)">
+                                {{ item.status === 'disabled' ? $t('sv.extpage.enable') : $t('sv.extpage.disable') }}
+                            </a-button>
+                            <a-button
+                                v-if="item.removable && item.status !== 'disabled' && item.status !== 'active'"
+                                @click="forgive(item)"
+                            >
+                                {{ $t('sv.extpage.forgive') }}
+                            </a-button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -175,21 +193,78 @@ onBeforeUnmount(() => offChanged?.())
     white-space: nowrap;
     direction: rtl;
 }
+
+/*
+ * 列表占满剩余高度：本页不用折叠卡片（内容就是一整张表），所以整页做成一条纵向 flex 链 ——
+ * `.el-scrollbar__view` → `.cols` → `.panel` 都撑满，只有 `.iv__list` 滚动，
+ * 页面本身不出现第二条滚动条。父级链的 flex 定义见 styles/settings.css。
+ */
+.panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.extpage__list {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.extpage__list .iv__list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* 列表是四列（名称 / 来源 / 状态 / 操作），与三列的版本列表不同，故单独定列宽。 */
+.iv__c-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+.iv__c-kind {
+    flex: 0 0 72px;
+    display: flex;
+    align-items: center;
+}
+.iv__c-status {
+    flex: 0 0 88px;
+    display: flex;
+    align-items: center;
+}
+.iv__c4 {
+    flex: 0 0 176px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 .extpage__name {
     font-weight: 600;
-    margin-right: 8px;
-}
-.extpage__tag {
-    margin-right: 4px;
+    flex: 0 0 auto;
 }
 .extpage__id {
+    font-family: var(--el-font-family-mono);
     font-size: 12px;
     color: var(--el-text-color-secondary);
-    word-break: break-all;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .extpage__msg {
     font-size: 12px;
     color: var(--el-color-danger);
-    margin-top: 2px;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 </style>

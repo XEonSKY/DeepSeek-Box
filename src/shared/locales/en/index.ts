@@ -197,7 +197,18 @@ export default {
             safeMode: 'Safe mode is on',
             safeModeDesc: 'Built-in / external extensions were not loaded this time. Review and enable them one by one, or delete the offending folder.',
             safeExited: 'Safe mode cleared; all extensions will load after restart.',
-            empty: 'No extensions discovered yet.'
+            empty: 'No extensions discovered yet.',
+            listTitle: 'All extensions',
+            colName: 'Name',
+            colKind: 'Source',
+            colStatus: 'Status',
+            stActive: 'Running',
+            stDisabled: 'Disabled',
+            stFailed: 'Failed',
+            stSkipped: 'Skipped',
+            kindSystem: 'System',
+            kindBuiltin: 'Built-in',
+            kindExternal: 'External'
         },
         plugins: {
             pnpmPreparing: 'Preparing pnpm (first run downloads it; see Settings → Environment)…',
