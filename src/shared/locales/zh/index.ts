@@ -575,6 +575,19 @@ export default {
     },
     /** main 进程文案（dsh/updater/托盘/对话框） */
     m: {
+        // 内嵌页面的权限询问（见 src/main/app/webviewPermissionPolicy.ts）
+        webviewPerm: {
+            message: '“{origin}” 请求使用{kind}。',
+            allow: '允许',
+            deny: '拒绝',
+            camera: '摄像头',
+            microphone: '麦克风',
+            cameraMic: '摄像头与麦克风',
+            location: '位置信息',
+            notifications: '系统通知',
+            midi: 'MIDI 设备',
+            unknown: '系统权限'
+        },
         dsh: {
             missingMsg: '未安装 @deepseek-ai/dsh（DeepSeek Box 命令行工具）',
             noVersion: '无法读取已安装的 @deepseek-ai/dsh 版本',

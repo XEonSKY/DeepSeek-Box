@@ -566,6 +566,19 @@ export default {
         continueBtn: 'Continue'
     },
     m: {
+        // Permission prompts for embedded pages (see src/main/app/webviewPermissionPolicy.ts)
+        webviewPerm: {
+            message: '"{origin}" requests access to your {kind}.',
+            allow: 'Allow',
+            deny: 'Deny',
+            camera: 'camera',
+            microphone: 'microphone',
+            cameraMic: 'camera and microphone',
+            location: 'location',
+            notifications: 'notifications',
+            midi: 'MIDI devices',
+            unknown: 'system permissions'
+        },
         dsh: {
             missingMsg: '@deepseek-ai/dsh is not installed (the DeepSeek Box CLI tool)',
             noVersion: 'Could not read the installed @deepseek-ai/dsh version',

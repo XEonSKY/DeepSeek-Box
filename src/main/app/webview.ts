@@ -1,9 +1,18 @@
 import os from 'node:os'
-import { app, session } from 'electron'
+import { app, BrowserWindow, dialog, session } from 'electron'
+import type { MessageBoxOptions, WebContents } from 'electron'
 import type { Settings } from '@shared/types'
-import { loadSettings } from './settings'
+import { loadSettings, mt } from './settings'
 import { proxyActive, proxyUrl } from '../dsh/net'
 import { proxyConfigFor } from '../dsh/http'
+import { APP_TITLE } from './const'
+import {
+    PermissionMemory,
+    checkPermission,
+    decidePermission,
+    originOf,
+    permissionKindKey
+} from './webviewPermissionPolicy'
 
 /**
  * Webview（内嵌页面）相关的渲染与身份设置：硬件加速开关 + UserAgent + 代理。
@@ -105,4 +114,97 @@ export async function applyWebviewProxy(cfg: Settings = loadSettings()): Promise
     /* ready 之前调用会抛：撤销登记，启动流程里 ready 后还会再调一次 */
         appliedProxy = null
     }
+}
+
+// ---------------------------------------------------------------------------
+// 内嵌页面的权限策略
+// ---------------------------------------------------------------------------
+
+/** 会话级「记住选择」：同一来源 + 同一权限只问一次（重启后重新询问，不落盘）。 */
+const permissionMemory = new PermissionMemory()
+
+/** 权限询问串行化：多个站点同时请求时不该叠出一堆系统弹窗。 */
+let promptQueue: Promise<unknown> = Promise.resolve()
+
+function queuePrompt(task: () => Promise<boolean>): Promise<boolean> {
+    const next = promptQueue.then(task, task)
+    promptQueue = next.catch(() => undefined)
+    return next
+}
+
+/** 弹系统询问框问用户；拿不到宿主窗口时用无父窗口的对话框。弹不出来按拒绝。 */
+async function askPermission(
+    contents: WebContents,
+    permission: string,
+    requestingUrl: string,
+    mediaTypes: readonly string[] | undefined
+): Promise<boolean> {
+    const options: MessageBoxOptions = {
+        type: 'question',
+        title: APP_TITLE,
+        message: mt('m.webviewPerm.message', {
+            origin: originOf(requestingUrl),
+            kind: mt(`m.webviewPerm.${permissionKindKey(permission, mediaTypes)}`)
+        }),
+        detail: requestingUrl,
+        buttons: [mt('m.webviewPerm.allow'), mt('m.webviewPerm.deny')],
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true
+    }
+    const parent = BrowserWindow.fromWebContents(contents)
+    try {
+        const { response } = parent && !parent.isDestroyed()
+            ? await dialog.showMessageBox(parent, options)
+            : await dialog.showMessageBox(options)
+        return response === 0
+    } catch {
+        return false
+    }
+}
+
+/**
+ * 给内嵌页面（webview / 标签页）装上权限策略。**必须在 `app.whenReady()` 之后调用**
+ * （`session.defaultSession` 在 ready 前拿不到），且要在建窗之前。
+ *
+ * 四个处理器缺一不可：`request` 管主动请求（`getUserMedia` 等），`check` 管同步查询
+ * （`navigator.permissions.query`、设备枚举），`device` 管 HID / 串口 / USB（**不走
+ * request**），`displayMedia` 管屏幕共享。只装 request 会被后三条绕过。
+ */
+export function installWebviewPermissionPolicy(): void {
+    const s = session.defaultSession
+    s.setDevicePermissionHandler(() => false)
+    // 屏幕共享一律不给：内嵌页面是任意站点，录制桌面属于最不该开放的一类能力。
+    s.setDisplayMediaRequestHandler((_request, callback) => callback({}))
+    s.setPermissionCheckHandler((_contents, permission, requestingOrigin) =>
+        checkPermission(permission, requestingOrigin, permissionMemory)
+    )
+    s.setPermissionRequestHandler((contents, permission, callback, details) => {
+        const url = typeof details?.requestingUrl === 'string' ? details.requestingUrl : ''
+        // `mediaTypes` 只在媒体类请求上存在，联合类型里必须收窄后再取。
+        const mediaTypes = details && 'mediaTypes' in details ? details.mediaTypes : undefined
+        const verdict = decidePermission(permission, url)
+        if (verdict === 'grant') {
+            callback(true)
+            return
+        }
+        if (verdict === 'deny') {
+            callback(false)
+            return
+        }
+        const origin = originOf(url)
+        const remembered = permissionMemory.recall(origin, permission)
+        if (remembered !== undefined) {
+            callback(remembered)
+            return
+        }
+        void queuePrompt(async () => {
+            const granted = await askPermission(contents, permission, url, mediaTypes)
+            permissionMemory.remember(origin, permission, granted)
+            return granted
+        }).then(
+            (granted) => callback(granted),
+            () => callback(false)
+        )
+    })
 }
