@@ -14,6 +14,16 @@ Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus 
 
 共享代码（类型、i18n、版本工具）放在 `src/shared/`，三边都能用。
 
+## 主进程分层：微内核
+
+主进程内部是**小内核 + 可插拔模块**：
+
+- `src/main/kernel/` —— **稳定的机制层**，不认识业务名词：`runtime`（运行态原语）、`router`（唯一 `ipcMain` 落点）、`module`（`defineModule` / `ModuleRegistry`）、`operations`（进度注册表 + 取消令牌）、`treeops`（整目录删除唯一出口）、`services`（服务槽）。
+- `src/main/modules/` —— **功能策略层**，一个功能一个文件，用 `defineModule` 声明自己的 IPC 路由（端点不再集中登记）。
+- `src/main/app/`、`src/main/dsh/` —— 具体实现，被模块调用。
+
+**依赖方向恒为** `modules → kernel`、`modules → app/dsh`；**模块之间不 import**，跨模块动作走 `kernel/services.ts` 的服务槽（提供方在 `onReady` 注册能力，消费方按名字取用）——这样 `modules/settings → dsh/dsh → app/settings` 之类的静态环不可能形成。`app/ipc.ts` 只是**装配器**。
+
 ## 启动流程
 
 主进程入口 `src/main/index.ts`：
@@ -22,7 +32,7 @@ Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus 
 2. **登记配置目录迁移**：`ensureDefaultConfigMigration()`（必须在任何读设置之前）；
 3. **读取启动所需设置**：是否忽略系统缩放、是否启用硬件加速；
 4. **单实例锁**：未拿到锁则直接退出，第二次启动会把已有窗口置前；
-5. **app ready 后**：注册 IPC → 建窗 → 建托盘 → 注册全局快捷键；
+5. **app ready 后**：`registerIpc()` + `runModuleReady()`（装配模块、跑模块 `onReady`）→ 建窗 → 建托盘 → 注册全局快捷键；
 6. `await waitForConfigMigration()`：有待执行的配置目录迁移时先搬完（带进度广播），再继续；
 7. `await migrateLegacyInstalls()`：把旧的平铺安装目录迁成版本化布局；
 8. 启动配置文件监听；若 DeepSeek Harness 已存在则 `restart()` 启动 dsh；
@@ -31,7 +41,7 @@ Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus 
 ## 生命周期与退出
 
 - **关闭窗口**：默认隐藏到托盘（可在设置里改为直接退出）；关闭窗口**不**结束 dsh。
-- **真正退出**：`before-quit` 先 `preventDefault()`，异步优雅停 dsh（`stopDshGracefully()`）→ 清理其余子进程 → 二次放行 `app.quit()`。
+- **真正退出**：`before-quit` 先 `preventDefault()`，异步优雅停 dsh（`stopDshGracefully()`）→ 清理其余子进程 → `runModuleQuit()`（模块 `onQuit` 逆序）→ 二次放行 `app.quit()`。
 - **兜底**：`process.on('exit')` 再杀一次 server 与子进程，避免孤儿进程。
 
 ## 窗口与标签模型

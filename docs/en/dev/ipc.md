@@ -9,7 +9,7 @@ Communication between the main process and the renderer is modelled as a **REST 
 | renderer → main (request) | `ipc:request` (`ipcRenderer.invoke`) | `IpcRequest = { method, path, query?, body? }` |
 | main → renderer (push) | `ipc:event` (`webContents.send`) | `IpcEvent = { event, payload }` |
 
-- Only `src/main/app/router.ts` touches `ipcMain`, and only `src/preload/index.ts` touches `ipcRenderer`.
+- Only `src/main/kernel/router.ts` touches `ipcMain`, and only `src/preload/index.ts` touches `ipcRenderer`.
 - The method is always one of five HTTP verbs: `GET` (read), `POST` (create / action), `PUT` (full update), `PATCH` (partial update), `DELETE` (remove).
 - A request envelope is isomorphic to an HTTP request; `:name` in a path denotes a path parameter.
 
@@ -48,47 +48,65 @@ window.api.delete('/icons/:id', { params: { id: 'user/a.png' } })
 - Event subscription is always `window.api.on(event, cb)` (returns an unsubscribe function); event names and payload types live in `AppEvents` in the same file.
 - `window.api` also carries the local constants `platform` / `versions`, which do not go over IPC.
 
-## Main-process router (Elysia style)
+## Main-process routing: module declaration + kernel assembly
 
-`registerIpc()` in `src/main/app/ipc.ts` registers every endpoint as a chain; handlers receive `{ event, params, query, body }`:
+Endpoints are **no longer registered centrally**; they are spread across `src/main/modules/*.ts`, where each
+feature module declares its own routes with `defineModule`. `src/main/app/ipc.ts` has shrunk into an
+**assembler** — it builds a `Router` → `new ModuleRegistry(allModules())` → `mountRoutes`; handlers receive
+`{ event, params, query, body }`:
 
-```ts [src/main/app/ipc.ts]
-router
-    .get('/settings', () => ({ ...DEFAULT_SETTINGS, ...readDiskSettings() }))
-    .put('/settings', async ({ body }) => { /* persist + broadcast settings:changed */ })
-    .delete('/versions/:kind/:version', ({ params }) => removeVersion(params.kind, params.version))
+```ts [src/main/modules/settings.ts]
+export default defineModule({
+    id: 'settings',
+    routes: {
+        GET: { '/settings': () => loadSettings() },
+        PUT: {
+            '/settings': async ({ body }) => {
+                persistSettings(body)
+                broadcast('settings:changed', body)
+                return body
+            }
+        }
+    }
+})
 ```
 
-- `Router` (`src/main/app/router.ts`) does the matching: **literal segments first, `:name` templates second**, so `/icons/current` is never stolen by `/icons/:id`; path parameters are decoded there.
+- Routes are grouped by **method** (`GET` / `POST` / `PUT` / `PATCH` / `DELETE`), and paths must be
+  `"<METHOD> <path>"` entries registered in `ApiRoutes` — a wrong path or result type is a **compile error**.
+- `ModuleRegistry` (`src/main/kernel/module.ts`) **throws on duplicate routes** at assembly time, so two
+  modules claiming the same path surface immediately.
+- `Router` (`src/main/kernel/router.ts`) does the matching: **literal segments first, `:name` templates second**, so `/icons/current` is never stolen by `/icons/:id`; path parameters are decoded there.
 - A handler may be sync or async; its return value is the response. A throw rejects the renderer's promise.
 - Window-level operations (zoom / minimize / close / dialogs) resolve "the shell window that made this request" from `ctx.event.sender` — do **not** use the global main window.
+- Modules must **not import each other**: to trigger another module's action, go through the service slot in
+  `kernel/services.ts` (e.g. `modules/settings` calls `useService(SERVICE.RESTART_DSH)` to restart dsh).
 
 ## Events (main → renderer)
 
-Event names are still `domain:action` (`settings:changed`, `configdir:migration`, `win:maximized`, …) but all travel over the single `ipc:event` channel, typed in `AppEvents`. The main process sends them through `broadcast` / `sendToWindow` / `sendToWcId` / `sendCore` in `runtime.ts` — **never call `webContents.send` directly**, or the envelope is bypassed and the renderer will not receive it.
+Event names are still `domain:action` (`settings:changed`, `configdir:migration`, `win:maximized`, …) but all travel over the single `ipc:event` channel, typed in `AppEvents`. The main process sends them through `broadcast` / `sendToWindow` / `sendToWcId` / `sendCore` in `kernel/runtime.ts` — **never call `webContents.send` directly**, or the envelope is bypassed and the renderer will not receive it.
 
 ## Adding an endpoint: two places
 
 1. **`src/shared/api.ts`**: add a row to `ApiRoutes` (and, for pushes, an entry to `AppEvents`).
-2. **`src/main/app/ipc.ts`**: implement the handler in the `registerIpc()` chain (the types force agreement with step 1).
+2. **Pick the module**: add the handler to the right method table in `src/main/modules/<feature>.ts` (the
+   types force agreement with step 1); for a brand-new feature, create a module file and hook it into
+   `allModules()` in `modules/index.ts`.
 
 **The preload does not change** — it only forwards (`ipc:request` → router, `ipc:event` → `on`). The renderer just calls the new path; a wrong path is caught by the type checker.
 
-## Endpoint groups
+## Owning module per group
 
-| Group | Examples | Description |
+| Module | Endpoints covered | Description |
 |---|---|---|
-| Settings / language | `GET` / `PUT /settings`, `POST /settings/apply`, `/settings/reset`, `GET` / `PUT /locale` | Read and write app settings and UI language |
-| Config directory | `GET` / `PUT /config-dir`, `POST /config-dir/revert`, `/config-dir/migration`, `DELETE /config-dir/migration` | Query / change / migrate / cancel |
-| DeepSeek Harness | `GET /dsh/*`, `POST /dsh/start`, `/stop`, `/restart`, `/update`, `/install`, `DELETE /dsh`, `/versions/:kind` | Install / update / uninstall / run state / version management |
-| Environment | `GET /env`, `/node/*`, `/npm/*`, `POST /node/deploy` | Node / npm deployment, status, versions |
-| Models & balances | `GET /models/info`, `GET /models/balance` | Keys never leave the main process |
-| App update | `GET /app/meta`, `/app/update/state`, `/slots`, `POST /app/update/check`, `/rollback`, `/restart` | Check / trigger / version slots / rollback |
-| App icon | `GET /icons`, `/icons/current`, `POST /icons`, `DELETE /icons/:id` | Preset / upload / delete |
-| Shell windows | `GET /shell/meta`, `POST /shell/open-url`, `/focus-core`, `/move-tab`, `PUT /shell/title` | Multi-window and tab transfer |
-| Window controls | `PUT /windows/zoom`, `GET /windows/maximized`, `POST /windows/minimize`, `/maximize-toggle`, `/close` | Frameless title-bar buttons |
-| Tab drag | `POST /tab-drag`, `PATCH /tab-drag`, `DELETE /tab-drag`, `POST /tab-drag/drop` | Driven by the source window; screen coordinates pick the drop target |
+| `settings.ts` | `GET` / `PUT /settings`, `POST /settings/apply`, `/settings/reset`, `GET` / `PUT /locale`, `/logs`, `/operations` | App settings, UI language, logs and the in-progress operations snapshot |
+| `configdir.ts` | `GET` / `PUT /config-dir`, `POST /config-dir/revert`, `/config-dir/migration`, `DELETE /config-dir/migration`, `/models/*`, `/icons*` | Config-dir change / migration / cancel, models & balances, app icon |
+| `dsh.ts` | `GET /dsh/*`, `POST /dsh/start`, `/stop`, `/restart`, `/update`, `/install`, `/reload`, `DELETE /dsh` | Install / update / uninstall / run state / version management / plugins |
+| `env.ts` | `GET /env`, `/node/*`, `/npm/*`, `/pnpm/*`, `POST /node/deploy`, `PUT /versions/:kind/active` | Node / npm / pnpm deployment, status, versions |
+| `appupdate.ts` | `GET /app/meta`, `/app/update/state`, `/slots`, `POST /app/update/check`, `/rollback`, `/restart`, `/app/relaunch`, `/app/quit` | Check / trigger / version slots / rollback / restart-quit |
+| `shell.ts` | `GET /shell/meta`, `POST /shell/open-url`, `/focus-core`, `/move-tab`, `PUT /shell/title`, `/windows/*`, `/dialog/*` | Multi-window and tab transfer, window controls, dialogs |
+| `tabdrag.ts` | `POST` / `PATCH` / `DELETE /tab-drag`, `POST /tab-drag/drop` | Driven by the source window; screen coordinates pick the drop target |
 
 ::: tip
-The full list is governed by `ApiRoutes` in `src/shared/api.ts`; the route engine is `src/main/app/router.ts`.
+The full list is governed by `ApiRoutes` in `src/shared/api.ts`; the module contract is
+`src/main/kernel/module.ts` and the route engine is `src/main/kernel/router.ts`.
 :::

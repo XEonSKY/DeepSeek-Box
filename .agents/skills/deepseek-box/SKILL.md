@@ -37,7 +37,9 @@ metadata:
 | 目录 | 职责 |
 |---|---|
 | `src/main/` | 主进程：窗口 / 托盘 / 设置 / dsh 启停 / 下载安装 / 自更新 / IPC 路由 |
-| `src/main/app/` | 应用自身（设置、迁移、模型、窗口、更新、IPC） |
+| `src/main/kernel/` | **微内核（机制）**：`runtime`（运行态原语）、`router`（唯一 ipcMain 落点）、`module`（defineModule / ModuleRegistry）、`operations`（进度注册表 + 取消令牌）、`treeops`（整目录删除唯一出口）、`services`（服务槽） |
+| `src/main/modules/` | **功能模块（策略）**：`settings` / `dsh` / `env` / `shell` / `tabdrag` / `appupdate` / `configdir`，各自 `defineModule` 声明路由；`index.ts` 汇总 `allModules()` |
+| `src/main/app/` | 应用自身的实现（设置、迁移、模型、窗口、更新、图标）；`ipc.ts` 已瘦成**装配器** |
 | `src/main/dsh/` | DeepSeek Harness 与运行环境（安装、下载、Node/npm、版本目录） |
 | `src/preload/` | 唯一 `contextBridge` 出口：`window.api`（REST 客户端 + 本地常量 + 事件订阅） |
 | `src/renderer/src/` | Vue 3 界面：标签页外壳、设置页、安装向导、状态栏、终端 |
@@ -50,8 +52,9 @@ metadata:
 
 ## 铁律（违反即视为改坏）
 
-1. **契约唯一事实来源是 `src/shared/api.ts`**：`ApiRoutes`（请求）与 `AppEvents`（推送）。新增端点必须**两处同步**：先登记 `ApiRoutes`，再在 `src/main/app/ipc.ts` 的 `registerIpc()` 实现；`preload` 不改。
-2. **IPC 通道收口**：全项目只有 `src/main/app/router.ts` 直接碰 `ipcMain`；只有 `src/preload/index.ts` 直接碰 `ipcRenderer`。
+1. **契约唯一事实来源是 `src/shared/api.ts`**：`ApiRoutes`（请求）与 `AppEvents`（推送）。新增端点必须**两处同步**：先在 `src/shared/api.ts` 登记 `ApiRoutes`，再到**对应功能模块** `src/main/modules/<功能>.ts` 里用 `defineModule` 声明处理函数（新功能就新建模块文件并挂进 `modules/index.ts` 的 `allModules()`）；`preload` 不改。模块声明的路径 / 方法 / 返回值与 `ApiRoutes` 对不上会**编译期报错**。
+2. **IPC 通道收口**：全项目只有 `src/main/kernel/router.ts` 直接碰 `ipcMain`；只有 `src/preload/index.ts` 直接碰 `ipcRenderer`。
+2b. **微内核分层不可越界**：`modules → kernel`、`modules → app/dsh` 单向依赖；**模块之间不 import**，跨模块动作走 `kernel/services.ts` 的服务槽（`provideService` / `useService`）。（`app/ipc.ts` 只是装配器，不再登记端点。）
 3. **主进程禁止裸 `fetch`**：所有 HTTP 走 `httpFetch(scope, url, init)`（`src/main/dsh/http.ts`），`scope` 决定是否走代理。
 4. **主进程推送不能直接 `webContents.send`**：用 `runtime.ts` 的 `broadcast` / `sendToWindow` / `sendToWcId` / `sendCore`，否则绕过 `ipc:event` 信封，渲染层收不到。
 5. **密钥不出主进程**：模型 / 余额相关的凭据读取只留在主进程，渲染层拿不到明文。
@@ -84,16 +87,17 @@ metadata:
 
 | 我要做的事 | 先改 | 必须同步 | 详见 |
 |---|---|---|---|
-| 新增 / 改 IPC 端点 | `src/shared/api.ts` 的 `ApiRoutes` | `src/main/app/ipc.ts` | references/ipc.md |
+| 新增 / 改 IPC 端点 | `src/shared/api.ts` 的 `ApiRoutes` | 对应 `src/main/modules/<功能>.ts`（新功能挂进 `allModules()`） | references/ipc.md |
 | 新增主进程事件 | `shared/api.ts` 的 `AppEvents` | 用 `broadcast` 发送 + 渲染层 `api.on` | references/ipc.md |
 | 新增 / 改设置项 | `shared/types.ts`（`Settings` + 默认值） | 归一化 legacy、订阅 `settings:changed` | references/main-process.md |
 | 新增界面文案 | `locales/zh/index.ts`、`en/index.ts` | hant 可选（差异覆盖，不必补） | references/conventions.md |
 | 新增设置面板 | `renderer/src/views/settings/*.vue` | `SettingsView.vue` 注册 + 文案 | references/renderer.md |
 | 改 dsh / Node / npm 安装 | `main/dsh/{manage,nodeenv,npmRunner}.ts` | `dsh/installs.ts` 版本目录 | references/main-process.md |
-| 改下载 / 取消 / 解压 | `main/dsh/downloader.ts`、`cancel.ts` | 进度事件 `phase` | references/main-process.md |
+| 改下载 / 取消 / 解压 | `main/dsh/downloader.ts`、`kernel/operations.ts` | 进度事件 `phase` | references/main-process.md |
 | 改配置目录与迁移 | `main/app/settings.ts`、`configmigrate.ts` | `main/index.ts` 启动顺序 | references/architecture.md |
 | 改 dsh 的偏好配置（主题 / 语言 / 供应商） | `main/dsh/cordisPatch.ts`、`dshHome.ts` | `settings.ts`（语言 / 主题）、`models.ts`（供应商） | references/main-process.md |
-| 改窗口 / 标签 / 托盘 | `main/app/{ui,windowreg}.ts` + `renderer/src/shell/*` | `shell/*` 路由与事件 | references/architecture.md |
+| 改窗口 / 标签 / 托盘 | `main/app/{ui,windowreg}.ts` + `renderer/src/shell/*` | `modules/shell.ts` 路由与事件 | references/architecture.md |
+| 新增一个主进程模块 | `main/kernel/module.ts`（契约） | `main/modules/<name>.ts` + `allModules()` | references/main-process.md |
 | 改文档站 | `docs/zh/...` + `docs/en/...` 成对 | `.vitepress/config.mts` nav/sidebar | references/conventions.md |
 | 新增 / 迁移 UI 组件 | `<a-*>` 组件（antdv-next） | 迁移同文件的 `el-*`；查 `antdv-next` 技能 | references/renderer.md |
 | 打包 / 发布 | `package.json` 版本号 | `package-lock.json` | references/conventions.md |
@@ -117,8 +121,10 @@ metadata:
 
 ## 交付前自检
 
-- [ ] 契约类改动是否 `shared/api.ts` 与 `main/app/ipc.ts` 两处一致（类型检查会拦，但先自查）？
+- [ ] 契约类改动是否 `shared/api.ts` 与对应 `modules/<功能>.ts` 两处一致（类型检查会拦，但先自查）？
+- [ ] 新增端点是否落在**正确的功能模块**里，且没有让模块之间互相 import（跨模块走服务槽）？
 - [ ] 主进程联网是否都走 `httpFetch`？推送是否都走 `runtime` 的发送函数？
+- [ ] 整目录删除是否都走 `kernel/treeops.ts`（而不是裸 `fs.rmSync(recursive)`）？
 - [ ] 设置项是否处理了 `legacy` 与 `settingsVersion`？派生 UI 是否订阅 `settings:changed`？
 - [ ] 文案是否 zh / en 两处对齐（hant 无需补充；**删键时 hant 也要删**）？
 - [ ] 缩进 4 空格、注释中文、无新增裸 `fetch` / 裸 `webContents.send`？
@@ -133,8 +139,8 @@ metadata:
 
 ## 参考文件
 
-- references/architecture.md —— 三进程、启动顺序、生命周期、窗口 / 标签、数据位置、代理范围、设置传播
-- references/ipc.md —— REST 风格 IPC 契约、新增端点全流程、事件、窗口级操作
-- references/main-process.md —— `app/` 与 `dsh/` 模块地图、关键导出、安装与下载链路
+- references/architecture.md —— 三进程、**主进程微内核分层**、启动顺序、生命周期、窗口 / 标签、数据位置、代理范围、设置传播
+- references/ipc.md —— REST 风格 IPC 契约、**定义模块 + 内核装配**、新增端点全流程、事件、窗口级操作
+- references/main-process.md —— `kernel/` 机制、`modules/` 模块地图、`app/` 与 `dsh/` 关键导出、安装与下载链路
 - references/renderer.md —— Vue 目录、Pinia、订阅 `settings:changed`、主题 / i18n、状态栏
 - references/conventions.md —— 代码风格、注释、i18n、文档、Git、临时文件、验证

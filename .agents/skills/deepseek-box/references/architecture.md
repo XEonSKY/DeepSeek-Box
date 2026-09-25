@@ -6,11 +6,31 @@
 
 | 进程 | 目录 | 职责 | 边界 |
 |---|---|---|---|
-| 主进程 main | `src/main/` | 窗口 / 托盘、设置、启动守护 dsh、下载安装、自更新、IPC 路由 | 唯一可直接用 Electron 主进程 API 的层 |
+| 主进程 main | `src/main/` | 窗口 / 托盘、设置、启动守护 dsh、下载安装、自更新、IPC 路由 | 唯一可直接用 Electron 主进程 API 的层。**内部按微内核分层**：`kernel/`（机制）+ `modules/`（功能模块）+ `app/`+`dsh/`（实现），见 references/main-process.md |
 | 预加载 preload | `src/preload/` | `contextBridge` 暴露 `window.api` | 唯一碰 `ipcRenderer` 的文件 |
 | 渲染进程 renderer | `src/renderer/` | Vue 3 界面：标签页外壳、设置、向导、终端 | 只能通过 `window.api` 调主进程 |
 
 共享代码（类型、i18n、版本工具）在 `src/shared/`，三边都能 import；别名 `@shared` 指向它，`@` 指向 `src/renderer/src`（见 `electron.vite.config.ts`）。
+
+## 主进程分层：微内核
+
+主进程内部是**小内核 + 可插拔模块**：
+
+```text
+kernel/   稳定机制，不认识业务名词
+modules/  功能策略，一个功能一个文件，自己声明路由（defineModule）
+app/ dsh/ 具体实现，被 modules 调用
+```
+
+- **依赖是单向的**：`modules → kernel`、`modules → app/dsh`；**模块之间不 import**。
+  模块 A 要触发模块 B 的动作时走 **kernel 服务槽**（`provideService` / `useService`）——
+  例：`modules/settings` 的 `POST /settings/apply` 需要重启 dsh，就 `useService(SERVICE.RESTART_DSH)`，
+  而 `RESTART_DSH` 由 `modules/dsh` 在 `onReady` 时注册。这样打断 `settings → dsh/dsh → app/settings` 的静态环。
+- **契约仍在编译期**：模块声明的路径必须是 `@shared/api` 的 `ApiRoutes` 里登记过的
+  `"<METHOD> <path>"`，写错路径或返回值对不上直接报错；`ModuleRegistry` 还会对重复路由**启动即抛错**。
+- `app/ipc.ts` 退化成**装配器**（~50 行）：建 Router + `new ModuleRegistry(allModules())` + `mountRoutes`，
+  并暴露 `registerIpc` / `runModuleReady` / `runModuleQuit`。端点实现全在 `modules/*.ts`。
+- 详见 references/main-process.md 与 references/ipc.md。
 
 ## 启动顺序（`src/main/index.ts`）
 
@@ -18,7 +38,7 @@
 2. `ensureDefaultConfigMigration()`：登记配置目录迁移，**必须在任何读设置之前**。
 3. 读取启动所需设置（忽略系统缩放、硬件加速）。
 4. **单实例锁**：拿不到锁直接退出；第二次启动把已有窗口置前。
-5. `app ready` 后：注册 IPC → 建窗 → 建托盘 → 注册全局快捷键。
+5. `app ready` 后：`registerIpc()` + `runModuleReady()`（装配模块、跑模块的 `onReady`）→ 建窗 → 建托盘 → 注册全局快捷键。
 6. `await waitForConfigMigration()`：有待迁移先搬完（带进度广播）再继续。
 7. `await migrateLegacyInstalls()`：旧平铺安装目录迁成版本化布局。
 8. 启动配置文件监听；dsh 已存在则 `restart()` 启动。
@@ -29,7 +49,8 @@
 ## 生命周期与退出
 
 - **关闭窗口**：默认隐藏到托盘（设置可改为直接退出）；**关闭窗口不结束 dsh**。
-- **真正退出**：`before-quit` 先 `preventDefault()` → 异步 `stopDshGracefully()` → 清理其余子进程 → 二次放行 `app.quit()`。
+- **真正退出**：`before-quit` 先 `preventDefault()` → 异步 `stopDshGracefully()` → 清理其余子进程 →
+  `runModuleQuit()`（模块 `onQuit` 逆序）→ 二次放行 `app.quit()`。
 - **兜底**：`process.on('exit')` 再杀一次 server 与子进程，避免孤儿进程。
 
 ## 窗口与标签
@@ -59,6 +80,8 @@
 **第一阶段（设置时）**：`setConfigDir()` 不立即搬迁，只写迁移计划；存在计划时 `configDir()` 仍返回旧目录，保证重启前设置可读。
 
 **第二阶段（重启引导）**：建窗后 `await waitForConfigMigration()` 才启动 dsh 与监听；由 `main/app/configmigrate.ts` 执行：`scanTree` 统计 → `migrateTree` 逐项搬迁（同盘整目录 `rename`，跨盘或目标存在则递归 copy + unlink，记 journal）→ 每项广播 `configdir:migration` → 成功才指向新位置。**取消**则 `rollbackMoves` 逆序搬回并固定回旧目录。搬迁失败不删源文件，避免丢数据。
+
+> 上述函数**全是 async**（`scanTree` 逐目录 `setImmediate` 让出事件循环），大目录搬迁期间界面不卡死。
 
 ## 网络出口与代理
 

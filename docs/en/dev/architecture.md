@@ -14,6 +14,19 @@ Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus 
 
 Shared code (types, i18n, version utilities) lives in `src/shared/` and is available to all three.
 
+## Main-process layering: a microkernel
+
+Inside the main process, this is a **small kernel plus pluggable modules**:
+
+- `src/main/kernel/` — the **stable mechanism layer**, which knows nothing about business concepts: `runtime` (runtime primitives), `router` (the only `ipcMain` sink), `module` (`defineModule` / `ModuleRegistry`), `operations` (progress registry + cancellation tokens), `treeops` (the single entry point for whole-directory deletion), `services` (service slot).
+- `src/main/modules/` — the **feature-policy layer**: one file per feature, each declaring its own IPC routes with `defineModule` (endpoints are no longer registered centrally).
+- `src/main/app/`, `src/main/dsh/` — concrete implementations, called by the modules.
+
+**Dependencies always flow** `modules → kernel` and `modules → app/dsh`; **modules never import each other** —
+cross-module actions go through the service slot in `kernel/services.ts` (a provider registers a capability in
+its `onReady`, a consumer looks it up by name), so static cycles like
+`modules/settings → dsh/dsh → app/settings` cannot form. `app/ipc.ts` is just the **assembler**.
+
 ## Startup flow
 
 Main-process entry `src/main/index.ts`:
@@ -22,7 +35,7 @@ Main-process entry `src/main/index.ts`:
 2. **Register the config-directory migration**: `ensureDefaultConfigMigration()` (must run before any settings are read);
 3. **Read startup settings**: whether to ignore OS scaling and whether hardware acceleration is enabled;
 4. **Single-instance lock**: quit immediately if the lock is not acquired; a second launch brings the existing window to the front;
-5. **After app ready**: register IPC → create the window → create the tray → register global shortcuts;
+5. **After app ready**: `registerIpc()` + `runModuleReady()` (assemble modules, run their `onReady`) → create the window → create the tray → register global shortcuts;
 6. `await waitForConfigMigration()`: when a config-directory migration is pending, finish it first (with progress broadcasts), then continue;
 7. `await migrateLegacyInstalls()`: migrate the old flat install directories into the versioned layout;
 8. Start the config file watcher; if DeepSeek Harness already exists, `restart()` to start dsh;
@@ -31,7 +44,7 @@ Main-process entry `src/main/index.ts`:
 ## Lifecycle and quitting
 
 - **Closing the window**: hides to the tray by default (can be changed in settings to quit directly); closing the window does **not** stop dsh.
-- **Really quitting**: `before-quit` first calls `preventDefault()`, gracefully stops dsh asynchronously (`stopDshGracefully()`) → cleans up the remaining child processes → releases the second `app.quit()`.
+- **Really quitting**: `before-quit` first calls `preventDefault()`, gracefully stops dsh asynchronously (`stopDshGracefully()`) → cleans up the remaining child processes → `runModuleQuit()` (module `onQuit` in reverse order) → releases the second `app.quit()`.
 - **Safety net**: `process.on('exit')` kills the server and child processes once more to avoid orphans.
 
 ## Window and tab model

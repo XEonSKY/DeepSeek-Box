@@ -39,7 +39,7 @@ Files that were occupied during the move (typically a running `node.exe`) may no
 
 ## Cancelling an install
 
-`main/dsh/cancel.ts` provides a single active token: `beginCancelable()` / `cancelActive()` / `CANCELED_MESSAGE`.
+`main/kernel/operations.ts` provides a single active token: `beginCancelable()` / `cancelActive()` / `CANCELED_MESSAGE` (the former `dsh/cancel.ts` was merged into the kernel).
 
 Both download and extraction are bound to that token; the route `POST /installs/cancel` triggers it. After cancellation the temp files are cleaned up and `{ ok:false, canceled:true }` is returned; the renderer does not treat it as an error.
 
