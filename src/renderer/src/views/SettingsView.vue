@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, markRaw, onMounted, ref } from 'vue'
 import type { Component } from 'vue'
-import { SettingOutlined, DashboardOutlined, BulbOutlined, ApiOutlined, DeploymentUnitOutlined, ClusterOutlined, AppstoreOutlined, CodeFilled, ControlOutlined, InfoCircleFilled, RobotFilled } from '@antdv-next/icons'
+import { SettingOutlined, DashboardOutlined, BulbOutlined, ApiOutlined, DeploymentUnitOutlined, ClusterOutlined, AppstoreOutlined, CodeFilled, ControlOutlined, InfoCircleFilled, RobotFilled, ApiFilled } from '@antdv-next/icons'
 import { useRoute, useRouter } from 'vue-router'
 import { useSettingsStore } from './settings/useSettingsStore'
 import { extMenus } from '../extensions/panels'
@@ -34,6 +34,27 @@ const menus: { key: Group; icon: Component }[] = [
  * 外壳不为它写特例 —— 内置扩展与外部扩展在控制点上的待遇一致，唯一的差别是主进程侧的加载方式。
  */
 const extItems = computed(() => extMenus())
+
+/**
+ * 扩展面板侧栏图标：贡献里只能给**图标名**（字符串），外壳在这里查表映射成组件 ——
+ * 扩展不允许传组件进来，否则等于让它往外壳的 JS 上下文里注入任意实现。
+ *
+ * 表里没有的名字（或干脆没声明 `icon`）一律回落到 {@link EXT_ICON_FALLBACK}，
+ * 所以这里**必须**有一个兜底项，不能出现"查不到就是空白"的情况。
+ */
+const EXT_ICON_FALLBACK: Component = markRaw(ApiFilled)
+const EXT_ICONS: Record<string, Component> = {
+    api: markRaw(ApiFilled),
+    app: markRaw(AppstoreOutlined),
+    cluster: markRaw(ClusterOutlined),
+    dashboard: markRaw(DashboardOutlined),
+    setting: markRaw(SettingOutlined)
+}
+
+/** 取扩展面板的图标组件；查不到就回落（保证侧栏每项都有图标）。 */
+function extIcon(name: string | undefined): Component {
+    return (name && EXT_ICONS[name]) || EXT_ICON_FALLBACK
+}
 
 /**
  * 由当前子路由决定高亮分组。
@@ -97,7 +118,7 @@ onMounted(async () => {
                     :class="{ on: activeGroup === m.key }"
                     @click="go(m.key)"
                 >
-                    <el-icon :size="18"><ApiFilled /></el-icon>
+                    <el-icon :size="18"><component :is="extIcon(m.icon)" /></el-icon>
                     <span class="nav__label" :title="m.extName">{{ $t(m.titleKey) }}</span>
                 </button>
             </nav>
