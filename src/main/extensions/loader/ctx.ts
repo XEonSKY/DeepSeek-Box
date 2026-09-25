@@ -134,7 +134,7 @@ export interface ExtContext {
      *
      * 放运行期产生的数据（下载的核心、状态文件、缓存……），与 `dir`（代码目录）
      * 分离 —— 代码目录随安装/卸载增删，数据目录在扩展重装后仍然保留。
-     * 路径形如 `<配置目录>/extensions/data/<extId>`。
+     * 路径形如 `<配置目录>/data/extensions/<extId>`。
      */
     readonly dataDir: string
     /** 本次加载的扩展 API 版本。 */

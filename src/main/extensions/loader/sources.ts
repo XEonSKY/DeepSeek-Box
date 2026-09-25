@@ -124,16 +124,14 @@ export function discoverExternal(): DiscoveredExt[] {
 // ---------------------------------------------------------------------------
 
 /**
- * 扩展数据根：`~/.dsbox/{channel}/extensions/data`。
+ * 扩展数据根：`~/.dsbox/{channel}/data/extensions`。
  *
- * 为什么在 `extensions` 下再加一层 `data/` 而不是直接 `extensions/<extId>/`：
- * `extensions/<extId>/` 是**外部扩展的安装目录**（代码），扩展扫描以「子目录里有
- * manifest.json」为准 —— 数据混进去有两个问题：与外部扩展代码目录同名冲突；
- * 卸载扩展时整目录删除会把用户数据一起带走。加 `data/` 一层后代码与数据分离，
- * 重装扩展数据仍在；`data` 目录没有 manifest.json，天然被扫描跳过。
+ * 与 `extensions/`（外部扩展的**代码**安装目录）分开：代码随安装/卸载增删，
+ * 数据要跨重装保留。放在配置目录的 `data/extensions` 下，每个扩展一个以
+ * 扩展 id 命名的专属子目录（见 extDataDir）。
  */
 export function extensionDataRoot(): string {
-    return path.join(externalRoot(), 'data')
+    return path.join(configDir(), 'data', 'extensions')
 }
 
 /** 某扩展的专属数据目录（只算路径，不落盘；创建见 ensureExtDataDir）。 */
