@@ -2,7 +2,7 @@ import path from 'node:path'
 import { app } from 'electron'
 import { registerIpc, runModuleReady, runModuleQuit } from './app/ipc'
 import { startAutoCheckIfEnabled, noteGracefulExit } from './app/appupdate'
-import { loadSettings, startConfigWatchers, readDiskSettings, syncNativeTheme, ensureDefaultConfigMigration, waitForConfigMigration } from './app/settings'
+import { loadSettings, startConfigWatchers, readDiskSettings, syncNativeTheme, ensureDefaultConfigMigration, waitForConfigMigration, configDir } from './app/settings'
 import { createShellWindow, createTray, showMainWindow, syncGlobalHotkey } from './app/ui'
 import { applyHardwareAcceleration, applyWebviewProxy, applyWebviewUserAgent, installWebviewPermissionPolicy } from './app/webview'
 import { applyAutoLaunch } from './app/autolaunch'
@@ -12,7 +12,18 @@ import { nodeVersionOf } from './dsh/tools'
 import { restart, killServer, stopDshGracefully } from './dsh/dsh'
 import { killAllChildren } from './dsh/logbus'
 import { getTray, setQuitting, destroyTray } from './kernel/runtime'
+import { initLogger, closeLogger, logger } from './kernel/logger'
 import { startLoader, stopLoader } from './extensions/loader'
+
+const log = logger('[Manager]')
+
+// ---------------------------------------------------------------------------
+// 日志初始化必须尽早：此后主进程的每一行诊断输出都经 pino（控制台 + 落盘到
+// <配置目录>/logs/）。configDir() 允许在 Electron ready 之前调用（它只读一个
+// 指针文件与迁移计划，不碰 app.whenReady 之后才有的东西），所以放这里安全。
+// 万一目录不可写，initLogger 内部会退化成「只输出控制台」，不会拖垮启动。
+// ---------------------------------------------------------------------------
+initLogger(configDir())
 
 // ---------------------------------------------------------------------------
 // Dev vs release isolation. A dev run must not grab the installed release's
@@ -93,7 +104,7 @@ if (!gotLock) {
         try {
             await startLoader()
         } catch (err) {
-            console.error('[ext] 扩展层启动失败（已忽略，继续启动应用）', err)
+            log.error({ err }, 'extension layer failed to start (ignored; app continues)')
         }
         createShellWindow() // 首个窗口注册为核心窗口（内部登记角色并设为主窗口）
         createTray()
@@ -152,6 +163,7 @@ if (!gotLock) {
         }
         await runModuleQuit() // 各模块逆序收尾（停 watcher、清资源）
         destroyTray()
+        closeLogger() // 刷盘并收掉 pino 的 transport worker，避免退出时丢最后几行
     }
     const requestCleanExit = (): void => {
         if (cleanExitDone) {

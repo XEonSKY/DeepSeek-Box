@@ -17,7 +17,29 @@ import { loadShellMeta } from './shell/shellmeta'
 import { startOperationTracking } from './shell/progressStore'
 import { startRendererExtensions } from './extensions'
 import { setupAntdv } from './lib/antdv'
+import { logger } from './lib/logger'
 import type { ResolvedLocale } from '@shared/types'
+
+const log = logger('[shell]')
+
+/**
+ * 兜住渲染层未捕获的错误 / 未处理的 Promise 拒绝。
+ *
+ * 之前这两类异常**完全静默**：用户看到界面卡住或某个操作没反应，而进程里不留任何痕迹，
+ * 事后无从查起。挂上处理器后，它们会经 logger 进控制台并转交主进程落盘。
+ *
+ * 放在模块顶层（而非 bootstrap 内）：bootstrap 自己抛错时也要能被兜住。
+ */
+function installGlobalErrorHandlers(): void {
+    window.addEventListener('error', (e) => {
+        log.error({ err: e.error ?? e.message, source: e.filename, line: e.lineno, col: e.colno }, 'uncaught error')
+    })
+    window.addEventListener('unhandledrejection', (e) => {
+        log.error({ err: e.reason }, 'unhandled rejection')
+    })
+}
+
+installGlobalErrorHandlers()
 
 /** 该窗口是否是「独立确认子窗口」（同一个 index.html，用 query 区分入口）。 */
 function isConfirmWindow(): boolean {

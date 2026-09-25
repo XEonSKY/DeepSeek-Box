@@ -24,6 +24,22 @@ interface Contribution {
 
 const items: Contribution[] = []
 
+/**
+ * 撤销失败时的上报出口。
+ *
+ * 本模块刻意**保持纯逻辑**（不 import fs / electron / 日志库），所以不直接依赖 logger，
+ * 而是留一个可注入的 sink：加载器在启动时把主进程 logger 接进来，探针里不接就退化成
+ * `console.error`。这样既守住了「纯逻辑可单测」的约束，又让真实运行的输出走统一日志。
+ */
+let onDisposeError: (kind: string, key: string, err: unknown) => void = (kind, key, err) => {
+    console.error(`[ext] 撤销贡献点失败：${kind} ${key}`, err)
+}
+
+/** 注入撤销失败的上报出口（由加载器在启动时调用）。 */
+export function setDisposeErrorSink(sink: (kind: string, key: string, err: unknown) => void): void {
+    onDisposeError = sink
+}
+
 /** 登记一条贡献，返回撤销函数（便于调用方在内部提前归还）。 */
 export function register(owner: string, kind: string, key: string, dispose: () => void): () => void {
     const dedup = `${kind}\u0000${key}`
@@ -46,7 +62,7 @@ function removeOne(item: Contribution): void {
         item.dispose()
     } catch (err) {
         // 撤销阶段的异常不该阻断卸载流程：报出来继续摘其它的。
-        console.error(`[ext] 撤销贡献点失败：${item.kind} ${item.key}`, err)
+        onDisposeError(item.kind, item.key, err)
     }
 }
 

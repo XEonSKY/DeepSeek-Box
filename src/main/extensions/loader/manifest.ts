@@ -10,6 +10,9 @@
 
 import type { ExtCapability, ExtContributions, ExtManifest, ExtSettingsContribution, ExtTabContribution } from '@shared/extensions'
 import { SYS_CAPABILITIES } from '@shared/extensions'
+import { logger } from '../../kernel/logger'
+
+const log = logger('[ext]')
 
 /** 解析结果：要么给出清单，要么给出「为什么不能用」。 */
 export type ManifestParseResult = { ok: true; manifest: ExtManifest } | { ok: false; reason: string }
@@ -145,7 +148,7 @@ export function parseManifest(raw: unknown): ManifestParseResult {
         const dropped = o.capabilities.length - caps.length
         if (dropped > 0) {
             // 只提示不失败：未知能力可能来自更新的 Box 版本，直接丢弃即可。
-            console.warn(`[ext] ${id}: 忽略了 ${dropped} 个无法识别的能力名`)
+            log.warn(`${id}: ignored ${dropped} unrecognized capability name(s)`)
         }
     }
 

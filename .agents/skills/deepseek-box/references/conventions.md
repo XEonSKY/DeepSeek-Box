@@ -56,9 +56,16 @@
 - 新增依赖允许，但**优先复用现有能力**，避免重复依赖与体积膨胀。
 - **依赖分区规则**（本仓库约定，别装错）：
   - `devDependencies`：**所有前端 / 构建期依赖**。本项目连 `vue`、`pinia`、`vue-router`、`vue-i18n`、`element-plus`、`antdv-next`、`@vueuse/core`、`@xterm/*`、Vite 插件、resolver 都在这里——渲染层由 Vite 打包进产物，运行时不需要 node_modules。
-  - `dependencies`：**只放主进程 / 预加载的运行时依赖**。`electron.vite.config.ts` 给 `main` 与 `preload` 设了 `externalizeDeps: true`，它们不打进 bundle，必须随包分发。目前只有 `electron-updater`、`semver`、`yaml`。
+  - `dependencies`：**只放主进程 / 预加载的运行时依赖**。`electron.vite.config.ts` 给 `main` 与 `preload` 设了 `externalizeDeps: true`，它们不打进 bundle，必须随包分发。目前有 `defu`、`electron-updater`、`pino`、`pino-roll`、`semver`、`write-file-atomic`、`yaml`。
+    - 注意 `pino-pretty` 刻意**留在 `devDependencies`**：它是开发态控制台的格式化器，打包产物里不该有它（`kernel/logger` 只在 `NODE_ENV=development` 时才把它作为 transport 目标）。
   - 判断方法：`grep` 该包在 `src/main` / `src/preload` 是否有 import——有则 `dependencies`，只被 `src/renderer` 或构建配置使用则 `devDependencies`。
 - 用户可见的日志与错误必须走现有日志入口与 i18n（主进程 `mt()`、渲染层 `t()`），禁止硬编码文案。
+- **日志统一走 pino**（不要新增裸 `console.*`）：
+  - 主进程：`import { logger } from '../kernel/logger'` → `const log = logger('[Manager]')`，然后 `log.error({ err }, 'msg')`（结构化字段放第一参，消息放第二参）。
+  - 渲染层：`import { logger } from './lib/logger'`，用法一致。渲染层的 pino 是 **browser 构建**，输出只能进 devtools；**warn 及以上会自动上报主进程落盘**（`POST /logs/renderer`）。
+  - 落盘位置：`<配置目录>/logs/dsbox.log`（pino-roll，5 MB 轮转、保留 5 个历史文件）。开发态控制台走 pino-pretty 单行彩色，发行态走 JSON。
+  - **两个故意保留 `console.*` 的地方**：`dsh/watchdog.ts`（`WATCHDOG_CODE` 是脱离进程的独立脚本，不能依赖 pino）；`extensions/loader/registry.ts` 的默认兜底 sink（加载器启动时会注入真 sink 替换它）。
+  - 日志消息用**英文**（诊断文本，面向开发者；`[Manager]` / `[Core]` / `[ext]` / `[shell]` 作为 `tag` 沿用）。
 - 保持渲染层安全底线：`contextIsolation` 开启、渲染层无 Node、只经 `window.api`；放宽必须说明理由。
 
 ## 兼容性与回退

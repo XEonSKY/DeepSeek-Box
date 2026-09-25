@@ -16,6 +16,12 @@ import { proxyEnv } from './net'
 import { describePtcNode, syncPtcNode } from './ptcNodeSync'
 import { WATCHDOG_CODE } from './watchdog'
 import { killAllChildren, killTree, pushLog, rememberChild } from './logbus'
+import { logger } from '../kernel/logger'
+
+// dsh 子进程的输出既进终端（pushLog，用户可见），也进主进程日志（pino，可落盘排查）。
+// 两者用途不同：终端是给用户看的实时流，日志是给事后排查的带时间戳记录。
+const coreLog = logger('[Core]')
+const log = logger('[Manager]')
 
 /** Build the CLI args passed to the @deepseek-ai/dsh bin entry. */
 function dshArgs(host: string, port: number): string[] {
@@ -227,7 +233,7 @@ function spawnWatchdog(rt: NodeRuntime, launch: { entry: string; args: string[] 
 
     const rl = createInterface({ input: child.stdout! })
     rl.on('line', (line) => {
-        console.log('[Core]', line)
+        coreLog.info(line)
         pushLog('o', line)
         const m = line.match(/dsh web:\s*(https?:\/\/\S+)/i)
         if (m) finish(m[1])
@@ -237,7 +243,7 @@ function spawnWatchdog(rt: NodeRuntime, launch: { entry: string; args: string[] 
         const s = d.toString()
         stderrTail = (stderrTail + s).slice(-4000)
         pushLog('e', s)
-        console.error('[Core]', s.replace(/\n/g, '\n[Core]'))
+        coreLog.error(s.replace(/\n/g, '\n'))
     })
 
     child.stdin!.on('error', () => {})
@@ -250,7 +256,7 @@ function spawnWatchdog(rt: NodeRuntime, launch: { entry: string; args: string[] 
     })
 
     child.on('exit', (code) => {
-        console.log('[Manager] dsh exited (code=', code, ')')
+        log.info({ code }, 'dsh exited')
         clearTimeout(timer)
         // 进程已结束就清掉当前句柄，避免 isDshRunning / 后续优雅停误判到已死/复用 PID。
         if (serverProcess === child) serverProcess = null
@@ -277,7 +283,7 @@ async function runOneRestart(): Promise<void> {
         // PTC（run_code）worker 启动时会清空环境变量，必须用真 node；每次启动前
         // 按当前档位重算并写入 dsh 的 home 级 patch（幂等）。
         const ptc = syncPtcNode(effective.nodeRuntime)
-        console.log('[Manager]', describePtcNode(ptc))
+        log.info(describePtcNode(ptc))
         const url = await launchServer(effective)
         setCurrentUrl(url)
         sendCore('dsh:url', url) // 只通知核心窗口：dsh UI 由核心窗口承载

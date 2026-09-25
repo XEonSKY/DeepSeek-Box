@@ -5,7 +5,10 @@ import fs from 'node:fs'
 import type { AppIconInfo, AppIconState, Settings } from '@shared/types'
 import { configDir, loadSettings, persistSettings } from './settings'
 import { broadcast, getTray } from '../kernel/runtime'
+import { logger } from '../kernel/logger'
 import { listWindows } from './windowreg'
+
+const log = logger('[Manager]')
 
 /**
  * 程序图标（「设置 → 外观」的「程序图标」）。
@@ -224,7 +227,7 @@ export function deleteUserIcon(id: string): void {
     try {
         fs.rmSync(p, { force: true })
     } catch (err) {
-        console.error('[Manager] failed to delete icon:', err)
+        log.error({ err }, 'failed to delete icon')
         return
     }
     const cur = loadSettings()

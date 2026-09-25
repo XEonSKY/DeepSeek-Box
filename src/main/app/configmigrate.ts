@@ -3,6 +3,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { ConfigMigrationPlan } from '@shared/types'
 import writeFileAtomic from 'write-file-atomic'
+import { logger } from '../kernel/logger'
+
+const log = logger('[Manager]')
 
 /**
  * 配置目录迁移：计划持久化 + 目录树逐项搬迁（支持取消回滚）。
@@ -40,7 +43,7 @@ export function writeMigrationPlan(plan: ConfigMigrationPlan): void {
         fs.mkdirSync(path.dirname(file), { recursive: true })
         writeFileAtomic.sync(file, JSON.stringify(plan, null, 2), 'utf8')
     } catch (err) {
-        console.error('[Manager] failed to persist config migration plan:', err)
+        log.error({ err }, 'failed to persist config migration plan')
     }
 }
 
@@ -188,7 +191,7 @@ async function mergeInto(from: string, to: string, hooks: MigrateHooks, journal:
                 await yieldIfDue(state)
                 continue
             } catch (err) {
-                console.error('[Manager] failed to move', src, err)
+                log.error({ err, src }, 'failed to move')
             }
         }
         let st: fs.Stats
@@ -239,7 +242,7 @@ export async function migrateTree(plan: ConfigMigrationPlan, hooks: MigrateHooks
     try {
         await fs.promises.mkdir(plan.to, { recursive: true })
     } catch (err) {
-        console.error('[Manager] failed to create target config dir:', err)
+        log.error({ err }, 'failed to create target config dir')
     }
     await mergeInto(plan.from, plan.to, hooks, journal, { last: 0 })
     return { journal, stopped: hooks.shouldStop() }
@@ -254,7 +257,7 @@ export async function rollbackMoves(journal: MoveRecord[]): Promise<void> {
             await fs.promises.mkdir(path.dirname(src), { recursive: true })
             await fs.promises.rename(dst, src)
         } catch (err) {
-            console.error('[Manager] failed to roll back', dst, '->', src, err)
+            log.error({ err, dst, src }, 'failed to roll back')
         }
     }
 }

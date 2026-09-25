@@ -39,6 +39,21 @@
 - 新增键时 **zh / en / hant 三处一起加**，否则繁体用户会看到简体或原始 key；
 - 文案是**程序的一部分**（`src/shared/locales/**` 不算文档），可随功能一起改。
 
+## 日志
+
+日志统一走 **pino**，不要新增裸 `console.*`：
+
+- **主进程**：`import { logger } from '../kernel/logger'`，`const log = logger('[Manager]')`，用法
+  `log.error({ err }, 'message')`（结构化字段放第一参、消息放第二参）；
+- **渲染层**：`import { logger } from './lib/logger'`，用法一致。渲染层用的是 pino 的 **browser 构建**，
+  输出进 devtools；**warn 及以上会自动上报主进程**，与主进程日志一起落盘；
+- **落盘**：`<配置目录>/logs/dsbox.log`，由 `pino-roll` 按 5 MB 轮转、最多保留 5 个历史文件；
+  开发态控制台经 `pino-pretty` 输出单行彩色，发行态是 JSON；
+- **日志消息用英文**（诊断文本面向开发者）；模块标签 `[Manager]` / `[Core]` / `[ext]` / `[shell]`
+  通过 `logger(tag)` 落到 `tag` 字段；
+- 两个**故意保留 `console.*`** 的位置：`dsh/watchdog.ts`（脱离进程的独立脚本）与
+  `extensions/loader/registry.ts` 的默认兜底 sink（加载器启动时会注入真 sink 替换它）。
+
 ## 验证
 
 本仓库**不含单元测试**（`tests/`、`scripts/`、`vitest.config.mjs` 与 `vitest` 依赖均已移除，`package.json` 里也没有 `test` 脚本）。

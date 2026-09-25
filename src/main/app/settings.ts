@@ -11,7 +11,10 @@ import { DEFAULT_SETTINGS, COLOR_SCHEME_IDS, PROXY_SCOPE_IDS, SETTINGS_VERSION }
 import type { ConfigDirInfo, ConfigMigrationPlan, ConfigMigrationProgress, Settings, ResolvedLocale, LocaleCode, ColorSchemeId, ProxyScope } from '@shared/types'
 import { resolveLocale, t as tl } from '@shared/i18n'
 import { broadcast } from '../kernel/runtime'
+import { logger } from '../kernel/logger'
 import { clearMigrationPlan, migrateTree, readMigrationPlan, rollbackMoves, scanTree, writeMigrationPlan } from './configmigrate'
+
+const log = logger('[Manager]')
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -70,7 +73,7 @@ function writeConfigOverride(dir: string | null): void {
             }
         }
     } catch (err) {
-        console.error('[Manager] failed to persist config-dir override:', err)
+        log.error({ err }, 'failed to persist config-dir override')
     }
 }
 
@@ -129,7 +132,7 @@ export function setConfigDir(dir: string | null): ConfigDirInfo {
     const override = !!dir
     if (to !== from && isNestedDir(from, to)) {
         // 互为父子目录：搬迁会自我递归，直接拒绝并保持原目录（渲染层据此提示用户）
-        console.warn('[Manager] refuse nested config dir:', from, '->', to)
+        log.warn({ from, to }, 'refuse nested config dir')
         return configDirInfo()
     }
     if (to === from) {
@@ -179,7 +182,7 @@ export function ensureDefaultConfigMigration(): void {
             return
         }
     } catch (err) {
-        console.error('[Manager] failed to queue default config migration:', err)
+        log.error({ err }, 'failed to queue default config migration')
     }
 }
 
@@ -267,7 +270,7 @@ export async function runConfigMigration(): Promise<void> {
         finish(true, false)
     } catch (err) {
         // 兜底：任何未预期异常都不能让引导阶段卡住（保持旧目录并放行启动）
-        console.error('[Manager] config migration crashed:', err)
+        log.error({ err }, 'config migration crashed')
         finish(false, false)
     }
 }
@@ -604,7 +607,7 @@ function writeDshPreference(entry: { id: string; name: string }, field: string, 
         lastSelfPatchWrite = Date.now()
         return true
     } catch (err) {
-        console.error(`[Manager] failed to write ${entry.id}.${field} to dsh profile patch:`, err)
+        log.error({ err, entry: entry.id, field }, 'failed to write to dsh profile patch')
         return false
     }
 }
@@ -707,7 +710,7 @@ function watchConfigFile(name: string, dir: string, onChange: () => void): void 
         })
         configWatchers.push(w)
     } catch (err) {
-        console.error(`[Manager] failed to watch ${name} in ${dir}:`, err)
+        log.error({ err, name, dir }, 'failed to watch config file')
     }
 }
 

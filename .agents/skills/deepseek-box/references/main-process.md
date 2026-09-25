@@ -13,6 +13,7 @@ kernel/     ← 稳定的「机制」：不认识任何业务名词，只认识�
   operations.ts   进度注册表 + 取消令牌 + trackedOperation（纯逻辑，emit 由外部注入）
   treeops.ts      整目录删除的唯一出口（转发 dsh/fsutil 的 removeTree/removeQuietly*）
   services.ts     服务槽：provideService / useService（模块间解耦，见下）
+  logger.ts       全进程唯一日志入口（pino + pino-roll；目录由启动方注入，kernel 不认业务目录）
 modules/    ← 可插拔的「策略」：每个功能一个文件，自己声明路由
   settings.ts  dsh.ts  env.ts  shell.ts  tabdrag.ts  appupdate.ts  configdir.ts
   index.ts        allModules()：模块清单
@@ -48,7 +49,7 @@ export default defineModule({
 - `onReady` 正序、`onQuit` 逆序（后建先拆）。`app/ipc.ts` 暴露 `runModuleReady()` / `runModuleQuit()`，
   由 `index.ts` 在 `whenReady` 与 `cleanExit` 里各调一次。
 
-## kernel 的另外三件「机制」
+## kernel 的另外四件「机制」
 
 - **进度注册表**（`kernel/operations.ts`）：`beginOperation` / `pushProgress`（返回「这次要不要广播」）/
   `currentProgress` / `endOperation` / `operationsSnapshot` / `isOperationRunning` / `MIN_INTERVAL_MS`。
@@ -63,6 +64,14 @@ export default defineModule({
   靠 import 图把「不跟随链接 + 不阻塞主进程」变成结构约束，而不是口头约定。
 - **服务槽**（`kernel/services.ts`）：`provideService(name, fn)`（重复注册抛错）/ `useService(name)`
   （未注册抛错）/ `hasService` / `resetServices` + `SERVICE` 常量。用于打断模块间静态依赖环。
+- **日志**（`kernel/logger.ts`）：`initLogger(dir)` / `logger(tag)` / `writeRemoteLog(rec)` / `closeLogger()`。
+  pino 实例带两个 transport —— 控制台（开发态 `pino-pretty`、发行态 JSON）+ 文件（`pino-roll` 写
+  `<配置目录>/logs/dsbox.log`，5 MB 轮转 / 留 5 个历史）。
+  - **目录靠注入**：kernel 不认业务目录，所以 `initLogger` 的 dir 由 `index.ts` 传 `configDir()` 进来。
+  - **`pino-pretty` 只在开发态挂**：它是 devDependency，打包产物里没有；靠 `NODE_ENV` 分支避开
+    MODULE_NOT_FOUND（不是 try/catch 探测）。
+  - **`initLogger` 之前调用 `logger()` 也不会炸**：退化成裸 pino（只进控制台）。
+  - 渲染层经 `POST /logs/renderer` 上报 warn 及以上，主进程用 `writeRemoteLog` 按级别号重新记一遍。
 
 ## app/（应用自身）
 

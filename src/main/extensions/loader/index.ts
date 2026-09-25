@@ -37,6 +37,15 @@ import { topoSort, reverseForUnload, type SortableItem } from './ordering'
 import { decideSafeMode, recordCrash, clearCrashesAfterCleanBoot } from './safemode'
 import { discoverExternal, externalRoot, currentChannel, staticExts } from './sources'
 import { loadState, saveState } from './state'
+import { logger } from '../../kernel/logger'
+
+const log = logger('[ext]')
+
+// registry 刻意保持纯逻辑（不依赖日志库），由这里注入上报出口，让撤销失败的输出
+// 也走主进程统一日志，而不是散落的 console.error。
+registry.setDisposeErrorSink((kind, key, err) => {
+    log.error({ err }, `failed to dispose contribution: ${kind} ${key}`)
+})
 
 // ---------------------------------------------------------------------------
 // 加载期的运行时状态
@@ -470,12 +479,12 @@ export async function stopLoader(): Promise<void> {
         try {
             await item.module.deactivate?.()
         } catch (err) {
-            console.error(`[ext] ${item.id} deactivate 抛错`, err)
+            log.error({ err }, `${item.id} deactivate threw`)
         }
         try {
             releaseOwner(item.id)
         } catch (err) {
-            console.error(`[ext] ${item.id} 撤销贡献失败`, err)
+            log.error({ err }, `${item.id} failed to revoke contributions`)
         }
     }
     state.loaded = []

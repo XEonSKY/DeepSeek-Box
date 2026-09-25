@@ -14,6 +14,7 @@
 | `operations.ts` | 「进行中的操作」注册表 + 取消令牌（**纯逻辑**） | `beginOperation` / `pushProgress` / `operationsSnapshot` / `trackedOperation` / `beginCancelable` / `cancelActive` |
 | `treeops.ts` | 整目录删除唯一出口 | 转发 `dsh/fsutil` 的 `removeTree` / `removeQuietly` / `removeQuietlySync` / `readPkgVersion` |
 | `services.ts` | 服务槽（打断模块间静态环） | `provideService` / `useService` / `hasService` / `SERVICE` |
+| `logger.ts` | 全进程唯一日志入口（pino + pino-roll） | `initLogger` / `logger(tag)` / `writeRemoteLog` / `closeLogger`；目录由 `index.ts` 注入，kernel 不认业务目录 |
 
 ## modules/（功能策略）
 

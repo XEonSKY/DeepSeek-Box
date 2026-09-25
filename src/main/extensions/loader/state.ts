@@ -13,6 +13,9 @@ import path from 'node:path'
 import writeFileAtomic from 'write-file-atomic'
 import type { ExtStateFile } from '@shared/extensions'
 import { configDir } from '../../app/settings'
+import { logger } from '../../kernel/logger'
+
+const log = logger('[ext]')
 
 /** 状态文件结构版本。 */
 const STATE_VERSION = 1
@@ -63,6 +66,6 @@ export function saveState(state: ExtStateFile): void {
         fs.mkdirSync(path.dirname(file), { recursive: true })
         writeFileAtomic.sync(file, JSON.stringify(state, undefined, 2) + '\n')
     } catch (err) {
-        console.error('[ext] 保存扩展状态失败', err)
+        log.error({ err }, 'failed to save extension state')
     }
 }

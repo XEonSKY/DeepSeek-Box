@@ -26,6 +26,10 @@ import { registerShellWindow, hasCoreWindow, promoteNextToCore, windowByContents
 import { attachContextMenu } from './contextmenu'
 import { dshInstalled } from '../dsh/manage'
 import { effectiveIconPath } from './appicon'
+import { logger } from '../kernel/logger'
+
+const log = logger('[shell]')
+const mlog = logger('[Manager]')
 
 /** 渲染层入口：dev 下是 Vite server URL，打包后是 index.html 的绝对路径。 */
 export function rendererIndex(): string {
@@ -390,10 +394,10 @@ export function createSecondaryShellWindow(url?: string): BrowserWindow | null {
     const initial = okNewtab ? NEWTAB_URL : (url as string)
     try {
         const win = buildShellWindow(false, initial)
-        console.log('[shell] created secondary window wcId=', win.webContents.id, 'target=', initial ?? '(none)')
+        log.info({ wcId: win.webContents.id, target: initial ?? '(none)' }, 'created secondary window')
         return win
     } catch (err) {
-        console.error('[shell] failed to create secondary window:', err)
+        log.error({ err }, 'failed to create secondary window')
         return null
     }
 }
@@ -513,7 +517,7 @@ export function createTray(): void {
         })
     } catch (err) {
     // Tray may be unavailable (e.g. some Linux setups). Degrade gracefully.
-        console.error('[Manager] failed to create tray:', err)
+        mlog.error({ err }, 'failed to create tray')
         setTray(null)
     }
 }

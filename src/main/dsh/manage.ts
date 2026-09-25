@@ -15,6 +15,9 @@ import { registryBase } from './registry'
 import { httpFetch } from './http'
 import { beginCancelable, CANCELED_MESSAGE } from '../kernel/operations'
 import { activeVersion, listInstalled, removeVersion, setActiveVersion, versionDir } from './installs'
+import { logger } from '../kernel/logger'
+
+const log = logger('[Manager]')
 
 // ---------------------------------------------------------------------------
 // @deepseek-ai/dsh install & version checks (source-aware: local vs global)
@@ -155,7 +158,7 @@ function probeDirInUse(dir: string): boolean {
         try {
             fs.renameSync(tmp, dir)
         } catch {
-            console.error('[Manager] could not restore module dir after lock probe:', tmp)
+            log.error({ tmp }, 'could not restore module dir after lock probe')
         }
     }
     return false

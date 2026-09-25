@@ -39,6 +39,22 @@ Before changing code or documentation, please follow these conventions.
 - When adding a key, add it to **zh / en / hant together**, otherwise Traditional Chinese users see Simplified text or the raw key;
 - Strings are **part of the program** (`src/shared/locales/**` does not count as documentation) and may change together with the feature.
 
+## Logging
+
+All logging goes through **pino**; do not add bare `console.*` calls:
+
+- **Main process**: `import { logger } from '../kernel/logger'`, `const log = logger('[Manager]')`, used as
+  `log.error({ err }, 'message')` (structured fields first, message second);
+- **Renderer**: `import { logger } from './lib/logger'`, same usage. The renderer uses pino's **browser
+  build**, so output lands in devtools; **warn and above is reported to the main process** and written to
+  the same log file;
+- **On disk**: `<config dir>/logs/dsbox.log`, rotated by `pino-roll` at 5 MB with up to 5 historical files.
+  Development console output is single-line color via `pino-pretty`; release output is JSON;
+- **Messages are in English** (diagnostic text aimed at developers); the module tags
+  `[Manager]` / `[Core]` / `[ext]` / `[shell]` land in the `tag` field via `logger(tag)`;
+- Two places **intentionally keep `console.*`**: `dsh/watchdog.ts` (a standalone detached script) and the
+  default fallback sink in `extensions/loader/registry.ts` (the loader injects a real sink at startup).
+
 ## Verification
 
 This repository ships **no unit tests** (`tests/`, `scripts/`, `vitest.config.mjs` and the `vitest` dependency have all been removed, and `package.json` has no `test` script).

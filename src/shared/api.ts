@@ -101,6 +101,15 @@ export interface ApiRoutes {
 
     // ---- 日志 ----
     'GET /logs': { result: LogEntry[] }
+    /**
+     * 渲染层把一条日志上报给主进程，落进同一份日志文件（见 main/modules/settings.ts）。
+     *
+     * 渲染层没有文件系统，它的 pino 是 browser 构建，输出只能进 devtools 控制台；
+     * 上报到主进程后，「渲染层报错」才和主进程其它日志一样可被事后排查。
+     * 只传「级别 + tag + 消息」三样，由主进程用自己的 logger 重记一遍 ——
+     * 这样时间戳来源统一、也能被 pino-roll 一起轮转。
+     */
+    'POST /logs/renderer': { body: { level: number; tag?: string; message: string }; result: void }
 
     /**
      * 正在进行中的操作快照（Node / npm / pnpm 下载、插件安装…）。

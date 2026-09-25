@@ -11,6 +11,9 @@ import { pushLog } from './logbus'
 import { proxyEnv } from './net'
 import { beginCancelable, CANCELED_MESSAGE } from '../kernel/operations'
 import { bundledPnpmCli, ensureBundledPnpmReady, pnpmShimEnv, pnpmStoreEnv, systemPnpmPath } from './pnpmRunner'
+import { logger } from '../kernel/logger'
+
+const log = logger('[Manager]')
 import {
     buildPluginEntries,
     effectiveBundles,
@@ -193,11 +196,11 @@ async function runDshPlugin(
             stderrTailLimit: 4000,
             onStdoutLine: (line) => {
                 pushLog('o', line)
-                console.log('[Manager]', line)
+                log.info(line)
             },
             onStderr: (s) => {
                 pushLog('e', s)
-                console.error('[Manager]', s.replace(/\n/g, '\n[Manager]'))
+                log.error(s.replace(/\n/g, '\n'))
             }
         },
         signal

@@ -6,6 +6,9 @@ import { findSystemNode, localNodeExecPath } from './tools'
 import { homePatchFile } from './dshHome'
 import { isValidNodeExecutable, mergePtcNodePatch, pickPtcNode } from './ptcNode'
 import type { NodeCandidate } from './ptcNode'
+import { logger } from '../kernel/logger'
+
+const log = logger('[Manager]')
 
 /**
  * 把 `nodeExecutable` 写进 dsh 的 **home 级 patch 层**，修复 PTC（run_code）worker 崩溃。
@@ -119,7 +122,7 @@ export function syncPtcNode(runtimeKind: NodeRuntimeKind): PtcNodeSyncResult {
         writeFileAtomic.sync(file, next, 'utf8')
         return { ...res, written: true }
     } catch (err) {
-        console.error('[Manager] failed to write dsh home patch (ptc nodeExecutable):', err)
+        log.error({ err }, 'failed to write dsh home patch (ptc nodeExecutable)')
         return { ...res, written: false }
     }
 }

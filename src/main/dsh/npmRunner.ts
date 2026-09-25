@@ -18,6 +18,9 @@ import { beginCancelable, CANCELED_MESSAGE } from '../kernel/operations'
 import { activeVersion, installRoot, listInstalled, prepareVersionDir, removeVersion, setActiveVersion, versionDir } from './installs'
 // registry 基址搬去 registry.ts（纯模块，可单测）；本文件只作为使用方引入。
 import { registryBase } from './registry'
+import { logger } from '../kernel/logger'
+
+const log = logger('[Manager]')
 
 /**
  * npm / 外部工具的调用层：如何按所选来源（系统 npm、内置 npm、本地 Node 自带 npm）
@@ -56,11 +59,11 @@ async function runTool(exec: string, argv: string[], label: string, opts: { shel
             stderrTailLimit: 3000,
             onStdoutLine: (line) => {
                 pushLog('o', line)
-                console.log('[Manager]', line)
+                log.info(line)
             },
             onStderr: (s) => {
                 pushLog('e', s)
-                console.error('[Manager]', s.replace(/\n/g, '\n[Manager]'))
+                log.error(s.replace(/\n/g, '\n'))
             }
         },
         signal

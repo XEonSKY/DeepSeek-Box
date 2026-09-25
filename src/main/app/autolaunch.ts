@@ -5,6 +5,9 @@ import type { Settings as LoginItemSettings } from 'electron'
 import os from 'node:os'
 import path from 'node:path'
 import fs from 'node:fs'
+import { logger } from '../kernel/logger'
+
+const log = logger('[Manager]')
 
 /**
  * 开机自启（「设置 → 系统与性能」的「启动增强」）。
@@ -44,7 +47,7 @@ function applyLinuxAutoLaunch(enabled: boolean): void {
         ].join('\n')
         fs.writeFileSync(file, entry, 'utf8')
     } catch (err) {
-        console.error('[Manager] failed to write Linux autostart entry:', err)
+        log.error({ err }, 'failed to write Linux autostart entry')
     }
 }
 
@@ -63,6 +66,6 @@ export function applyAutoLaunch(enabled: boolean): void {
         }
         app.setLoginItemSettings(opts)
     } catch (err) {
-        console.error('[Manager] failed to apply auto-launch:', err)
+        log.error({ err }, 'failed to apply auto-launch')
     }
 }

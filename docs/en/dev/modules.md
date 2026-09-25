@@ -16,6 +16,7 @@ through the service slot in `kernel/services.ts`.
 | `operations.ts` | "Operations in progress" registry + cancellation tokens (**pure logic**) | `beginOperation` / `pushProgress` / `operationsSnapshot` / `trackedOperation` / `beginCancelable` / `cancelActive` |
 | `treeops.ts` | The single entry point for whole-directory deletion | Re-exports `dsh/fsutil`'s `removeTree` / `removeQuietly` / `removeQuietlySync` / `readPkgVersion` |
 | `services.ts` | Service slot (breaks static cycles between modules) | `provideService` / `useService` / `hasService` / `SERVICE` |
+| `logger.ts` | The single logging entry point (pino + pino-roll) | `initLogger` / `logger(tag)` / `writeRemoteLog` / `closeLogger`; the directory is injected by `index.ts` — kernel knows no business paths |
 
 ## modules/ (feature policy)
 

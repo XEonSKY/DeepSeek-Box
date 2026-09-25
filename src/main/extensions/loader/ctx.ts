@@ -13,9 +13,22 @@
  * 本文件只定义**形状**与构造逻辑；实际的加载/注入编排在 loader/index.ts。
  */
 
+import { format } from 'node:util'
 import type { ExtCapability, ExtKind, ExtSettingsContribution, ExtTabContribution } from '@shared/extensions'
+import { logger } from '../../kernel/logger'
 import * as capability from './capability'
 import * as registry from './registry'
+
+/**
+ * 把扩展 logger 的可变参压成一条消息。
+ *
+ * pino 的第一个参数是「合并对象」或「消息字符串」，不像 console 那样接受任意个参数；
+ * 扩展 API 的 `ExtLogger` 沿用了 console 风格的可变参，所以这里先归一：
+ * 首个字符串之外的内容用 `util.format` 拼进同一条消息，保证扩展作者不用改写法。
+ */
+function formatArgs(message: unknown, rest: unknown[]): string {
+    return rest.length === 0 ? String(message) : format(String(message), ...rest)
+}
 
 /**
  * 扩展可以调用的能力接口。
@@ -185,11 +198,13 @@ export function createContext(options: {
         }
     }
 
+    // 扩展自己的日志：走主进程统一日志入口（pino），tag 带上扩展 id 便于检索。
     const tag = `[ext:${id}]`
+    const extLog = logger(tag)
     const log: ExtLogger = {
-        info: (message, ...rest) => console.log(tag, message, ...rest),
-        warn: (message, ...rest) => console.warn(tag, message, ...rest),
-        error: (message, ...rest) => console.error(tag, message, ...rest)
+        info: (message, ...rest) => extLog.info(formatArgs(message, rest)),
+        warn: (message, ...rest) => extLog.warn(formatArgs(message, rest)),
+        error: (message, ...rest) => extLog.error(formatArgs(message, rest))
     }
 
     return { id, kind, dir, apiVersion, capabilities, tabs, settings, ipc, log, disposables }

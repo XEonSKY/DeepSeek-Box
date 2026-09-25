@@ -7,6 +7,7 @@ import { defineModule } from '../kernel/module'
 import { operationsSnapshot } from '../kernel/operations'
 import { SERVICE, useService } from '../kernel/services'
 import { getLogHistory } from '../dsh/logbus'
+import { writeRemoteLog } from '../kernel/logger'
 import { readDiskSettings, persistSettings, syncDshTheme, syncNativeTheme, dshLocale, writeDshLocale, normalizeNpmSource } from '../app/settings'
 import { syncGlobalHotkey } from '../app/ui'
 import { applyAutoLaunch } from '../app/autolaunch'
@@ -81,6 +82,10 @@ export default defineModule({
                 applyAppIcon(d)
                 broadcast('settings:changed', d)
                 return d
+            },
+            // 渲染层日志上报：用自己的 logger 重记一遍，落进同一份文件（见 kernel/logger.ts）。
+            '/logs/renderer': ({ body }) => {
+                writeRemoteLog(body)
             }
         }
     }
