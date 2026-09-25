@@ -1,13 +1,15 @@
 import type { BrowserWindow, Tray } from 'electron'
 import { IPC_EVENT_CHANNEL } from '@shared/api'
-import { listWindows, coreWindowId, windowByContentsId } from './windowreg'
+import { listWindows, coreWindowId, windowByContentsId } from '../app/windowreg'
 
 /**
- * Lowest-level cross-cutting runtime state shared by every main-process module.
+ * kernel：最底层的跨模块运行态原语。
  *
- * Kept deliberately tiny and cycle-free: feature modules (settings / dsh /
- * dsh server / ui / ipc) import these primitives; nothing imports them back, so
- * there is no import cycle. Electron types are imported as `type` only.
+ * 刻意保持极小且无环：功能模块（settings / dsh / env / shell / ipc）import 这些原语，
+ * 而这里不 import 任何功能模块，所以没有循环依赖。Electron 类型只作为 `type` 引入。
+ *
+ * 这是微内核的「机制」半边：它只回答「往哪儿发事件」「主窗口 / 托盘是哪个」，
+ * 不关心任何具体业务。
  */
 export const IS_WIN = process.platform === 'win32'
 

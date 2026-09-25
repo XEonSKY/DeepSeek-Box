@@ -4,13 +4,13 @@ import type { InstalledVersions, NodeDeployProgress, NodeDeployResult, NodeRunti
 import { loadSettings, tempDownloadDir } from '../app/settings'
 import { isDshRunning } from './dsh'
 import { runChild } from './child'
-import { removeQuietly } from './fsutil'
+import { removeQuietly } from '../kernel/treeops'
 import { pushLog } from './logbus'
 import { findSystemNode, localNodeExecPath, nodeVersionOf } from './tools'
 import { compareVersions, stripV } from './semver'
 import { downloadFile } from './downloader'
 import { httpFetch } from './http'
-import { beginCancelable, CANCELED_MESSAGE } from './cancel'
+import { beginCancelable, CANCELED_MESSAGE } from '../kernel/operations'
 import { activeVersion, installRoot, listInstalled, prepareVersionDir, removeVersion, resolveActive, setActiveVersion, versionDir } from './installs'
 
 /**

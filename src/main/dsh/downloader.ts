@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { DownloadThreads } from '@shared/types'
 import { errorMessage } from '@shared/errors'
-import { removeQuietly } from './fsutil'
+import { removeQuietly } from '../kernel/treeops'
 import { httpFetch } from './http'
 import type { HttpScope } from './http'
 

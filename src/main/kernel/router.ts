@@ -114,7 +114,11 @@ export class Router {
         })
     }
 
-    private add(method: HttpMethod, path: string, handler: unknown): this {
+    /**
+     * 登记一条路由。公开给 ModuleRegistry 用（模块自己声明端点表，由装配器统一挂载）；
+     * 模块侧不要直接调用 —— 用 `defineModule()` 声明，好处是重名会在装配期被拦下。
+     */
+    add(method: HttpMethod, path: string, handler: unknown): this {
         this.table[method].push({
             segments: splitPath(path),
             handler: handler as (context: RouteContext<RouteKey>) => unknown

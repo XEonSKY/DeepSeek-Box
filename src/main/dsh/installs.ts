@@ -1,10 +1,10 @@
 import path from 'node:path'
 import fs from 'node:fs'
-import { IS_WIN } from '../app/runtime'
+import { IS_WIN } from '../kernel/runtime'
 import { configDir } from '../app/settings'
 import type { InstallKind } from '@shared/types'
 import { sortVersionsDesc } from './semver'
-import { readPkgVersion, removeQuietlySync, removeTree } from './fsutil'
+import { readPkgVersion, removeQuietlySync, removeTree } from '../kernel/treeops'
 import { PNPM_MANIFEST_REL, isPnpmPackageReady } from './pnpmEntry'
 
 /**

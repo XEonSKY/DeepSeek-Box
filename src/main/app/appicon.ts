@@ -4,7 +4,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import type { AppIconInfo, AppIconState, Settings } from '@shared/types'
 import { configDir, loadSettings, persistSettings } from './settings'
-import { broadcast, getTray } from './runtime'
+import { broadcast, getTray } from '../kernel/runtime'
 import { listWindows } from './windowreg'
 
 /**

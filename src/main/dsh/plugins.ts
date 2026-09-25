@@ -9,7 +9,7 @@ import { resolveDshModule, nodeRuntimeForCfg } from './tools'
 import { runChild } from './child'
 import { pushLog } from './logbus'
 import { proxyEnv } from './net'
-import { beginCancelable, CANCELED_MESSAGE } from './cancel'
+import { beginCancelable, CANCELED_MESSAGE } from '../kernel/operations'
 import { bundledPnpmCli, ensureBundledPnpmReady, pnpmShimEnv, pnpmStoreEnv, systemPnpmPath } from './pnpmRunner'
 import {
     buildPluginEntries,

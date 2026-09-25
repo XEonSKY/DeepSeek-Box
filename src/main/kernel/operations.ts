@@ -13,6 +13,10 @@
  * 另外这里做**节流**：下载进度是每个数据块回调一次，直接转发会给渲染层灌几千条 IPC 消息
  * （界面发卡的来源之一）。同一操作在 `MIN_INTERVAL_MS` 内的重复进度只保留最后一条，
  * 但**阶段变化**（下载 → 解压）与最后一次进度一定送出，否则进度条会停在半路。
+ *
+ * 本文件同时收纳「可取消令牌」（同类：在途操作的机制），以及把长耗时操作包成
+ * 「可被任意页面重新取回」的 `trackedOperation`（见文件末尾）。三者都属于 kernel 机制，
+ * 因此各功能模块共用它们，无需互相 import。
  */
 
 import type { NodeDeployProgress, OperationKind, OperationProgress } from '@shared/types'
@@ -88,4 +92,103 @@ export function endOperation(kind: OperationKind): boolean {
 /** 清空全部记录（测试用）。 */
 export function resetOperations(): void {
     running.clear()
+}
+
+// ---------------------------------------------------------------------------
+// 可取消操作令牌（与上面的进度注册表同属「在途操作」机制，故并入 kernel）
+// ---------------------------------------------------------------------------
+
+/**
+ * Node / npm / pnpm / dsh 的安装（下载 + 解压 + 落盘）各自持有一个令牌，
+ * 渲染层「取消」按钮经 IPC 调 `cancelActive()` 中止**当前所有**在途操作。
+ *
+ * 之所以用集合而不是单槽：node / npm / pnpm 的部署入口之间没有互斥（见 modules/env.ts
+ * 的 `/node/deploy`、`/npm/update`、`/npm/ensure`），若只记最后一个令牌，先发的操作会
+ * 失去取消能力 —— 「取消」只覆盖了一半路径。每个操作结束后由 `done()` 自行摘除。
+ */
+const activeCancels = new Set<{ ctrl: AbortController }>()
+
+export interface CancelToken {
+    signal: AbortSignal
+    /** 操作结束时调用；只清理属于自己的令牌，避免误清后来的操作。 */
+    done(): void
+}
+
+/** 开始一个可取消操作并返回令牌。 */
+export function beginCancelable(): CancelToken {
+    const ctrl = new AbortController()
+    const entry = { ctrl }
+    activeCancels.add(entry)
+    const token: CancelToken = {
+        signal: ctrl.signal,
+        done(): void {
+            activeCancels.delete(entry)
+        }
+    }
+    return token
+}
+
+/** 中止所有进行中的操作；没有进行中的操作时返回 false。 */
+export function cancelActive(): boolean {
+    if (activeCancels.size === 0) return false
+    for (const entry of activeCancels) entry.ctrl.abort()
+    return true
+}
+
+/** 已取消时的统一文案。 */
+export const CANCELED_MESSAGE = '操作已取消'
+
+// ---------------------------------------------------------------------------
+// 可持久化的「长耗时操作」包装（进度注册表 + 广播节流的统一入口）
+// ---------------------------------------------------------------------------
+
+/** 各操作种类对应的广播频道。 */
+const CHANNEL_OF: Record<OperationKind, string> = {
+    'node': 'nodeenv:deploy-progress',
+    'npm': 'npmenv:progress',
+    'pnpm': 'pnmenv:progress',
+    'dsh-plugin': 'pnmenv:progress'
+}
+
+/** 安装进度统一整形：解压阶段百分比无意义，仅保留 phase 供前端切动画。 */
+function tidyProgress(p: NodeDeployProgress): NodeDeployProgress {
+    return {
+        phase: p.phase,
+        percent: Math.max(0, Math.min(100, Math.round(p.percent))),
+        downloaded: p.downloaded,
+        total: p.total,
+        speed: p.speed
+    }
+}
+
+/**
+ * 把「下载 / 安装」这类长耗时操作包成**可被任意页面重新取回**的操作。
+ *
+ * 解决的正是这批 bug 的根因，所以放在 kernel（各模块共用，不必互相 import）：
+ *
+ *  1. 在进度注册表里登记 / 更新 / 结束 → 切页回来的面板能靠 `GET /operations` 快照
+ *     把进度找回来（此前进度只活在面板 ref 里，卸载即丢）；
+ *  2. 按注册表的节流判定决定是否真的广播 —— 下载是每个数据块回调一次，全转发会给
+ *     渲染层灌几千条 IPC；
+ *  3. 每条进度都带 `kind`，渲染层据此区分，npm / pnpm 不再串台。
+ *
+ * `emit` 由调用方注入（kernel 不认识 Electron，不能直接 broadcast），因此本模块保持纯逻辑、可单测。
+ */
+export async function trackedOperation<T>(
+    kind: OperationKind,
+    emit: (channel: string, payload: OperationProgress) => void,
+    run: (onProgress: (p: NodeDeployProgress) => void) => Promise<T>
+): Promise<T> {
+    beginOperation(kind)
+    try {
+        return await run((p) => {
+            if (pushProgress(kind, tidyProgress(p))) {
+                const current = currentProgress(kind)
+                if (current) emit(CHANNEL_OF[kind], current)
+            }
+        })
+    } finally {
+        // 成功 / 失败 / 取消都要清空：否则快照里会永远留着一条「假的进行中」。
+        endOperation(kind)
+    }
 }

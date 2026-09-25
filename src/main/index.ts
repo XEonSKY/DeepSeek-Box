@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { app } from 'electron'
-import { registerIpc } from './app/ipc'
+import { registerIpc, runModuleReady, runModuleQuit } from './app/ipc'
 import { startAutoCheckIfEnabled, noteGracefulExit } from './app/appupdate'
 import { loadSettings, startConfigWatchers, readDiskSettings, syncNativeTheme, ensureDefaultConfigMigration, waitForConfigMigration } from './app/settings'
 import { createShellWindow, createTray, showMainWindow, syncGlobalHotkey } from './app/ui'
@@ -11,7 +11,7 @@ import { migrateLegacyInstalls } from './dsh/installs'
 import { nodeVersionOf } from './dsh/tools'
 import { restart, killServer, stopDshGracefully } from './dsh/dsh'
 import { killAllChildren } from './dsh/logbus'
-import { getTray, setQuitting, destroyTray } from './app/runtime'
+import { getTray, setQuitting, destroyTray } from './kernel/runtime'
 
 // ---------------------------------------------------------------------------
 // Dev vs release isolation. A dev run must not grab the installed release's
@@ -85,6 +85,8 @@ if (!gotLock) {
         installWebviewPermissionPolicy()
         await applyWebviewProxy(cfg)
         registerIpc()
+        // 各模块的 onReady：注册内核服务、准备需要 Electron 就绪态的能力（建窗之前）。
+        await runModuleReady()
         createShellWindow() // 首个窗口注册为核心窗口（内部登记角色并设为主窗口）
         createTray()
         syncGlobalHotkey() // 系统全局快捷键（默认 Ctrl+Alt+H 回到主窗口）
@@ -105,7 +107,7 @@ if (!gotLock) {
         }
 
         // 打包后按设置自动检查 app 更新（静默，开发态自动跳过）。
-        startAutoCheckIfEnabled()
+        void startAutoCheckIfEnabled()
 
         app.on('activate', () => {
             // macOS convention: re-show the window when the dock icon is clicked.
@@ -135,6 +137,7 @@ if (!gotLock) {
             /* best effort; the force cleanup below covers any stragglers */
         }
         killAllChildren() // 收尾其余在跑子进程（如正在进行的 npm）
+        await runModuleQuit() // 各模块逆序收尾（停 watcher、清资源）
         destroyTray()
     }
     const requestCleanExit = (): void => {

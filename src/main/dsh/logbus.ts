@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import type { LogEntry } from '@shared/types'
-import { IS_WIN, broadcast } from '../app/runtime'
+import { IS_WIN, broadcast } from '../kernel/runtime'
 
 /**
  * 日志环形缓冲 + 子进程登记表。

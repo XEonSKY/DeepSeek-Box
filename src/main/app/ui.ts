@@ -21,7 +21,7 @@ import {
     sendToWindow,
     sendToWcId,
     sendCore
-} from './runtime'
+} from '../kernel/runtime'
 import { registerShellWindow, hasCoreWindow, promoteNextToCore, windowByContentsId, listWindows } from './windowreg'
 import { attachContextMenu } from './contextmenu'
 import { dshInstalled } from '../dsh/manage'

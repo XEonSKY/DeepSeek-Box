@@ -1,11 +1,11 @@
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
-import { IS_WIN } from '../app/runtime'
+import { IS_WIN } from '../kernel/runtime'
 import { installRoot, listInstalled, resolveActive, versionDir } from './installs'
 import { nodeModulesRootOf } from './dshHome'
 import { probeVersion } from './child'
-import { readPkgVersion } from './fsutil'
+import { readPkgVersion } from '../kernel/treeops'
 import type { NodeRuntimeKind } from '@shared/types'
 
 /**

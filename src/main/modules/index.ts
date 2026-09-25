@@ -1,0 +1,25 @@
+import type { MainModule } from '../kernel/module'
+import settings from './settings'
+import dsh from './dsh'
+import env from './env'
+import shell from './shell'
+import tabdrag from './tabdrag'
+import appupdate from './appupdate'
+import configdir from './configdir'
+
+/**
+ * 模块树：主进程的全部功能模块。
+ *
+ * **新增一个功能模块 = 写一个文件 + 在这里加一行。** 核心（kernel）不认识任何具体模块，
+ * 它只负责遍历这张表并挂载；因此模块可以任意增删，装配逻辑不必改。
+ *
+ * 顺序即装配顺序（也决定 `onReady` / `onQuit` 的调用顺序：`onQuit` 逆序）。
+ * 目前各模块互不依赖，顺序不重要；将来若有「A 的端点要用 B 提供的能力」，用 kernel 的
+ * 服务槽（`kernel/services.ts`）解耦，而**不要**把顺序当成隐式依赖。
+ */
+const modules: MainModule[] = [settings, dsh, env, shell, tabdrag, appupdate, configdir]
+
+/** 全部模块（装配器与测试用）。 */
+export function allModules(): MainModule[] {
+    return [...modules]
+}
