@@ -1,6 +1,8 @@
 import type { StaticExt } from '../loader/sources'
 import * as boxExtensions from '@ext/box.extensions/main'
 import { manifest as boxExtensionsManifest } from '@ext/box.extensions/manifest'
+import * as xeonskyZip from '@ext/xeonsky.zip/main'
+import { manifest as xeonskyZipManifest } from '@ext/xeonsky.zip/manifest'
 
 /**
  * 内置扩展登记表：源码在本目录，随构建产物发布。
@@ -27,5 +29,14 @@ export const builtinExtensions: StaticExt[] = [
         sourceDir: 'src/extensions/box.extensions',
         manifest: boxExtensionsManifest,
         module: boxExtensions
+    },
+    {
+        // 归档（7-Zip）：申请 fs / net / proc 三项系统能力，对外提供 ext:xeonsky.zip。
+        // 依赖系统扩展全部就位（它在排序中排在内置之前，见 loader/sources.ts 的 staticExts），
+        // 所以这里的 capabilities 在激活时必然已提供。
+        kind: 'builtin',
+        sourceDir: 'src/extensions/xeonsky.zip',
+        manifest: xeonskyZipManifest,
+        module: xeonskyZip
     }
 ]
