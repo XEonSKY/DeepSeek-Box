@@ -8,7 +8,7 @@ import {
     operationsSnapshot,
     pushProgress,
     resetOperations
-} from '@main/app/operationProgress'
+} from '@main/kernel/operations'
 
 /**
  * 「进行中的操作」注册表 —— 解决两个真实问题：
