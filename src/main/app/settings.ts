@@ -10,7 +10,7 @@ import writeFileAtomic from 'write-file-atomic'
 import { DEFAULT_SETTINGS, COLOR_SCHEME_IDS, PROXY_SCOPE_IDS, SETTINGS_VERSION } from '@shared/types'
 import type { ConfigDirInfo, ConfigMigrationPlan, ConfigMigrationProgress, Settings, ResolvedLocale, LocaleCode, ColorSchemeId, ProxyScope } from '@shared/types'
 import { resolveLocale, t as tl } from '@shared/i18n'
-import { broadcast } from './runtime'
+import { broadcast } from '../kernel/runtime'
 import { clearMigrationPlan, migrateTree, readMigrationPlan, rollbackMoves, scanTree, writeMigrationPlan } from './configmigrate'
 
 // ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ export async function runConfigMigration(): Promise<void> {
     migrationRunning = true
     migrationCancel = false
 
-    const scan = scanTree(plan.from)
+    const scan = await scanTree(plan.from)
     const total = scan.total
     let moved = 0
     let lastEmit = 0
@@ -260,7 +260,7 @@ export async function runConfigMigration(): Promise<void> {
         })
 
         if (result.stopped || migrationCancel) {
-            rollbackMoves(result.journal)
+            await rollbackMoves(result.journal)
             finish(false, true)
             return
         }

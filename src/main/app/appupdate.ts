@@ -8,7 +8,7 @@ import { isPrerelease, stripV } from '@shared/version'
 import { errorMessage } from '@shared/errors'
 import { proxyActive, proxyUrl } from '../dsh/net'
 import { proxyConfigFor } from '../dsh/http'
-import { broadcast } from './runtime'
+import { broadcast } from '../kernel/runtime'
 import { loadSettings, mt } from './settings'
 import {
     appSlotsState,
@@ -234,10 +234,10 @@ async function onDownloaded(info: UpdateDownloadedEvent): Promise<void> {
  *    「回退 → 启动 → 再回退」的无限循环。
  * 返回 false 表示已安排自动回退，调用方不应继续做更新检查。
  */
-function runBootGuard(): boolean {
+async function runBootGuard(): Promise<boolean> {
     const running = app.getVersion()
 
-    const result = takeRollbackResult()
+    const result = await takeRollbackResult()
     if (result && !result.ok) {
         clearPending()
         emit({ kind: 'error', message: mt('m.appUpdate.rollbackGaveUp', { version: running }) })
@@ -273,13 +273,15 @@ function runBootGuard(): boolean {
                 message: mt('m.appUpdate.autoRollback', { version: previous ?? '?' })
             })
             setTimeout(() => {
-                const res = restorePrevious()
-                if (res.ok) setTimeout(() => app.quit(), 400)
-                else {
-                    // 起不来（例如安装目录无写权限）就到此为止，避免「启动 → 回退 → 启动」空转
-                    clearPending()
-                    emit({ kind: 'error', message: res.message })
-                }
+                void (async () => {
+                    const res = await restorePrevious()
+                    if (res.ok) setTimeout(() => app.quit(), 400)
+                    else {
+                        // 起不来（例如安装目录无写权限）就到此为止，避免「启动 → 回退 → 启动」空转
+                        clearPending()
+                        emit({ kind: 'error', message: res.message })
+                    }
+                })()
             }, 1500)
             return false
         }
@@ -364,9 +366,9 @@ export function restartAndInstall(): void {
 }
 
 /** 手动回退到压缩保留的上一版；成功后会重启应用。 */
-export function rollbackAppUpdate(): { ok: boolean; message: string } {
+export async function rollbackAppUpdate(): Promise<{ ok: boolean; message: string }> {
     if (!app.isPackaged || isPortableBuild()) return { ok: false, message: mt('m.appUpdate.onlyPackaged') }
-    const r = restorePrevious()
+    const r = await restorePrevious()
     if (r.ok) {
         emit({ kind: 'rollback', version: r.version, message: r.message })
         setTimeout(() => app.quit(), 400)
@@ -382,10 +384,10 @@ export { appSlotsState }
  * `appAutoUpdate` 开启时，electron-updater 会自动后台下载；下载完成后由 onDownloaded
  * 归档旧版并广播「待重启」事件。
  */
-export function startAutoCheckIfEnabled(): void {
+export async function startAutoCheckIfEnabled(): Promise<void> {
     if (!app.isPackaged || isPortableBuild()) return
     ensureInited()
-    if (!runBootGuard()) return
+    if (!(await runBootGuard())) return
     const s = loadSettings()
     if (!s.appAutoUpdate) return
     void triggerAppUpdate({ prerelease: s.appCheckPrerelease })

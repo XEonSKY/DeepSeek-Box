@@ -171,11 +171,16 @@ function runTar(args: string[]): Promise<boolean> {
     })
 }
 
-/** 清理其余历史归档，只保留 `keep`（「保留一个版本」）。 */
-function pruneArchives(keep: string): void {
+/**
+ * 清理其余历史归档，只保留 `keep`（「保留一个版本」）。
+ *
+ * 异步：`app-slots` 里虽然通常只有几个 tar.gz，但目录本身可能是网络盘 / 被杀软扫描，
+ * `readdirSync` + `rmSync` 仍可能短暂卡住主进程。归档动作本就在异步更新链路里，顺手 await 即可。
+ */
+async function pruneArchives(keep: string): Promise<void> {
     try {
-        for (const f of fs.readdirSync(slotsDir())) {
-            if (f !== keep && f.endsWith('.tar.gz')) fs.rmSync(path.join(slotsDir(), f), { force: true })
+        for (const f of await fs.promises.readdir(slotsDir())) {
+            if (f !== keep && f.endsWith('.tar.gz')) await fs.promises.rm(path.join(slotsDir(), f), { force: true })
         }
     } catch {
         /* ignore */
@@ -219,7 +224,7 @@ export async function archiveRunningVersion(): Promise<boolean> {
     } catch {
         /* ignore */
     }
-    pruneArchives(name)
+    await pruneArchives(name)
     writeManifest({
         ...m,
         previous: { version, archive: name, createdAt: Date.now(), bytes }
@@ -289,13 +294,13 @@ function rollbackResultFile(version: string): string {
  * 脚本在解包成功/失败时都会写这个文件；应用下次启动据此知道上一轮回退是成了还是废了 ——
  * 失败时必须停止重试并如实报错，而不是再起一轮（那正是"无限重启"的来源）。
  */
-export function takeRollbackResult(): { version: string; ok: boolean } | null {
+export async function takeRollbackResult(): Promise<{ version: string; ok: boolean } | null> {
     let newest: { version: string; mtime: number } | null = null
     try {
-        for (const f of fs.readdirSync(slotsDir())) {
+        for (const f of await fs.promises.readdir(slotsDir())) {
             const hit = /^rollback-(.+)\.result$/.exec(f)
             if (!hit) continue
-            const mtime = fs.statSync(path.join(slotsDir(), f)).mtimeMs
+            const mtime = (await fs.promises.stat(path.join(slotsDir(), f))).mtimeMs
             if (!newest || mtime > newest.mtime) newest = { version: hit[1], mtime }
         }
     } catch {
@@ -305,12 +310,12 @@ export function takeRollbackResult(): { version: string; ok: boolean } | null {
     const file = rollbackResultFile(newest.version)
     let text = ''
     try {
-        text = fs.readFileSync(file, 'utf8')
+        text = await fs.promises.readFile(file, 'utf8')
     } catch {
         /* 读不到就按失败处理 */
     }
     try {
-        fs.rmSync(file, { force: true })
+        await fs.promises.rm(file, { force: true })
     } catch {
         /* ignore */
     }
@@ -318,14 +323,14 @@ export function takeRollbackResult(): { version: string; ok: boolean } | null {
 }
 
 /** 清理一小时前的回退残留（脚本名带时间戳，正在跑的不会被误删）。 */
-function pruneRollbackScripts(keep: string): void {
+async function pruneRollbackScripts(keep: string): Promise<void> {
     const cutoff = Date.now() - 3600_000
     try {
-        for (const f of fs.readdirSync(slotsDir())) {
+        for (const f of await fs.promises.readdir(slotsDir())) {
             if (f === keep || !/^rollback-.+\.(cmd|sh|log)$/.test(f)) continue
             const p = path.join(slotsDir(), f)
             try {
-                if (fs.statSync(p).mtimeMs < cutoff) fs.rmSync(p, { force: true })
+                if ((await fs.promises.stat(p)).mtimeMs < cutoff) await fs.promises.rm(p, { force: true })
             } catch {
                 /* ignore */
             }
@@ -341,11 +346,11 @@ function pruneRollbackScripts(keep: string): void {
  * `fs.accessSync(dir, W_OK)` 在 Windows 上不看 ACL，判不准；而这里必须判准 ——
  * 装到 `C:\Program Files` 又没有管理员权限时，解包**必然**失败，那就别起脚本了。
  */
-function canWriteDir(dir: string): boolean {
+async function canWriteDir(dir: string): Promise<boolean> {
     const probe = path.join(dir, `.dsbox-write-probe-${process.pid}-${Date.now()}`)
     try {
-        fs.writeFileSync(probe, '')
-        fs.rmSync(probe, { force: true })
+        await fs.promises.writeFile(probe, '')
+        await fs.promises.rm(probe, { force: true })
         return true
     } catch {
         return false
@@ -355,8 +360,11 @@ function canWriteDir(dir: string): boolean {
 /**
  * 生成回退脚本：等待本进程退出 → 解包覆盖安装目标 → 重新启动应用。
  * 返回脚本路径；失败返回 null。
+ *
+ * 异步：脚本目录的 mkdir / write 与残留清理都不能同步做 —— 此处紧接着就要 `app.quit()`，
+ * 任何同步阻塞都会拖慢退出。
  */
-function writeRollbackScript(archive: string, target: InstallTarget, version: string): string | null {
+async function writeRollbackScript(archive: string, target: InstallTarget, version: string): Promise<string | null> {
     const parent = path.dirname(target.path)
     const tar = tarBinary()
     const resultFile = rollbackResultFile(version)
@@ -364,7 +372,7 @@ function writeRollbackScript(archive: string, target: InstallTarget, version: st
     // 脚本名带时间戳：旧实例还在按偏移读取时，新脚本不会覆盖它（老实现同名覆盖会让 cmd 读到错位内容）
     const stamp = Date.now()
     try {
-        fs.mkdirSync(slotsDir(), { recursive: true })
+        await fs.promises.mkdir(slotsDir(), { recursive: true })
     } catch {
         return null
     }
@@ -384,8 +392,8 @@ function writeRollbackScript(archive: string, target: InstallTarget, version: st
             image: path.basename(process.execPath)
         })
         try {
-            fs.writeFileSync(file, text, 'utf8')
-            pruneRollbackScripts(file)
+            await fs.promises.writeFile(file, text, 'utf8')
+            await pruneRollbackScripts(file)
             return file
         } catch {
             return null
@@ -409,8 +417,8 @@ function writeRollbackScript(archive: string, target: InstallTarget, version: st
         pid: process.pid
     })
     try {
-        fs.writeFileSync(file, text, { encoding: 'utf8', mode: 0o755 })
-        pruneRollbackScripts(file)
+        await fs.promises.writeFile(file, text, { encoding: 'utf8', mode: 0o755 })
+        await pruneRollbackScripts(file)
         return file
     } catch {
         return null
@@ -444,19 +452,19 @@ export function dropPreviousIfCurrent(version: string): void {
  * `C:\Program Files` 下的 per-machine 安装、当前用户无管理员权限）时直接返回失败。
  * 否则脚本必然解包失败，却仍会重启应用 → 变成「回退 → 启动 → 再回退」的无限循环。
  */
-export function restorePrevious(): RollbackResult {
+export async function restorePrevious(): Promise<RollbackResult> {
     const m = readManifest()
     const rec = m.previous
     if (!rec) return { ok: false, message: mt('m.appUpdate.noRollback'), version: null }
     const archive = path.join(slotsDir(), rec.archive)
-    if (!fs.existsSync(archive)) return { ok: false, message: mt('m.appUpdate.rollbackMissing'), version: null }
+    if (!(await pathExists(archive))) return { ok: false, message: mt('m.appUpdate.rollbackMissing'), version: null }
 
     const target = installTarget()
-    if (!canWriteDir(path.dirname(target.path))) {
+    if (!(await canWriteDir(path.dirname(target.path)))) {
         return { ok: false, message: mt('m.appUpdate.rollbackNoPermission'), version: null }
     }
 
-    const script = writeRollbackScript(archive, target, rec.version)
+    const script = await writeRollbackScript(archive, target, rec.version)
     if (!script) return { ok: false, message: mt('m.appUpdate.rollbackFail'), version: null }
 
     try {
@@ -471,4 +479,14 @@ export function restorePrevious(): RollbackResult {
         return { ok: false, message: mt('m.appUpdate.rollbackFail'), version: null }
     }
     return { ok: true, message: mt('m.appUpdate.rollbackStarted', { version: rec.version }), version: rec.version }
+}
+
+/** 异步判断路径是否存在。 */
+async function pathExists(p: string): Promise<boolean> {
+    try {
+        await fs.promises.access(p)
+        return true
+    } catch {
+        return false
+    }
 }

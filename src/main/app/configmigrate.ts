@@ -59,29 +59,38 @@ export interface TreeScan {
     dirCounts: Map<string, number>
 }
 
-/** 递归统计 root 下的文件数；目录记入 dirCounts，符号链接按 1 个叶子计。 */
-export function scanTree(root: string): TreeScan {
+/**
+ * 递归统计 root 下的文件数；目录记入 dirCounts，符号链接按 1 个叶子计。
+ *
+ * **为什么是 async**：配置目录里带着 dsh / npm 的安装目录，动辄几万个小文件。同步递归
+ * 会把主进程**独占地**占住几百毫秒到几秒，期间界面完全没响应 —— 正是「一些操作时整个
+ * 程序会卡住」的成因之一。改成 promise 版后每进一个目录就让出事件循环一次
+ *（`setImmediate`），IPC 与界面动画都能继续跑。
+ */
+export async function scanTree(root: string): Promise<TreeScan> {
     const dirCounts = new Map<string, number>()
-    const count = (p: string): number => {
+    const count = async (p: string): Promise<number> => {
         let st: fs.Stats
         try {
-            st = fs.lstatSync(p)
+            st = await fs.promises.lstat(p)
         } catch {
             return 0
         }
         if (!st.isDirectory()) return 1
         let names: string[]
         try {
-            names = fs.readdirSync(p)
+            names = await fs.promises.readdir(p)
         } catch {
             return 0
         }
         let n = 0
-        for (const name of names) n += count(path.join(p, name))
+        for (const name of names) n += await count(path.join(p, name))
         dirCounts.set(p, n)
+        // 每处理完一个目录让出一次事件循环，避免深层大目录一次性霸占主线程。
+        await new Promise<void>((resolve) => setImmediate(resolve))
         return n
     }
-    return { total: count(root), dirCounts }
+    return { total: await count(root), dirCounts }
 }
 
 /** 单条搬迁记录：整目录或单文件，回滚时逆序搬回。 */
@@ -117,10 +126,10 @@ async function yieldIfDue(state: { last: number }): Promise<void> {
     await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
-/** 确保文件父目录存在。 */
-function ensureParent(file: string): void {
+/** 确保文件父目录存在（异步：大目录树上同步建目录会卡主进程）。 */
+async function ensureParent(file: string): Promise<void> {
     try {
-        fs.mkdirSync(path.dirname(file), { recursive: true })
+        await fs.promises.mkdir(path.dirname(file), { recursive: true })
     } catch {
         /* 交由后续写入报错 */
     }
@@ -128,33 +137,33 @@ function ensureParent(file: string): void {
 
 /** 把 source 整体搬到 target；同盘用 rename，跨盘退回复制 + 删除，并记入 journal。 */
 async function moveEntry(src: string, dst: string, journal: MoveRecord[], state: { last: number }): Promise<void> {
-    ensureParent(dst)
+    await ensureParent(dst)
     try {
-        fs.renameSync(src, dst)
+        await fs.promises.rename(src, dst)
         journal.push({ src, dst })
         return
     } catch {
         /* 跨盘或目标被占用：回退到复制 */
     }
-    const st = fs.lstatSync(src)
+    const st = await fs.promises.lstat(src)
     if (st.isDirectory()) {
-        fs.mkdirSync(dst, { recursive: true })
-        for (const name of fs.readdirSync(src)) {
+        await fs.promises.mkdir(dst, { recursive: true })
+        for (const name of await fs.promises.readdir(src)) {
             await moveEntry(path.join(src, name), path.join(dst, name), journal, state)
         }
         try {
-            fs.rmdirSync(src)
+            await fs.promises.rmdir(src)
         } catch {
             /* 非空或占用则保留 */
         }
         return
     }
     if (st.isSymbolicLink()) {
-        fs.symlinkSync(fs.readlinkSync(src), dst)
-        fs.unlinkSync(src)
+        await fs.promises.symlink(await fs.promises.readlink(src), dst)
+        await fs.promises.unlink(src)
     } else {
-        fs.copyFileSync(src, dst)
-        fs.unlinkSync(src)
+        await fs.promises.copyFile(src, dst)
+        await fs.promises.unlink(src)
     }
     journal.push({ src, dst })
 }
@@ -164,7 +173,7 @@ async function mergeInto(from: string, to: string, hooks: MigrateHooks, journal:
     if (hooks.shouldStop()) return
     let names: string[]
     try {
-        names = fs.readdirSync(from)
+        names = await fs.promises.readdir(from)
     } catch {
         return
     }
@@ -172,7 +181,7 @@ async function mergeInto(from: string, to: string, hooks: MigrateHooks, journal:
         if (hooks.shouldStop()) return
         const src = path.join(from, name)
         const dst = path.join(to, name)
-        if (!fs.existsSync(dst)) {
+        if (!(await pathExists(dst))) {
             try {
                 await moveEntry(src, dst, journal, state)
                 hooks.onAdvance(src, Math.max(1, hooks.scan.dirCounts.get(src) ?? 1))
@@ -184,13 +193,13 @@ async function mergeInto(from: string, to: string, hooks: MigrateHooks, journal:
         }
         let st: fs.Stats
         try {
-            st = fs.lstatSync(src)
+            st = await fs.promises.lstat(src)
         } catch {
             continue
         }
         if (st.isDirectory()) {
             try {
-                fs.mkdirSync(dst, { recursive: true })
+                await fs.promises.mkdir(dst, { recursive: true })
             } catch {
                 /* ignore */
             }
@@ -199,18 +208,28 @@ async function mergeInto(from: string, to: string, hooks: MigrateHooks, journal:
             // 只有目标确实存在时才丢弃源：moveEntry 失败（如文件被占用）时目标可能并不存在，
             // 此时删源会把唯一一份拷贝也弄丢。
             hooks.onAdvance(src, 1)
-            if (!fs.existsSync(dst)) continue
+            if (!(await pathExists(dst))) continue
             try {
-                fs.unlinkSync(src)
+                await fs.promises.unlink(src)
             } catch {
                 /* 删除失败（被占用）则保留，后续人工处理 */
             }
         }
     }
     try {
-        if (fs.readdirSync(from).length === 0) fs.rmdirSync(from)
+        if ((await fs.promises.readdir(from)).length === 0) await fs.promises.rmdir(from)
     } catch {
         /* 非空或占用则保留 */
+    }
+}
+
+/** 异步判断路径是否存在（`fs.promises.access` 无 exists 版）。 */
+async function pathExists(p: string): Promise<boolean> {
+    try {
+        await fs.promises.access(p)
+        return true
+    } catch {
+        return false
     }
 }
 
@@ -218,7 +237,7 @@ async function mergeInto(from: string, to: string, hooks: MigrateHooks, journal:
 export async function migrateTree(plan: ConfigMigrationPlan, hooks: MigrateHooks): Promise<MigrateResult> {
     const journal: MoveRecord[] = []
     try {
-        fs.mkdirSync(plan.to, { recursive: true })
+        await fs.promises.mkdir(plan.to, { recursive: true })
     } catch (err) {
         console.error('[Manager] failed to create target config dir:', err)
     }
@@ -227,13 +246,13 @@ export async function migrateTree(plan: ConfigMigrationPlan, hooks: MigrateHooks
 }
 
 /** 取消迁移：把已搬走的项逆序搬回原处（best effort）。 */
-export function rollbackMoves(journal: MoveRecord[]): void {
+export async function rollbackMoves(journal: MoveRecord[]): Promise<void> {
     for (let i = journal.length - 1; i >= 0; i--) {
         const { src, dst } = journal[i]
         try {
-            if (fs.existsSync(src) || !fs.existsSync(dst)) continue
-            fs.mkdirSync(path.dirname(src), { recursive: true })
-            fs.renameSync(dst, src)
+            if ((await pathExists(src)) || !(await pathExists(dst))) continue
+            await fs.promises.mkdir(path.dirname(src), { recursive: true })
+            await fs.promises.rename(dst, src)
         } catch (err) {
             console.error('[Manager] failed to roll back', dst, '->', src, err)
         }
