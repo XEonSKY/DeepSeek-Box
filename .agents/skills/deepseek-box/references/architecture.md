@@ -37,16 +37,17 @@ app/ dsh/ 具体实现，被 modules 调用
 三类扩展（`system` / `builtin` / `external`），按**信任级别**分：
 
 ```text
-src/extensions/<id>/        内置与系统扩展的业务代码（main.ts / manifest.ts / *.vue）
+src/extensions/<id>/        内置与系统扩展的业务代码（main.ts / manifest.ts / *.vue / locales.ts）
   main.ts                   主进程入口（activate），只依赖 ExtContext
   manifest.ts               清单（id / 名称 / 贡献点）
+  locales.ts                扩展自管的界面文案（zh/en 字典，见 conventions「i18n 文案」）
   *.vue                     渲染层视图（可选，仅内置扩展能声明 view）
 src/main/extensions/
   loader/                   加载器 = 框架本身（发现 / 排序 / 授权 / 激活 / 卸载）
   system/                   系统扩展登记表（system.fs / system.net / ... 各一个目录）
   builtin/                  内置扩展登记表（只声明「有哪些」，清单在扩展自己目录里）
 src/renderer/src/extensions/
-  index.ts store.ts tabs.ts panels.ts   渲染层框架 = 加载器 + 两个控制点
+  index.ts store.ts tabs.ts panels.ts locales.ts   渲染层框架（locales.ts 把扩展文案装配进外壳）
   ExtSettingsPanel.vue      外部扩展的通用兜底容器
 src/extensions/renderer-api.ts          渲染层扩展公开 API 面
 ```
@@ -54,8 +55,9 @@ src/extensions/renderer-api.ts          渲染层扩展公开 API 面
 **为什么内置扩展在顶层 `src/extensions/` 而不是 `src/main/` 下**：一个内置扩展同时有主进程
 与渲染层文件，而这两端分属**两个构建入口**（`electron.vite.config.ts` 的 main / renderer）。
 目录放在中立的顶层，两端都以 `@ext/<id>/...` 引用（别名对 main / preload / renderer 三处都配），
-改一个扩展只动一个目录。对应地，两个 tsconfig 的 `include` 都覆盖 `src/extensions/`：
-node 侧收 `**/main.ts` + `**/manifest.ts`，web 侧收 `**/*.vue` + `src/extensions/*.ts`。
+改一个扩展只动一个目录。对应地，两个 tsconfig 的 `include` 都覆盖 `src/extensions/*/**/*.ts`：
+node 侧收全部 TS（顶层 `renderer-api.ts` 除外 —— 它引用 `window`）；web 侧排除 `**/main.ts`
+（它依赖 node 内置模块）。
 
 **扩展只能通过 API 面触达内核**（这条是硬约束，两个方向都成立）：
 
@@ -65,9 +67,18 @@ node 侧收 `**/main.ts` + `**/manifest.ts`，web 侧收 `**/*.vue` + `src/exten
   外壳自身的界面（`renderer/src/views/**`）不受此限 —— 它是内核的一部分。
   需要新能力时**先扩 API 面**，让它保持唯一可见面；否则内核重构会波及所有扩展。
 
+**扩展间互调走 `ctx.provides` / `ctx.capabilities` 对**：提供方
+`ctx.provides.register('xeonsky.zip', actions)`（自动补 `ext:` 前缀），消费方
+`ctx.capabilities.call('ext:xeonsky.zip', action, ...)`。实现落在加载器持有的能力槽
+（`loader/capability.ts` 的 `provideActions` / `actionsOf` / `revokeName`），并经 registry
+按名记账 —— 卸载时逐名精确摘除（`revokeName`），不用按 owner 扫全表的 `revoke`，
+避免误伤同 owner 的其它登记。重复提供同一能力名 = 装配冲突，直接抛错。
+
 **系统扩展 id 用 `system.` 前缀**（`system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui`），
 与外部扩展能力名 `ext:<extId>` 对仗。注意**能力名是裸名**（`fs` / `net` / ...，见
 `@shared/extensions` 的 `SysCapability`），与系统扩展 id 是两层 —— 改 id 不影响扩展申请能力的写法。
+`system.net` 现有三动作：`fetch` / `fetchJson`（只回文本）+ `download`（包装内核
+`dsh/downloader.ts` 的多线程下载，二进制落盘用这个）。
 
 ## 启动顺序（`src/main/index.ts`）
 

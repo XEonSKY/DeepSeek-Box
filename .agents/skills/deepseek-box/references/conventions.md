@@ -31,6 +31,12 @@
 - **新增键时只需改 zh / en 两处**；hant **无需同步补充**，未覆盖的键自动回落到简体基座。
 - **删除键时三处都要删**：hant 必须是 zh 的**子集**——只删 zh 会让 hant 留下孤儿键。
   本仓库已无单测守护这条，务必**人工核对**（新增两处、删除三处，方向不同）。
+- **扩展的界面文案由扩展自管**，不写进外壳的 `shared/locales/{zh,en}`：扩展在自己目录放
+  `locales.ts` 导出 `extLocales`（`{ zh, en }` 字典表），键统一挂 `ext.<稳定名>.*` 命名空间
+  （稳定名 = id 驼峰，如 `ext.xeonskyZip.*`）。渲染层 `renderer/src/extensions/locales.ts`
+  的 `EXT_LOCALES` 静态表负责装配（内置扩展编译进 bundle、磁盘上无目录可扫，与 LOCAL_VIEWS
+  同构），合并后注入 `shared/locales/ext.ts` 的扩展层并立即并进当前消息目录 —— 扩展键
+  不受语言切换 / 翻译风格影响。命名空间冲突只告警不阻断。
 - 文案是程序的一部分（`src/shared/locales/` 不算文档），可随功能一起改。
 
 ## 文档
