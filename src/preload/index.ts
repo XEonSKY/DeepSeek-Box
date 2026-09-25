@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC_EVENT_CHANNEL, IPC_REQUEST_CHANNEL } from '@shared/api'
+import { IPC_EVENT_CHANNEL, IPC_REQUEST_CHANNEL, EXT_CHANNEL_PREFIX } from '@shared/api'
 import type { AppEvents, HttpMethod, IpcEvent, IpcRequest, RendererApi } from '@shared/api'
 
 /**
@@ -52,6 +52,32 @@ function on<Event extends keyof AppEvents>(event: Event, callback: (payload: App
     return () => ipcRenderer.removeListener(IPC_EVENT_CHANNEL, listener)
 }
 
+/**
+ * 扩展 DIY 通道的请求。
+ *
+ * 复用与内置端点**同一条**请求通道与同一个 Router —— 只是通道名由扩展自己拼。
+ * 校验前缀：不带 `ext:` 的通道一律拒绝，避免渲染层扩展拿它去探内置端点
+ * （内置端点应当走类型安全的 `api.get/post/...`，而不是这条无类型的口子）。
+ */
+function extInvoke(channel: string, payload?: unknown): Promise<unknown> {
+    if (typeof channel !== 'string' || !channel.startsWith(EXT_CHANNEL_PREFIX)) {
+        return Promise.reject(new Error(`扩展通道必须以 ${EXT_CHANNEL_PREFIX} 开头：${String(channel)}`))
+    }
+    // 通道 `ext:<extId>:<action>` → 路由 `/ext/<extId>/<action>`（与 main/kernel/extroute.ts 对应）。
+    const path = '/ext/' + channel.slice(EXT_CHANNEL_PREFIX.length).split(':').map(encodeURIComponent).join('/')
+    const envelope: IpcRequest = { method: 'POST', path, body: payload }
+    return ipcRenderer.invoke(IPC_REQUEST_CHANNEL, envelope)
+}
+
+/** 订阅扩展自定义通道的推送（按完整通道名精确匹配）。 */
+function extOn(channel: string, callback: (payload: unknown) => void): () => void {
+    const listener = (_e: unknown, envelope: IpcEvent): void => {
+        if (envelope && envelope.event === channel) callback(envelope.payload)
+    }
+    ipcRenderer.on(IPC_EVENT_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(IPC_EVENT_CHANNEL, listener)
+}
+
 const api = {
     // 本地常量：无需 IPC，直接从 preload 的进程信息里读。
     platform: process.platform,
@@ -69,7 +95,13 @@ const api = {
     delete: (path: string, options?: RequestOptions) => request('DELETE', path, options),
 
     // ---- 主进程 → 渲染层事件订阅 ----
-    on
+    on,
+
+    // ---- 扩展 DIY 自定义通信 ----
+    ext: {
+        invoke: extInvoke,
+        on: extOn
+    }
 } as unknown as RendererApi
 
 contextBridge.exposeInMainWorld('api', api)

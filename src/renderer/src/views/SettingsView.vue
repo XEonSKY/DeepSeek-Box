@@ -4,6 +4,7 @@ import type { Component } from 'vue'
 import { SettingOutlined, DashboardOutlined, BulbOutlined, ApiOutlined, DeploymentUnitOutlined, ClusterOutlined, AppstoreOutlined, CodeFilled, ControlOutlined, InfoCircleFilled, RobotFilled } from '@antdv-next/icons'
 import { useRoute, useRouter } from 'vue-router'
 import { useSettingsStore } from './settings/useSettingsStore'
+import { extMenus } from '../extensions/panels'
 
 type Group = 'general' | 'system' | 'appearance' | 'network' | 'env' | 'dsh' | 'plugins' | 'models' | 'log' | 'hotkeys' | 'about'
 
@@ -25,13 +26,32 @@ const menus: { key: Group; icon: Component }[] = [
     { key: 'about', icon: InfoCircleFilled }
 ]
 
-/** 由当前子路由决定高亮分组。 */
-const activeGroup = computed<Group>(() => {
+/**
+ * 扩展贡献的设置面板：**追加在内置项之后**（不能插入内置项中间，
+ * 否则"设置页长什么样"会变得不确定）。扩展面板的图标由外壳统一映射 —— 扩展不能传组件。
+ *
+ * 注意：「扩展管理」页本身也走这条通路（由内置扩展 `box.extensions` 贡献），
+ * 外壳不为它写特例 —— 内置扩展与外部扩展在控制点上的待遇一致，唯一的差别是主进程侧的加载方式。
+ */
+const extItems = computed(() => extMenus())
+
+/**
+ * 由当前子路由决定高亮分组。
+ *
+ * 内置面板的 name 是 `settings-<key>`；扩展贡献的面板走兜底路由（name 固定为
+ * `settings-ext-panel`），key 在 `params.panelKey` 里 —— 两种都要能高亮，
+ * 否则扩展面板在侧栏里点上去不亮。
+ */
+const activeGroup = computed<string>(() => {
     const n = route.name
-    return typeof n === 'string' && n.startsWith('settings-') ? (n.slice(9) as Group) : 'general'
+    if (n === 'settings-ext-panel') {
+        const p = route.params.panelKey
+        return typeof p === 'string' ? p : Array.isArray(p) ? (p[0] ?? 'general') : 'general'
+    }
+    return typeof n === 'string' && n.startsWith('settings-') ? n.slice(9) : 'general'
 })
 
-function go(g: Group): void {
+function go(g: string): void {
     void router.push(`/settings/${g}`)
 }
 
@@ -66,6 +86,19 @@ onMounted(async () => {
                 >
                     <el-icon :size="18"><component :is="m.icon" /></el-icon>
                     <span class="nav__label">{{ $t('sv.nav.' + m.key) }}</span>
+                </button>
+
+                <!-- 扩展贡献的面板：追加在内置项之后，图标由外壳统一给（扩展不能传组件）。 -->
+                <button
+                    v-for="m in extItems"
+                    :key="'ext-' + m.extId + '-' + m.key"
+                    type="button"
+                    class="nav__item"
+                    :class="{ on: activeGroup === m.key }"
+                    @click="go(m.key)"
+                >
+                    <el-icon :size="18"><ApiFilled /></el-icon>
+                    <span class="nav__label" :title="m.extName">{{ m.title }}</span>
                 </button>
             </nav>
         </aside>

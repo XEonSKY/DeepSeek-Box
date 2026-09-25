@@ -158,7 +158,7 @@ export default {
     },
     sv: {
         cap: 'Settings',
-        nav: { general: 'General', system: 'System & performance', appearance: 'Appearance', network: 'Network', env: 'Environment', dsh: 'DeepSeek Harness', plugins: 'Plugins', models: 'Models', log: 'Terminal', hotkeys: 'Shortcuts', about: 'About' },
+        nav: { general: 'General', system: 'System & performance', appearance: 'Appearance', network: 'Network', env: 'Environment', dsh: 'DeepSeek Harness', plugins: 'Plugins', models: 'Models', extensions: 'Extensions', log: 'Terminal', hotkeys: 'Shortcuts', about: 'About' },
         intro: {
             general: 'Working directory, port, tabs and search basics.',
             system: 'Launch at login, how DSH opens, graphics acceleration and page identity.',
@@ -168,9 +168,36 @@ export default {
             dsh: 'DeepSeek Harness source, npm source and updates.',
             plugins: 'Manage each profile\u2019s dsh plugins (bundles) and choose which load at startup.',
             models: 'Token list: one row per key, showing its provider and balance (no secrets shown).',
+            extensions: 'Extensions: system / built-in / external tiers — inspect status, enable or disable external ones, leave safe mode.',
             log: 'Live DeepSeek Box output (stdout / stderr).',
             hotkeys: 'Keyboard shortcuts: system-wide and in-app.',
             about: 'About the app and DeepSeek Harness, plus update checks.'
+        },
+        extpanel: {
+            missing: 'This extension is currently unavailable.',
+            inactive: 'This extension is not running.',
+            info: 'Extension info',
+            kind: 'Kind',
+            version: 'Version',
+            status: 'Status',
+            caps: 'Granted capabilities',
+            dir: 'Location',
+            reveal: 'Open containing folder',
+            tabs: 'Tabs provided by this extension'
+        },
+        extpage: {
+            refresh: 'Refresh',
+            openDir: 'Open extensions folder',
+            exitSafe: 'Leave safe mode',
+            enable: 'Enable',
+            disable: 'Disable',
+            forgive: 'Clear crash record',
+            forgiven: 'Crash record cleared; restart to retry.',
+            restartHint: 'Saved. Takes effect after restart.',
+            safeMode: 'Safe mode is on',
+            safeModeDesc: 'Built-in / external extensions were not loaded this time. Review and enable them one by one, or delete the offending folder.',
+            safeExited: 'Safe mode cleared; all extensions will load after restart.',
+            empty: 'No extensions discovered yet.'
         },
         plugins: {
             pnpmPreparing: 'Preparing pnpm (first run downloads it; see Settings → Environment)…',

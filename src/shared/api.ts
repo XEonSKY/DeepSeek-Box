@@ -46,6 +46,7 @@ import type {
     UpdateResult,
     WebviewInfo
 } from './types'
+import type { ExtensionsInfo } from './extensions'
 
 // ---------------------------------------------------------------------------
 // 传输层：通道与信封
@@ -191,6 +192,18 @@ export interface ApiRoutes {
     'POST /icons': { body: { name: string; data: Uint8Array }; result: { id: string; list: AppIconInfo[] } }
     'DELETE /icons/:id': { result: AppIconInfo[] }
 
+    // ---- 扩展管理 ----
+    /** 列出全部已发现扩展（含失败 / 跳过 / 停用的）与安全模式状态。 */
+    'GET /extensions': { result: ExtensionsInfo }
+    /** 停用 / 启用某扩展（写盘，重启后生效；系统扩展不可停用）。 */
+    'PUT /extensions/:id/enabled': { body: { enabled: boolean }; result: ExtensionsInfo }
+    /** 清掉某扩展的崩溃计数并解除停用（「我已知道并要试一次」）。 */
+    'POST /extensions/:id/forgive': { result: ExtensionsInfo }
+    /** 退出安全模式并清空崩溃计数（要求重新加载全部扩展）。 */
+    'POST /extensions/exit-safe-mode': { result: ExtensionsInfo }
+    /** 打开外部扩展安装目录（在文件管理器里定位）。 */
+    'POST /extensions/open-dir': { result: void }
+
     // ---- 原生对话框 ----
     'POST /dialog/directory': { result: string | null }
     'POST /dialog/file': { result: string | null }
@@ -252,6 +265,8 @@ export interface AppEvents {
     'ui:toggle-view': void
     'ui:reload-dsh': void
     'dsh:missing': void
+    /** 扩展列表发生变化（启用 / 停用 / 安全模式切换后），设置页据此重新拉取。 */
+    'extensions:changed': void
 }
 
 // ---------------------------------------------------------------------------
@@ -341,10 +356,39 @@ export interface RestClient {
     ): Promise<ResultOfRoute<RouteAt<'DELETE', Path>>>
 }
 
-/** 渲染层可见的全部能力：REST 客户端 + 少量本地常量 + 事件订阅。 */
+/** 渲染层可见的全部能力：REST 客户端 + 少量本地常量 + 事件订阅 + 扩展 DIY 通道。 */
 export interface RendererApi extends RestClient {
     platform: string
     versions: { electron: string; node: string; chrome: string }
     /** 订阅主进程推送的事件，返回退订函数。 */
     on<Event extends keyof AppEvents>(event: Event, callback: (payload: AppEvents[Event]) => void): () => void
+    /**
+     * 扩展层的 **DIY 自定义通信接口**。
+     *
+     * 存在的理由：扩展端点（`/ext/<extId>/<action>`）是**运行期**才知道的，
+     * 不可能写进 `ApiRoutes`（那是编译期契约，也是内置端点的唯一事实来源）。
+     * 这个命名空间因此刻意**不受** `ApiRoutes` 约束 —— 通道名由扩展自己拼，
+     * 返回类型由调用方自理。它是「能力面收窄」与「扩展可自由通信」之间的妥协口：
+     *
+     *  - `invoke(channel, payload)` —— 向主进程某扩展端点发一次请求。
+     *    通道名必须是 `ext:<extId>:<action>`（由 {@link EXT_CHANNEL_PREFIX} 起始），
+     *    主进程按同一 Router 分发，因此跨扩展无法冒充（前缀含 id）。
+     *  - `on(channel, cb)` —— 订阅某扩展 push 过来的自定义事件。
+     *
+     * 之所以不把它做成五个 REST 动词：扩展的通道是"消息"而不是"资源"，
+     * 一个动词（invoke）+ 一个订阅（on）正好对应「请求 / 推送」这对语义，
+     * 也避免让扩展误以为它能声明任意 HTTP 路径。
+     */
+    ext: {
+        /** 向主进程某扩展端点发一次请求；`channel` 形如 `ext:<extId>:<action>`。 */
+        invoke(channel: string, payload?: unknown): Promise<unknown>
+        /** 订阅某扩展自定义通道的推送，返回退订函数。 */
+        on(channel: string, callback: (payload: unknown) => void): () => void
+    }
 }
+
+/** 扩展自定义通道的固定前缀（与 `main/kernel/extroute.ts` 的 `EXT_ROUTE_PREFIX` 对应）。 */
+export const EXT_CHANNEL_PREFIX = 'ext:'
+
+/** 扩展自定义事件的通道前缀（主进程侧拼 `ext:<extId>:<action>` 后经事件通道推送）。 */
+export const EXT_EVENT_PREFIX = 'ext:'

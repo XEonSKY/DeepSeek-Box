@@ -126,6 +126,25 @@ export class Router {
         return this
     }
 
+    /**
+     * 摘除一条路由（同方法 + 同路径）。
+     *
+     * 供扩展卸载使用：扩展的端点是运行期挂上来、也要能运行期摘掉 ——
+     * 否则会留下「指向已卸载代码」的端点，调用时才炸，而且炸在别人的调用栈里。
+     * 内置模块的路由不摘（它们随进程生命周期存在）。
+     */
+    remove(method: HttpMethod, path: string): boolean {
+        if (!(method in this.table)) return false
+        const segments = splitPath(path)
+        const entries = this.table[method]
+        const idx = entries.findIndex(
+            (entry) => entry.segments.length === segments.length && entry.segments.every((s, i) => s === segments[i])
+        )
+        if (idx < 0) return false
+        entries.splice(idx, 1)
+        return true
+    }
+
     /** 先找「全字面量」匹配，再找带参数的匹配，避免 `/icons/current` 被 `/icons/:id` 抢走。 */
     private match(method: HttpMethod, path: string): { handler: RouteEntry['handler']; params: Record<string, string> } | null {
         if (!method || !(method in this.table)) return null

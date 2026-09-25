@@ -1,15 +1,18 @@
 import { Router } from '../kernel/router'
 import { ModuleRegistry } from '../kernel/module'
+import { bindExtRouter } from '../kernel/extroute'
 import { allModules } from '../modules'
+import { setupStaticExtensions } from '../extensions'
 
 /**
  * 主进程装配器。
  *
- * 这里**不再**写任何具体端点，也不再 import 任何 `app/*` 或 `dsh/*` 模块 —— 它只做三件事：
+ * 这里**不再**写任何具体端点，也不再 import 任何 `app/*` 或 `dsh/*` 模块 —— 它只做四件事：
  *
  *   1. 建路由引擎（Router：全项目唯一碰 `ipcMain` 的地方）；
  *   2. 把 `modules/` 里的模块树收集成注册表；
- *   3. `mountRoutes` 统一挂载，并 `listen()` 在唯一通道上开始接收请求。
+ *   3. `mountRoutes` 统一挂载，并 `listen()` 在唯一通道上开始接收请求；
+ *   4. 把 Router 与静态扩展表交给扩展层（扩展端点走同一个 Router，见 kernel/extroute.ts）。
  *
  * 端点本身由各模块用 `defineModule({ id, routes })` 自证（见 `modules/*.ts`），
  * 类型仍由 `@shared/api` 的 `ApiRoutes` 校验，所以「契约唯一事实来源」这条没变。
@@ -26,6 +29,10 @@ export function registerIpc(): void {
     registry = new ModuleRegistry(allModules())
     registry.mountRoutes(router)
     router.listen()
+    // 扩展层的两个接线：端点挂载点（Router）与静态扩展表（系统 / 内置）。
+    // 都必须早于加载器启动 —— 加载器在 runModuleReady() 之后才跑。
+    bindExtRouter(router)
+    setupStaticExtensions()
 }
 
 /**

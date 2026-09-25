@@ -12,6 +12,7 @@ import { nodeVersionOf } from './dsh/tools'
 import { restart, killServer, stopDshGracefully } from './dsh/dsh'
 import { killAllChildren } from './dsh/logbus'
 import { getTray, setQuitting, destroyTray } from './kernel/runtime'
+import { startLoader, stopLoader } from './extensions/loader'
 
 // ---------------------------------------------------------------------------
 // Dev vs release isolation. A dev run must not grab the installed release's
@@ -87,6 +88,13 @@ if (!gotLock) {
         registerIpc()
         // 各模块的 onReady：注册内核服务、准备需要 Electron 就绪态的能力（建窗之前）。
         await runModuleReady()
+        // 扩展层加载：在模块 onReady 之后（此时系统扩展依赖的内核能力已就绪）、建窗之前。
+        // 加载器自身的失败已被它内部隔离，这里再包一层只是保证「扩展坏了也不挡启动」。
+        try {
+            await startLoader()
+        } catch (err) {
+            console.error('[ext] 扩展层启动失败（已忽略，继续启动应用）', err)
+        }
         createShellWindow() // 首个窗口注册为核心窗口（内部登记角色并设为主窗口）
         createTray()
         syncGlobalHotkey() // 系统全局快捷键（默认 Ctrl+Alt+H 回到主窗口）
@@ -137,6 +145,11 @@ if (!gotLock) {
             /* best effort; the force cleanup below covers any stragglers */
         }
         killAllChildren() // 收尾其余在跑子进程（如正在进行的 npm）
+        try {
+            await stopLoader() // 逆序卸载扩展：先让扩展自己清场，再撤贡献与能力
+        } catch {
+            /* 卸载失败不该挡住退出 */
+        }
         await runModuleQuit() // 各模块逆序收尾（停 watcher、清资源）
         destroyTray()
     }

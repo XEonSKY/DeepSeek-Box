@@ -6,6 +6,7 @@ import shell from './shell'
 import tabdrag from './tabdrag'
 import appupdate from './appupdate'
 import configdir from './configdir'
+import extensions from './extensions'
 
 /**
  * 模块树：主进程的全部功能模块。
@@ -17,7 +18,7 @@ import configdir from './configdir'
  * 目前各模块互不依赖，顺序不重要；将来若有「A 的端点要用 B 提供的能力」，用 kernel 的
  * 服务槽（`kernel/services.ts`）解耦，而**不要**把顺序当成隐式依赖。
  */
-const modules: MainModule[] = [settings, dsh, env, shell, tabdrag, appupdate, configdir]
+const modules: MainModule[] = [settings, dsh, env, shell, tabdrag, appupdate, configdir, extensions]
 
 /** 全部模块（装配器与测试用）。 */
 export function allModules(): MainModule[] {
