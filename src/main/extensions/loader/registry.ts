@@ -32,7 +32,7 @@ const items: Contribution[] = []
  * `console.error`。这样既守住了「纯逻辑可单测」的约束，又让真实运行的输出走统一日志。
  */
 let onDisposeError: (kind: string, key: string, err: unknown) => void = (kind, key, err) => {
-    console.error(`[ext] 撤销贡献点失败：${kind} ${key}`, err)
+    console.error(`[ext] failed to dispose contribution: ${kind} ${key}`, err)
 }
 
 /** 注入撤销失败的上报出口（由加载器在启动时调用）。 */
