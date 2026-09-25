@@ -1,6 +1,7 @@
 import { watch } from 'vue'
 import { extState } from './store'
 import { openTab, findTab, webTabs } from '../shell/tabs'
+import { tt } from '../lib/locales'
 
 /**
  * 渲染层控制点 1：**标签页**。
@@ -40,7 +41,9 @@ export function openExtTab(extId: string, key: string): void {
         return
     }
     // 复用 openTab 的构造逻辑，再把 id 改成稳定值（openTab 生成的是时间戳 id）。
-    const tab = openTab(contribution.url, contribution.titleKey)
+    // openTab 的 title 是**展示文本**而非 i18n 键，故这里先把贡献的 titleKey 译好再传入，
+    // 否则标签栏会直接显示 'ext.tab.xxx' 这样的原始键。
+    const tab = openTab(contribution.url, tt(contribution.titleKey))
     tab.id = id
     webTabs.activeId = id
 }

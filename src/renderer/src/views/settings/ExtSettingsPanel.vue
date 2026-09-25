@@ -81,42 +81,42 @@ const abnormal = computed(() => !!ext.value && ext.value.status !== 'active')
             <div class="dsh-brand__icon"><AppstoreOutlined style="font-size: 34px" /></div>
             <div class="dsh-brand__txt">
                 <div class="dsh-brand__name">{{ ext?.name ?? panelKey }}</div>
-                <div class="dsh-brand__desc">{{ ext?.id ?? $t('extpanel.missing') }}</div>
+                <div class="dsh-brand__desc">{{ ext?.id ?? $t('sv.extpanel.missing') }}</div>
             </div>
         </div>
 
-        <a-alert v-if="!ext" type="warning" show-icon :message="$t('extpanel.missing')" />
+        <a-alert v-if="!ext" type="warning" show-icon :message="$t('sv.extpanel.missing')" />
 
         <template v-else>
-            <a-alert v-if="abnormal" type="warning" show-icon :message="ext.message || $t('extpanel.inactive')" />
+            <a-alert v-if="abnormal" type="warning" show-icon :message="ext.message || $t('sv.extpanel.inactive')" />
 
             <a-collapse :active-key="['info']">
-                <a-collapse-panel key="info" :header="$t('extpanel.info')">
+                <a-collapse-panel key="info" :header="$t('sv.extpanel.info')">
                     <div class="extinfo">
-                        <div class="extinfo__row"><span>{{ $t('extpanel.kind') }}</span><b>{{ ext.kind }}</b></div>
-                        <div class="extinfo__row"><span>{{ $t('extpanel.version') }}</span><b>{{ ext.version || '-' }}</b></div>
-                        <div class="extinfo__row"><span>{{ $t('extpanel.status') }}</span><b>{{ ext.status }}</b></div>
+                        <div class="extinfo__row"><span>{{ $t('sv.extpanel.kind') }}</span><b>{{ ext.kind }}</b></div>
+                        <div class="extinfo__row"><span>{{ $t('sv.extpanel.version') }}</span><b>{{ ext.version || '-' }}</b></div>
+                        <div class="extinfo__row"><span>{{ $t('sv.extpanel.status') }}</span><b>{{ ext.status }}</b></div>
                         <div class="extinfo__row">
-                            <span>{{ $t('extpanel.caps') }}</span>
+                            <span>{{ $t('sv.extpanel.caps') }}</span>
                             <b>{{ ext.capabilities.length ? ext.capabilities.join(', ') : '-' }}</b>
                         </div>
                         <div class="extinfo__row extinfo__row--path">
-                            <span>{{ $t('extpanel.dir') }}</span><b :title="ext.dir">{{ ext.dir }}</b>
+                            <span>{{ $t('sv.extpanel.dir') }}</span><b :title="ext.dir">{{ ext.dir }}</b>
                         </div>
                     </div>
                     <div class="extinfo__actions">
                         <a-button v-if="ext.kind === 'external'" size="small" @click="revealDir">
                             <template #icon><FolderOpenOutlined /></template>
-                            {{ $t('extpanel.reveal') }}
+                            {{ $t('sv.extpanel.reveal') }}
                         </a-button>
                     </div>
                 </a-collapse-panel>
 
-                <a-collapse-panel v-if="tabs.length" key="tabs" :header="$t('extpanel.tabs')">
+                <a-collapse-panel v-if="tabs.length" key="tabs" :header="$t('sv.extpanel.tabs')">
                     <div class="exttabs">
                         <a-button v-for="t in tabs" :key="t.key" size="small" @click="openTabOf(t.key)">
                             <template #icon><ReloadOutlined /></template>
-                            {{ t.titleKey }}
+                            {{ $t(t.titleKey) }}
                         </a-button>
                     </div>
                 </a-collapse-panel>

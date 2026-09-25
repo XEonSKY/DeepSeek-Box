@@ -98,7 +98,7 @@ onMounted(async () => {
                     @click="go(m.key)"
                 >
                     <el-icon :size="18"><ApiFilled /></el-icon>
-                    <span class="nav__label" :title="m.extName">{{ m.title }}</span>
+                    <span class="nav__label" :title="m.extName">{{ $t(m.titleKey) }}</span>
                 </button>
             </nav>
         </aside>

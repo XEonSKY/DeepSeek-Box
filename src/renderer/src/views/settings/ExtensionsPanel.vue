@@ -41,7 +41,7 @@ async function toggle(ext: ExtInfo): Promise<void> {
             params: { id: ext.id },
             body: { enabled: ext.status === 'disabled' }
         })
-        ElMessage.success(tt('extpage.restartHint'))
+        ElMessage.success(tt('sv.extpage.restartHint'))
     } catch (err) {
         ElMessage.error(errorMessage(err))
     }
@@ -51,7 +51,7 @@ async function toggle(ext: ExtInfo): Promise<void> {
 async function forgive(ext: ExtInfo): Promise<void> {
     try {
         info.value = await window.api.post('/extensions/:id/forgive', { params: { id: ext.id } })
-        ElMessage.success(tt('extpage.forgiven'))
+        ElMessage.success(tt('sv.extpage.forgiven'))
     } catch (err) {
         ElMessage.error(errorMessage(err))
     }
@@ -61,7 +61,7 @@ async function forgive(ext: ExtInfo): Promise<void> {
 async function exitSafeMode(): Promise<void> {
     try {
         info.value = await window.api.post('/extensions/exit-safe-mode')
-        ElMessage.success(tt('extpage.safeExited'))
+        ElMessage.success(tt('sv.extpage.safeExited'))
     } catch (err) {
         ElMessage.error(errorMessage(err))
     }
@@ -101,21 +101,21 @@ onBeforeUnmount(() => offChanged?.())
             </div>
         </div>
 
-        <a-alert v-if="info?.safeMode" type="error" show-icon :message="$t('extpage.safeMode')">
-            <template #description>{{ $t('extpage.safeModeDesc') }}</template>
+        <a-alert v-if="info?.safeMode" type="error" show-icon :message="$t('sv.extpage.safeMode')">
+            <template #description>{{ $t('sv.extpage.safeModeDesc') }}</template>
         </a-alert>
 
         <div class="extpage__bar">
             <a-button size="small" @click="reload">
                 <template #icon><ReloadOutlined /></template>
-                {{ $t('extpage.refresh') }}
+                {{ $t('sv.extpage.refresh') }}
             </a-button>
             <a-button size="small" @click="openDir">
                 <template #icon><FolderOpenOutlined /></template>
-                {{ $t('extpage.openDir') }}
+                {{ $t('sv.extpage.openDir') }}
             </a-button>
             <a-button v-if="info?.safeMode" size="small" danger @click="exitSafeMode">
-                {{ $t('extpage.exitSafe') }}
+                {{ $t('sv.extpage.exitSafe') }}
             </a-button>
             <span class="extpage__dir" :title="info?.externalDir">{{ info?.externalDir }}</span>
         </div>
@@ -140,21 +140,21 @@ onBeforeUnmount(() => offChanged?.())
                             size="small"
                             @click="toggle(item)"
                         >
-                            {{ item.status === 'disabled' ? $t('extpage.enable') : $t('extpage.disable') }}
+                            {{ item.status === 'disabled' ? $t('sv.extpage.enable') : $t('sv.extpage.disable') }}
                         </a-button>
                         <a-button
                             v-if="item.removable && item.status !== 'disabled' && item.status !== 'active'"
                             size="small"
                             @click="forgive(item)"
                         >
-                            {{ $t('extpage.forgive') }}
+                            {{ $t('sv.extpage.forgive') }}
                         </a-button>
                     </template>
                 </a-list-item>
             </template>
         </a-list>
 
-        <a-empty v-if="info && info.entries.length === 0" :description="$t('extpage.empty')" />
+        <a-empty v-if="info && info.entries.length === 0" :description="$t('sv.extpage.empty')" />
     </div>
 </template>
 

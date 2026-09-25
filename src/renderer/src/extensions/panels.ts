@@ -23,8 +23,8 @@ import { extState } from './store'
 export interface ExtMenuItem {
     /** 路由与高亮用的 key。 */
     key: string
-    /** 展示名（贡献里的 titleKey，扩展自备 i18n）。 */
-    title: string
+    /** 展示名的 i18n 键（来自贡献的 titleKey，由渲染层翻译）。 */
+    titleKey: string
     /** 来源扩展 id（便于展示与排查）。 */
     extId: string
     /** 来源扩展名。 */
@@ -39,7 +39,7 @@ export interface ExtMenuItem {
 export function extMenus(): ExtMenuItem[] {
     return extState.panels.map((p) => ({
         key: p.key,
-        title: p.titleKey,
+        titleKey: p.titleKey,
         extId: p.extId,
         extName: p.extName,
         view: p.view,
