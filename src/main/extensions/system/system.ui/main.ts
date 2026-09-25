@@ -3,7 +3,7 @@ import { listByKind } from '../../loader/registry'
 import type { ExtContext } from '../../loader/ctx'
 
 /**
- * 系统扩展 `cap.ui` —— 外壳界面操作的**能力声明**。
+ * 系统扩展 `system.ui` —— 外壳界面操作的**能力声明**。
  *
  * 与其他能力不同，这个能力的**执行在渲染层**：标签页与设置面板是渲染层的两个
  * 控制点（`shell/tabs.ts`、`views/SettingsView.vue`），主进程侧只能做「登记」。
@@ -27,5 +27,5 @@ const actions = {
 
 export function activate(ctx: ExtContext): void {
     provideActions(ctx.id, 'ui', actions as unknown as Record<string, (...args: never[]) => unknown>)
-    ctx.log.info('已提供能力 ui（动作：tabs, panels, routes）')
+    ctx.log.info('capability provided: ui (actions: tabs, panels, routes)')
 }

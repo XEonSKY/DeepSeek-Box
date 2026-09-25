@@ -67,6 +67,18 @@
   - **两个故意保留 `console.*` 的地方**：`dsh/watchdog.ts`（`WATCHDOG_CODE` 是脱离进程的独立脚本，不能依赖 pino）；`extensions/loader/registry.ts` 的默认兜底 sink（加载器启动时会注入真 sink 替换它）。
   - 日志消息用**英文**（诊断文本，面向开发者；`[Manager]` / `[Core]` / `[ext]` / `[shell]` 作为 `tag` 沿用）。
 - 保持渲染层安全底线：`contextIsolation` 开启、渲染层无 Node、只经 `window.api`；放宽必须说明理由。
+- **扩展只经 API 面触达内核**（两个方向都成立，别绕）：
+  - 主进程侧：扩展只用 `ExtContext`（`main/extensions/loader/ctx.ts`），**不 import 内核模块**；
+  - 渲染层侧：扩展只用 `src/extensions/renderer-api.ts`（`extApi` / `extT` / `extErrorMessage`），
+    **不 import 外壳内部**（`@/lib/*`、`@/components/*`、`@/shell/*` 都不行）。
+    需要新能力时**先扩那个 API 面**。外壳自身的界面（`renderer/src/views/**`）不受此限。
+- **内置扩展一个扩展一个目录**：`src/extensions/<id>/`（`main.ts` + `manifest.ts` + 可选 `*.vue`），
+  清单写在扩展自己目录里，登记表（`main/extensions/builtin/index.ts`）只列「有哪些」。
+  两端都用 `@ext/<id>/...` 引用。新增内置扩展 = 建一个目录 + 登记表加一行 + tsconfig 无需再改
+  （include 已覆盖 `src/extensions/`）。
+- **打包时源码不得进 asar**：`package.json` 的 `build.files` 里排除规则必须是 **`!src/**`**（递归），
+  不要写成 `!src/*`（只挡第一层，挡不住 `src/extensions/<id>/` 深处）。
+  另外**不要往 `files` 里加裸 `**/*`** —— 加了就会把整棵 `src/` 重新纳入。
 
 ## 兼容性与回退
 

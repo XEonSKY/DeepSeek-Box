@@ -17,6 +17,16 @@ import { extState } from './store'
  * {@link LOCAL_VIEWS} 里已登记的实现名（`view` 字段），由外壳挂载真实组件。
  * 于是「扩展管理」页本身也是内置扩展的贡献，外壳不为它写特例 ——
  * 内置与外部在控制点上的待遇一致，唯一差别是主进程侧的加载方式。
+ *
+ * **内置扩展的实现按扩展收拢在 `src/extensions/<id>/`**：一个目录里同时放主进程入口
+ * （`main.ts`）、清单（`manifest.ts`）与渲染层视图（`*.vue`）。之所以能这么做：
+ * 目录在中立的顶层、不属于任何单一构建入口，两端都以 `@ext/<id>/...` 引用
+ * （别名见 electron.vite.config.ts，对 main / preload / renderer 三处都配了）。
+ * 改一个扩展只动一个目录，不必在 `views/settings/` 与 `main/extensions/` 之间来回找。
+ *
+ * 与之相对，本文件与 `store.ts` / `tabs.ts` / `index.ts` 是**扩展框架本身**
+ * （加载器 + 两个控制点），属于基础设施，不随任何具体扩展走；
+ * 扩展能用的公开面则是 `src/extensions/renderer-api.ts`。
  */
 
 /** 侧栏项（内置面板之后追加）。 */
@@ -65,7 +75,9 @@ export function extPanelOf(key: string): ExtMenuItem | undefined {
  */
 const LOCAL_VIEWS: Record<string, () => Promise<Component>> = {
     // 「扩展管理」页（由内置扩展 box.extensions 贡献）。
-    extensions: () => import('../views/settings/ExtensionsPanel.vue')
+    // 视图与它的主进程实现在同一个目录（`src/extensions/box.extensions/`），
+    // 两端都用 `@ext/<id>/...` 引用 —— 见本文件顶部说明。
+    extensions: () => import('@ext/box.extensions/ExtensionsPanel.vue')
 }
 
 /**

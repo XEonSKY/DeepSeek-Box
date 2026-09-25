@@ -3,8 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { AppstoreOutlined, ReloadOutlined, FolderOpenOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
 import type { ExtInfo, ExtensionsInfo } from '@shared/extensions'
-import { errorMessage } from '@shared/errors'
-import { tt } from '../../lib/locales'
+import { extApi, extErrorMessage, extT } from '../renderer-api'
 
 /**
  * 「扩展」页：列出全部已发现扩展，支持停用 / 启用 / 清除崩溃记录，
@@ -16,6 +15,13 @@ import { tt } from '../../lib/locales'
  *
  * 列出的是主进程裁决的**全部**条目（含失败 / 跳过 / 停用），
  * 因为排查时最需要知道的是"为什么它没跑起来"。
+ *
+ * 本文件是内置扩展 `box.extensions` 的渲染层实现，与它的主进程入口（同目录 `main.ts`）
+ * 和清单（同目录 `manifest.ts`）放在一起 —— 三者构成这个扩展的完整定义，改它不必去别处找。
+ * 挂载入口见 `renderer/src/extensions/panels.ts` 的 `LOCAL_VIEWS`。
+ *
+ * 对外依赖刻意收在 `../renderer-api`（渲染层扩展 API 面）里，不 import 外壳内部模块 ——
+ * 与主进程侧「扩展不直接 import 内核」是同一条原则。
  */
 
 const info = ref<ExtensionsInfo | null>(null)
@@ -26,9 +32,9 @@ let offChanged: (() => void) | null = null
 async function reload(): Promise<void> {
     loading.value = true
     try {
-        info.value = await window.api.get('/extensions')
+        info.value = await extApi.get('/extensions')
     } catch (err) {
-        ElMessage.error(errorMessage(err))
+        ElMessage.error(extErrorMessage(err))
     } finally {
         loading.value = false
     }
@@ -37,42 +43,42 @@ async function reload(): Promise<void> {
 /** 启用 / 停用某扩展（重启后生效）。 */
 async function toggle(ext: ExtInfo): Promise<void> {
     try {
-        info.value = await window.api.put('/extensions/:id/enabled', {
+        info.value = await extApi.put('/extensions/:id/enabled', {
             params: { id: ext.id },
             body: { enabled: ext.status === 'disabled' }
         })
-        ElMessage.success(tt('sv.extpage.restartHint'))
+        ElMessage.success(extT('sv.extpage.restartHint'))
     } catch (err) {
-        ElMessage.error(errorMessage(err))
+        ElMessage.error(extErrorMessage(err))
     }
 }
 
 /** 清除某扩展的崩溃记录并解除停用（「我已知道并要试一次」）。 */
 async function forgive(ext: ExtInfo): Promise<void> {
     try {
-        info.value = await window.api.post('/extensions/:id/forgive', { params: { id: ext.id } })
-        ElMessage.success(tt('sv.extpage.forgiven'))
+        info.value = await extApi.post('/extensions/:id/forgive', { params: { id: ext.id } })
+        ElMessage.success(extT('sv.extpage.forgiven'))
     } catch (err) {
-        ElMessage.error(errorMessage(err))
+        ElMessage.error(extErrorMessage(err))
     }
 }
 
 /** 退出安全模式并清空崩溃计数。 */
 async function exitSafeMode(): Promise<void> {
     try {
-        info.value = await window.api.post('/extensions/exit-safe-mode')
-        ElMessage.success(tt('sv.extpage.safeExited'))
+        info.value = await extApi.post('/extensions/exit-safe-mode')
+        ElMessage.success(extT('sv.extpage.safeExited'))
     } catch (err) {
-        ElMessage.error(errorMessage(err))
+        ElMessage.error(extErrorMessage(err))
     }
 }
 
 /** 在文件管理器里打开外部扩展目录。 */
 async function openDir(): Promise<void> {
     try {
-        await window.api.post('/extensions/open-dir')
+        await extApi.post('/extensions/open-dir')
     } catch (err) {
-        ElMessage.error(errorMessage(err))
+        ElMessage.error(extErrorMessage(err))
     }
 }
 
@@ -101,7 +107,7 @@ const KIND_KEY: Record<ExtInfo['kind'], string> = {
 
 onMounted(() => {
     void reload()
-    offChanged = window.api.on('extensions:changed', () => void reload())
+    offChanged = extApi.on('extensions:changed', () => void reload())
 })
 onBeforeUnmount(() => offChanged?.())
 </script>

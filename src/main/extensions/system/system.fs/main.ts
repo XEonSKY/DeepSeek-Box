@@ -5,7 +5,7 @@ import { provideActions } from '../../loader/capability'
 import type { ExtContext } from '../../loader/ctx'
 
 /**
- * 系统扩展 `cap.fs` —— 把内核的文件操作**包装**成一个可申请的能力。
+ * 系统扩展 `system.fs` —— 把内核的文件操作**包装**成一个可申请的能力。
  *
  * 「系统扩展其实是系统能力抽象化的体现」的落点就在这里：内核本来就有一份唯一的
  * 整目录删除实现（`kernel/treeops` → `dsh/fsutil`，不跟随符号链接 / junction）；
@@ -75,5 +75,5 @@ const actions = {
 export function activate(ctx: ExtContext): void {
     // 能力槽按 owner 记账；卸载本扩展（或整体退出）时会连同这个能力一起撤销。
     provideActions(ctx.id, 'fs', actions as unknown as Record<string, (...args: never[]) => unknown>)
-    ctx.log.info(`已提供能力 fs（动作：${Object.keys(actions).join(', ')}）`)
+    ctx.log.info(`capability provided: fs (actions: ${Object.keys(actions).join(', ')})`)
 }

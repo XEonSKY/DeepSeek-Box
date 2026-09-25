@@ -3,7 +3,7 @@ import { provideActions } from '../../loader/capability'
 import type { ExtContext } from '../../loader/ctx'
 
 /**
- * 系统扩展 `cap.proc` —— 把子进程执行包装成能力。
+ * 系统扩展 `system.proc` —— 把子进程执行包装成能力。
  *
  * 内核侧唯一的子进程入口是 `dsh/child.ts` 的 `runChild`（spawn → 登记 → 收日志 →
  * 可取消 → 只 settle 一次）。扩展若自己 `child_process.spawn`，会绕开三件事：
@@ -64,5 +64,5 @@ const actions = {
 
 export function activate(ctx: ExtContext): void {
     provideActions(ctx.id, 'proc', actions as unknown as Record<string, (...args: never[]) => unknown>)
-    ctx.log.info('已提供能力 proc（动作：run）')
+    ctx.log.info('capability provided: proc (actions: run)')
 }

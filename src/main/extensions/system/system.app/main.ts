@@ -3,7 +3,7 @@ import { useService, hasService, SERVICE } from '../../../kernel/services'
 import type { ExtContext } from '../../loader/ctx'
 
 /**
- * 系统扩展 `cap.app` —— 把内核的**服务槽**包装成能力。
+ * 系统扩展 `system.app` —— 把内核的**服务槽**包装成能力。
  *
  * 内核的 `kernel/services.ts` 是「模块之间不直接 import」的解耦手段（控制反转）：
  * 提供方在自己的 `onReady` 注册，消费方按名字取用。扩展若想触达这类跨模块动作
@@ -31,5 +31,5 @@ const actions = {
 
 export function activate(ctx: ExtContext): void {
     provideActions(ctx.id, 'app', actions as unknown as Record<string, (...args: never[]) => unknown>)
-    ctx.log.info('已提供能力 app（动作：has, restartDsh）')
+    ctx.log.info('capability provided: app (actions: has, restartDsh)')
 }

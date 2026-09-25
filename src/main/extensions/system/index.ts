@@ -1,9 +1,9 @@
 import type { StaticExt } from '../loader/sources'
-import * as capFs from './cap.fs/main'
-import * as capNet from './cap.net/main'
-import * as capProc from './cap.proc/main'
-import * as capApp from './cap.app/main'
-import * as capUi from './cap.ui/main'
+import * as sysFs from './system.fs/main'
+import * as sysNet from './system.net/main'
+import * as sysProc from './system.proc/main'
+import * as sysApp from './system.app/main'
+import * as sysUi from './system.ui/main'
 
 /**
  * 系统扩展登记表。
@@ -23,32 +23,32 @@ import * as capUi from './cap.ui/main'
 export const systemExtensions: StaticExt[] = [
     {
         kind: 'system',
-        sourceDir: 'src/main/extensions/system/cap.fs',
-        manifest: { id: 'cap.fs', name: '文件系统能力', version: '1.0.0', apiVersion: 1 },
-        module: capFs
+        sourceDir: 'src/main/extensions/system/system.fs',
+        manifest: { id: 'system.fs', name: '文件系统能力', version: '1.0.0', apiVersion: 1 },
+        module: sysFs
     },
     {
         kind: 'system',
-        sourceDir: 'src/main/extensions/system/cap.net',
-        manifest: { id: 'cap.net', name: '网络请求能力', version: '1.0.0', apiVersion: 1 },
-        module: capNet
+        sourceDir: 'src/main/extensions/system/system.net',
+        manifest: { id: 'system.net', name: '网络请求能力', version: '1.0.0', apiVersion: 1 },
+        module: sysNet
     },
     {
         kind: 'system',
-        sourceDir: 'src/main/extensions/system/cap.proc',
-        manifest: { id: 'cap.proc', name: '子进程能力', version: '1.0.0', apiVersion: 1 },
-        module: capProc
+        sourceDir: 'src/main/extensions/system/system.proc',
+        manifest: { id: 'system.proc', name: '子进程能力', version: '1.0.0', apiVersion: 1 },
+        module: sysProc
     },
     {
         kind: 'system',
-        sourceDir: 'src/main/extensions/system/cap.app',
-        manifest: { id: 'cap.app', name: '应用服务能力', version: '1.0.0', apiVersion: 1 },
-        module: capApp
+        sourceDir: 'src/main/extensions/system/system.app',
+        manifest: { id: 'system.app', name: '应用服务能力', version: '1.0.0', apiVersion: 1 },
+        module: sysApp
     },
     {
         kind: 'system',
-        sourceDir: 'src/main/extensions/system/cap.ui',
-        manifest: { id: 'cap.ui', name: '界面操作能力', version: '1.0.0', apiVersion: 1 },
-        module: capUi
+        sourceDir: 'src/main/extensions/system/system.ui',
+        manifest: { id: 'system.ui', name: '界面操作能力', version: '1.0.0', apiVersion: 1 },
+        module: sysUi
     }
 ]

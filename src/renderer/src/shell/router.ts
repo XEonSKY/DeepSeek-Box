@@ -34,7 +34,7 @@ export const router = createRouter({
                 { path: 'about', name: 'settings-about', component: () => import('../views/settings/AboutPanel.vue') },
                 // 扩展贡献的面板：兜底路由，视图统一由 ExtSettingsPanel 渲染（扩展不注入组件）。
                 // 放在内置项之后，内置路径优先匹配（Router 按声明顺序取第一个匹配）。
-                { path: ':panelKey', name: 'settings-ext-panel', component: () => import('../views/settings/ExtSettingsPanel.vue') }
+                { path: ':panelKey', name: 'settings-ext-panel', component: () => import('../extensions/ExtSettingsPanel.vue') }
             ]
         },
         { path: '/:pathMatch(.*)*', redirect: '/' }

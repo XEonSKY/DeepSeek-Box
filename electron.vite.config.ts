@@ -10,20 +10,28 @@ export default defineConfig({
         // 旧的 externalizeDepsPlugin() 已弃用。
         build: { externalizeDeps: true },
         resolve: {
-            alias: { '@shared': resolve('src/shared') }
+            alias: {
+                '@shared': resolve('src/shared'),
+                // 内置扩展业务代码在顶层 src/extensions/<id>/（详见该目录说明）
+                '@ext': resolve('src/extensions')
+            }
         }
     },
     preload: {
         build: { externalizeDeps: true },
         resolve: {
-            alias: { '@shared': resolve('src/shared') }
+            alias: {
+                '@shared': resolve('src/shared'),
+                '@ext': resolve('src/extensions')
+            }
         }
     },
     renderer: {
         resolve: {
             alias: {
                 '@': resolve('src/renderer/src'),
-                '@shared': resolve('src/shared')
+                '@shared': resolve('src/shared'),
+                '@ext': resolve('src/extensions')
             }
         },
         plugins: [

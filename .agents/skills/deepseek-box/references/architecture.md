@@ -32,6 +32,43 @@ app/ dsh/ 具体实现，被 modules 调用
   并暴露 `registerIpc` / `runModuleReady` / `runModuleQuit`。端点实现全在 `modules/*.ts`。
 - 详见 references/main-process.md 与 references/ipc.md。
 
+## 扩展层：一个扩展一个目录
+
+三类扩展（`system` / `builtin` / `external`），按**信任级别**分：
+
+```text
+src/extensions/<id>/        内置与系统扩展的业务代码（main.ts / manifest.ts / *.vue）
+  main.ts                   主进程入口（activate），只依赖 ExtContext
+  manifest.ts               清单（id / 名称 / 贡献点）
+  *.vue                     渲染层视图（可选，仅内置扩展能声明 view）
+src/main/extensions/
+  loader/                   加载器 = 框架本身（发现 / 排序 / 授权 / 激活 / 卸载）
+  system/                   系统扩展登记表（system.fs / system.net / ... 各一个目录）
+  builtin/                  内置扩展登记表（只声明「有哪些」，清单在扩展自己目录里）
+src/renderer/src/extensions/
+  index.ts store.ts tabs.ts panels.ts   渲染层框架 = 加载器 + 两个控制点
+  ExtSettingsPanel.vue      外部扩展的通用兜底容器
+src/extensions/renderer-api.ts          渲染层扩展公开 API 面
+```
+
+**为什么内置扩展在顶层 `src/extensions/` 而不是 `src/main/` 下**：一个内置扩展同时有主进程
+与渲染层文件，而这两端分属**两个构建入口**（`electron.vite.config.ts` 的 main / renderer）。
+目录放在中立的顶层，两端都以 `@ext/<id>/...` 引用（别名对 main / preload / renderer 三处都配），
+改一个扩展只动一个目录。对应地，两个 tsconfig 的 `include` 都覆盖 `src/extensions/`：
+node 侧收 `**/main.ts` + `**/manifest.ts`，web 侧收 `**/*.vue` + `src/extensions/*.ts`。
+
+**扩展只能通过 API 面触达内核**（这条是硬约束，两个方向都成立）：
+
+- 主进程侧 —— 只用 `ExtContext`（`main/extensions/loader/ctx.ts`），不 import 内核模块；
+- 渲染层侧 —— 只用 `src/extensions/renderer-api.ts`（`extApi` / `extT` / `extErrorMessage`），
+  **不 import 外壳内部**（`@/lib/*`、`@/components/*`、`@/shell/*` 一律不行）。
+  外壳自身的界面（`renderer/src/views/**`）不受此限 —— 它是内核的一部分。
+  需要新能力时**先扩 API 面**，让它保持唯一可见面；否则内核重构会波及所有扩展。
+
+**系统扩展 id 用 `system.` 前缀**（`system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui`），
+与外部扩展能力名 `ext:<extId>` 对仗。注意**能力名是裸名**（`fs` / `net` / ...，见
+`@shared/extensions` 的 `SysCapability`），与系统扩展 id 是两层 —— 改 id 不影响扩展申请能力的写法。
+
 ## 启动顺序（`src/main/index.ts`）
 
 1. **dev / release 隔离**：开发态把 `userData` 指向 `"<app> (dev)"`，避免与已安装版抢单实例锁。

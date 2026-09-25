@@ -3,10 +3,10 @@ import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import { AppstoreOutlined, FolderOpenOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { useRoute } from 'vue-router'
-import { extState } from '../../extensions/store'
-import { extTabId } from '../../extensions/tabs'
-import { resolveExtPanelView } from '../../extensions/panels'
-import { findTab, webTabs } from '../../shell/tabs'
+import { extState } from './store'
+import { extTabId } from './tabs'
+import { resolveExtPanelView } from './panels'
+import { findTab, webTabs } from '../shell/tabs'
 import type { ExtInfo } from '@shared/extensions'
 
 /**
@@ -61,7 +61,7 @@ function openTabOf(key: string): void {
         webTabs.activeId = id
         return
     }
-    void import('../../extensions/tabs').then((m) => m.openExtTab(ext.value!.id, key))
+    void import('./tabs').then((m) => m.openExtTab(ext.value!.id, key))
 }
 
 /** 在文件管理器里定位扩展目录（仅外部扩展有意义）。 */

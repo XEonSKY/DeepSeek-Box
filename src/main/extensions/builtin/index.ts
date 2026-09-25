@@ -1,5 +1,6 @@
 import type { StaticExt } from '../loader/sources'
-import * as boxExtensions from './box.extensions/main'
+import * as boxExtensions from '@ext/box.extensions/main'
+import { manifest as boxExtensionsManifest } from '@ext/box.extensions/manifest'
 
 /**
  * 内置扩展登记表：源码在本目录，随构建产物发布。
@@ -12,21 +13,19 @@ import * as boxExtensions from './box.extensions/main'
  *  - 受崩溃计数与安全模式影响（与外部扩展同等待遇）—— 它有可能是我们在这一版引入的
  *    问题，用户仍需要一条「全部关掉」的自救路径。
  *
- * 迁入一个扩展 = 写一个目录 + 在这里加一行。
+ * 迁入一个扩展 = 写一个目录（`src/extensions/<id>/`，内含 main.ts 与 manifest.ts，可含 .vue）+ 在这里加一行。
+ * 清单写在扩展自己的目录里（见 box.extensions/manifest.ts 的说明），
+ * 登记表只回答「有哪些内置扩展」。
+ *
+ * 目录在顶层 `src/extensions/` 而不是 `src/main/` 下：一个内置扩展同时有主进程与渲染层文件，
+ * 而这两端分属两个构建入口（见 electron.vite.config.ts）。放在中立的顶层目录，
+ * 两端都能以 `@ext/<id>/...` 引用，改一个扩展只动一个目录。
  */
 export const builtinExtensions: StaticExt[] = [
     {
         kind: 'builtin',
-        sourceDir: 'src/main/extensions/builtin/box.extensions',
-        manifest: {
-            id: 'box.extensions',
-            name: '扩展管理',
-            version: '1.0.0',
-            apiVersion: 1,
-            contributions: {
-                settings: [{ key: 'extensions', titleKey: 'sv.nav.extensions', view: 'extensions' }]
-            }
-        },
+        sourceDir: 'src/extensions/box.extensions',
+        manifest: boxExtensionsManifest,
         module: boxExtensions
     }
 ]

@@ -29,6 +29,9 @@ dist-electron/
 # ---------- Electron / electron-builder ----------
 dev-app-update.yml
 *.blockmap
+# electron-vite 加载配置时生成的临时文件（electron.vite.config.<时间戳>.mjs），
+# 与真配置文件同目录；不忽略会被 eslint . 扫到并报一堆缩进错。
+electron.vite.config.*.mjs
 
 # ---------- 日志 ----------
 logs/

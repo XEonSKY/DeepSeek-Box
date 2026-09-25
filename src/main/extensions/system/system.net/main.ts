@@ -3,7 +3,7 @@ import { provideActions } from '../../loader/capability'
 import type { ExtContext } from '../../loader/ctx'
 
 /**
- * 系统扩展 `cap.net` —— 把主进程的 HTTP 入口包装成能力。
+ * 系统扩展 `system.net` —— 把主进程的 HTTP 入口包装成能力。
  *
  * 内核的约定是「主进程 HTTP 一律走 `dsh/http.ts` 的 `httpFetch`」，原因是它按 scope
  * 绑定各自的 Electron session（代理、UA、Cookie 分区都跟着设置走）。若让外部扩展
@@ -52,5 +52,5 @@ const actions = {
 
 export function activate(ctx: ExtContext): void {
     provideActions(ctx.id, 'net', actions as unknown as Record<string, (...args: never[]) => unknown>)
-    ctx.log.info('已提供能力 net（动作：fetch, fetchJson）')
+    ctx.log.info('capability provided: net (actions: fetch, fetchJson)')
 }
