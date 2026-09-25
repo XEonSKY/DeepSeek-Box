@@ -100,6 +100,19 @@ export function providedBy(owner: string): string[] {
 }
 
 /**
+ * 精确摘除**一个**能力名。
+ *
+ * 与 {@link revoke} 的区别：后者按 owner 扫全表，用于「连人带能力一起撤」；
+ * 本函数只摘指定名字。扩展卸载时逐个撤销自己提供的能力用这个 —— 更精确，
+ * 且不受「系统能力的 owner 也是扩展 id」这类巧合的影响。
+ *
+ * @returns 是否真的摘掉了一个（不存在返回 false）
+ */
+export function revokeName(name: string): boolean {
+    return caps.delete(name)
+}
+
+/**
  * 撤销某个扩展提供的全部能力。
  *
  * 这是 `rmmod` 语义的关键一步：卸载扩展时必须把它注册过的能力一并摘掉，

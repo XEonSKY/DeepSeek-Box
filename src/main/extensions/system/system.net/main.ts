@@ -1,4 +1,6 @@
 import { httpFetch, type HttpScope } from '../../../dsh/http'
+import { downloadFile } from '../../../dsh/downloader'
+import type { DownloadThreads } from '@shared/types'
 import { provideActions } from '../../loader/capability'
 import type { ExtContext } from '../../loader/ctx'
 
@@ -47,10 +49,42 @@ const actions = {
         } catch {
             return null
         }
+    },
+    /**
+     * 下载**二进制文件**到磁盘。
+     *
+     * `fetch` 只回文本，二进制（压缩包、可执行文件）经它必然失真 —— 所以单列一个动作，
+     * 直接复用内核的 `dsh/downloader.ts`（多线程 Range 分段 / 代理感知 / 进度 / 重试 /
+     * 临时文件 + 原子落位）。扩展若自己拿 `fetch` 再写盘，会绕开这一整套，
+     * 这正是不把裸 fetch 暴露出去的原因。
+     *
+     * 代理档位：下载器只认它历史上的两档（npm / node），故这里也只为它暴露这两档，
+     * 缺省交给下载器自己决定（'npm'）。
+     *
+     * @returns 成功与否、取消标志、失败信息与落盘后的绝对路径
+     */
+    download: async (options: {
+        url: string
+        destDir: string
+        fileName?: string
+        threads?: DownloadThreads
+        proxyScope?: 'npm' | 'node'
+    }): Promise<{ ok: boolean; canceled?: boolean; message?: string; file: string }> => {
+        const fileName = options.fileName ?? ''
+        const result = await downloadFile({
+            url: options.url,
+            destDir: options.destDir,
+            fileName: fileName || undefined,
+            threads: options.threads,
+            proxyScope: options.proxyScope
+        })
+        // 不依赖 downloader 内部如何推断文件名：落位路径由「目录 + 实际文件名」拼回来。
+        const name = fileName || new URL(options.url).pathname.split('/').filter(Boolean).pop() || ''
+        return { ...result, file: name ? `${options.destDir}/${decodeURIComponent(name)}` : options.destDir }
     }
 }
 
 export function activate(ctx: ExtContext): void {
     provideActions(ctx.id, 'net', actions as unknown as Record<string, (...args: never[]) => unknown>)
-    ctx.log.info('capability provided: net (actions: fetch, fetchJson)')
+    ctx.log.info('capability provided: net (actions: fetch, fetchJson, download)')
 }

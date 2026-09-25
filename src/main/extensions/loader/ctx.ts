@@ -58,6 +58,30 @@ export interface ExtSettingsAccess {
 }
 
 /**
+ * 扩展**对外提供能力**的登记口（扩展间互调的那一半）。
+ *
+ * 与 {@link ExtCapabilityAccess}（消费方）配对：消费方 `call('ext:<id>', action, ...)`，
+ * 提供方 `provides('ext:<id>', actions)`。之所以要显式的 provide 口子而不是让两边
+ * 直接互相 import —— 那会立刻产生静态耦合与循环依赖，而能力槽正是用来打断它的
+ * （与内核用 `kernel/services.ts` 打断模块间环是同一套思路）。
+ *
+ * 名称必须是 `<id>` 或 `ext:<id>` 形态：前者是自己（自动补 `ext:` 前缀），
+ * 后者是显式命名空间。加载器会按 owner 记账，卸载时随扩展一起撤销 ——
+ * 所以「提供者退出后消费者还拿到陈旧实现」不会发生。
+ */
+export interface ExtProvidesAccess {
+    /**
+     * 以**动作表**形式对外提供能力。
+     *
+     * @param name 能力名：`ext:<id>`（或省去前缀直接给 id，自动补 `ext:`）
+     * @param actions 动作名 → 实现
+     */
+    register(name: string, actions: Record<string, (...args: never[]) => unknown>): void
+    /** 本扩展已对外提供的能力名（排查用）。 */
+    provided(): string[]
+}
+
+/**
  * 专用 IPC 通路（主进程扩展的通路 1）。
  *
  * 扩展声明自己的端点，经内核 `Router` 挂到唯一通道上。两条硬约束：
@@ -107,7 +131,10 @@ export interface ExtContext {
     readonly dir: string
     /** 本次加载的扩展 API 版本。 */
     readonly apiVersion: number
+    /** 消费其它能力（系统能力或别的扩展提供的）。 */
     readonly capabilities: ExtCapabilityAccess
+    /** 对外提供能力（扩展间互调的另一半）。 */
+    readonly provides: ExtProvidesAccess
     readonly tabs: ExtTabsAccess
     readonly settings: ExtSettingsAccess
     readonly ipc: ExtIpcAccess
@@ -183,6 +210,27 @@ export function createContext(options: {
         }
     }
 
+    // 对外提供能力：直接写进加载器持有的能力槽（capability）。
+    //
+    // 记账方式是「提供时登记一条按 owner 撤销的 disposable」，而不是依赖
+    // capability.revoke(owner) —— 后者会按 owner 扫全表，看似够用；但能力槽里的
+    // 系统能力（fs/net/…）owner 也是扩展 id，混在一起撤销容易误伤。
+    // 这里精确记录「本次提供了哪几个名字」，撤销时只摘这几个。
+    const providedNames = new Set<string>()
+    const provides: ExtProvidesAccess = {
+        register: (name, actions) => {
+            const full = name.startsWith('ext:') ? name : `ext:${name}`
+            // 重复提供同一能力名 = 装配冲突，capability.provideActions 会抛错。
+            capability.provideActions(id, full, actions)
+            providedNames.add(full)
+            registry.register(id, 'capability', full, () => {
+                capability.revokeName(full)
+                providedNames.delete(full)
+            })
+        },
+        provided: () => [...providedNames]
+    }
+
     const ipc: ExtIpcAccess = {
         prefix,
         handle: (action, handler) => {
@@ -207,7 +255,7 @@ export function createContext(options: {
         error: (message, ...rest) => extLog.error(formatArgs(message, rest))
     }
 
-    return { id, kind, dir, apiVersion, capabilities, tabs, settings, ipc, log, disposables }
+    return { id, kind, dir, apiVersion, capabilities, provides, tabs, settings, ipc, log, disposables }
 }
 
 /** 当前已提供的能力快照（供加载器在构造 ctx 前收集动作表）。 */
