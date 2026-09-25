@@ -35,7 +35,7 @@ import { createContext, channelOf, releaseOwner, type ExtContext, type ExtModule
 import { parseManifest, missingDependencies, isSafeContributionKey } from './manifest'
 import { topoSort, reverseForUnload, type SortableItem } from './ordering'
 import { decideSafeMode, recordCrash, clearCrashesAfterCleanBoot } from './safemode'
-import { discoverExternal, externalRoot, currentChannel, staticExts } from './sources'
+import { discoverExternal, externalRoot, currentChannel, staticExts, ensureExtDataDir } from './sources'
 import { loadState, saveState } from './state'
 import { logger } from '../../kernel/logger'
 
@@ -298,6 +298,8 @@ async function activateOne(c: Candidate, granted: ReadonlySet<ExtCapability>): P
         apiVersion: EXT_API_VERSION,
         granted,
         actions: buildActions(granted),
+        // 数据目录懒创建：扩展首次访问 ctx.dataDir 才落盘（sources.ts 的 ensureExtDataDir）。
+        ensureDataDir: () => ensureExtDataDir(id),
         registerIpc: (action, handler) => {
             const ports = state.ports
             if (!ports) throw new Error('加载器端口未安装')

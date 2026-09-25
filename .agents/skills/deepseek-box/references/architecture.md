@@ -74,6 +74,15 @@ node 侧收全部 TS（顶层 `renderer-api.ts` 除外 —— 它引用 `window`
 按名记账 —— 卸载时逐名精确摘除（`revokeName`），不用按 owner 扫全表的 `revoke`，
 避免误伤同 owner 的其它登记。重复提供同一能力名 = 装配冲突，直接抛错。
 
+**扩展数据目录**：`ctx.dataDir`（懒创建 getter，首次访问才在磁盘建目录），
+路径 `<配置目录>/extensions/data/<extId>`。放运行期产生的数据（下载的核心、状态文件、
+缓存），与 `dir`（代码目录）**分离** —— 外部扩展卸载时整目录删除的是代码目录，
+数据目录在重装后仍然保留；`data` 目录没有 manifest.json，天然被扩展扫描跳过。
+实现：`sources.ts` 的 `ensureExtDataDir`（mkdir -p），由 loader 注入 ctx，
+`ctx.ts` 本身不碰 fs。内置 / 系统扩展同样有数据目录（它们的 `dir` 是源码路径，
+打包后在磁盘上不存在 —— 需要落盘的东西一律用 `dataDir`，参考 `xeonsky.zip` 的
+core 目录与 config.json）。
+
 **系统扩展 id 用 `system.` 前缀**（`system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui`），
 与外部扩展能力名 `ext:<extId>` 对仗。注意**能力名是裸名**（`fs` / `net` / ...，见
 `@shared/extensions` 的 `SysCapability`），与系统扩展 id 是两层 —— 改 id 不影响扩展申请能力的写法。

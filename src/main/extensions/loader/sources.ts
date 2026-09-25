@@ -118,3 +118,37 @@ function listDirs(root: string): DiscoveredExt[] {
 export function discoverExternal(): DiscoveredExt[] {
     return listDirs(externalRoot())
 }
+
+// ---------------------------------------------------------------------------
+// 扩展数据目录：每个扩展一个专属文件夹，存放运行期产生的数据
+// ---------------------------------------------------------------------------
+
+/**
+ * 扩展数据根：`~/.dsbox/{channel}/extensions/data`。
+ *
+ * 为什么在 `extensions` 下再加一层 `data/` 而不是直接 `extensions/<extId>/`：
+ * `extensions/<extId>/` 是**外部扩展的安装目录**（代码），扩展扫描以「子目录里有
+ * manifest.json」为准 —— 数据混进去有两个问题：与外部扩展代码目录同名冲突；
+ * 卸载扩展时整目录删除会把用户数据一起带走。加 `data/` 一层后代码与数据分离，
+ * 重装扩展数据仍在；`data` 目录没有 manifest.json，天然被扫描跳过。
+ */
+export function extensionDataRoot(): string {
+    return path.join(externalRoot(), 'data')
+}
+
+/** 某扩展的专属数据目录（只算路径，不落盘；创建见 ensureExtDataDir）。 */
+export function extDataDir(id: string): string {
+    return path.join(extensionDataRoot(), id)
+}
+
+/**
+ * 确保某扩展的数据目录存在并返回它。
+ *
+ * 懒创建：由 ctx 的 `dataDir` getter 在**扩展第一次访问**时调用，不用数据的扩展
+ * 不会在磁盘上留下空目录。递归创建是幂等的，重复访问无害。
+ */
+export function ensureExtDataDir(id: string): string {
+    const dir = extDataDir(id)
+    fs.mkdirSync(dir, { recursive: true })
+    return dir
+}

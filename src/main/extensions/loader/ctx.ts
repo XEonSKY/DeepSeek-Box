@@ -129,6 +129,14 @@ export interface ExtContext {
     readonly kind: ExtKind
     /** 本扩展所在目录（读写自己的文件可用；写盘请走 fs 能力）。 */
     readonly dir: string
+    /**
+     * 本扩展的专属数据目录（懒创建：首次访问时才在磁盘上建出来）。
+     *
+     * 放运行期产生的数据（下载的核心、状态文件、缓存……），与 `dir`（代码目录）
+     * 分离 —— 代码目录随安装/卸载增删，数据目录在扩展重装后仍然保留。
+     * 路径形如 `<配置目录>/extensions/data/<extId>`。
+     */
+    readonly dataDir: string
     /** 本次加载的扩展 API 版本。 */
     readonly apiVersion: number
     /** 消费其它能力（系统能力或别的扩展提供的）。 */
@@ -166,6 +174,11 @@ export function createContext(options: {
     kind: ExtKind
     dir: string
     apiVersion: number
+    /**
+     * 确保数据目录存在并返回路径（由 loader 注入，本文件不碰 fs）。
+     * 会在扩展**首次访问 ctx.dataDir** 时才被调用（懒创建）。
+     */
+    ensureDataDir: () => string
     /** 已申请且校验通过的能力名。 */
     granted: ReadonlySet<ExtCapability>
     /** 各能力的动作表：能力名 → 动作名 → 实现。由系统扩展在激活时注入。 */
@@ -255,7 +268,27 @@ export function createContext(options: {
         error: (message, ...rest) => extLog.error(formatArgs(message, rest))
     }
 
-    return { id, kind, dir, apiVersion, capabilities, provides, tabs, settings, ipc, log, disposables }
+    // dataDir 懒创建：getter 首次访问才落盘（ensureDataDir 里 mkdir -p，幂等），
+    // 不用数据的扩展不会留下空目录。缓存首次结果，后续访问零开销。
+    let dataDirCache: string | null = null
+
+    return {
+        id,
+        kind,
+        dir,
+        apiVersion,
+        capabilities,
+        provides,
+        tabs,
+        settings,
+        ipc,
+        log,
+        disposables,
+        get dataDir(): string {
+            if (dataDirCache === null) dataDirCache = options.ensureDataDir()
+            return dataDirCache
+        }
+    }
 }
 
 /** 当前已提供的能力快照（供加载器在构造 ctx 前收集动作表）。 */

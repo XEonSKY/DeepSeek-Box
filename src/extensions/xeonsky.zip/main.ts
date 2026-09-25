@@ -75,10 +75,10 @@ export function activate(ctx: ExtContext): void {
 
     // ---- 路径约定 -------------------------------------------------------------
 
-    /** 核心目录：下载得到的 7-Zip 放这里。 */
-    const coreDir = path.join(ctx.dir, 'core')
+    /** 核心目录：下载得到的 7-Zip 放这里（在扩展数据目录下，重装不丢）。 */
+    const coreDir = path.join(ctx.dataDir, 'core')
     /** 扩展自己的配置文件（与 core 目录平级）。 */
-    const configPath = path.join(ctx.dir, 'config.json')
+    const configPath = path.join(ctx.dataDir, 'config.json')
 
     // ---- 配置读写 -------------------------------------------------------------
 
