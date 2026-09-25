@@ -47,6 +47,26 @@ Node、npm 与 DeepSeek Harness 都按版本分开存放，多版本并存：
 
 Node 的 zip / tar 与内置 npm 的 tgz 解压是独立阶段，进度广播携带 `phase: 'download' | 'extract'`；解压时渲染层切换为不确定动画（不再显示百分比）。
 
+## 进度与「切页不失联」
+
+进度由**主进程**记录，不是渲染层自己的状态：`main/app/operationProgress.ts` 按 `kind`
+（`node` / `npm` / `pnpm` / `dsh-plugin`）登记进行中的操作。渲染层任意时刻可 `GET /operations`
+取快照，操作结束时主进程清空对应条目。这样切换页面（面板卸载）再回来，或者从初始化页跳到设置页，
+正在跑的下载依然看得见 —— 以前进度只活在面板的 `ref` 里，切一次就再也看不到了。
+
+`kind` 同时也解决串台：npm 与 pnpm 的下载此前共用一个广播通道，下 pnpm 会同时点亮 npm 的进度条。
+
+进度还会**节流**（`MIN_INTERVAL_MS = 80`）：下载是每个数据块回调一次，全转发会给渲染层灌几千条
+IPC。同一操作在窗口内的重复进度只保留最后一条，但**阶段变化**（下载 → 解压）与进度前进一定送出，
+否则进度条会停在半路。
+
+## 长耗时的文件操作不要同步
+
+一个版本目录动辄几万个小文件，同步删除 / 拷贝会把主进程独占到界面完全没响应。
+`fsutil.removeTree` / `removeQuietly`、`installs.prepareVersionDir` / `removeVersion`、
+`fs.promises.cp` 都是 async；进程终止走 `logbus.killTree()`（同为 async，Windows 上
+`taskkill /T` 常要几百毫秒）。`removeQuietlySync` 只留给启动期无法 await 的同步迁移。
+
 ## npm 缓存
 
 `settings.tempNpmDir()` = `<工作目录>/temp/npm`；`npmRunner.npmCacheEnv()` 把 `npm_config_cache` 注入所有 npm 子进程（系统 npm、内置 npm、本地 Node 自带 npm、版本探测），不写 `~/.npm`。

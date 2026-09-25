@@ -4,7 +4,7 @@ import { IS_WIN } from '../app/runtime'
 import { configDir } from '../app/settings'
 import type { InstallKind } from '@shared/types'
 import { sortVersionsDesc } from './semver'
-import { readPkgVersion } from './fsutil'
+import { readPkgVersion, removeQuietlySync, removeTree } from './fsutil'
 import { PNPM_MANIFEST_REL, isPnpmPackageReady } from './pnpmEntry'
 
 /**
@@ -40,7 +40,9 @@ function migrateLegacyDshDir(): void {
             try {
                 // 目标已有同名项：旧处这份是重复的（目标才是权威），直接删掉，
                 // 免得留下一个半旧的 kernel 目录误导用户。
-                if (fs.existsSync(to)) fs.rmSync(from, { recursive: true, force: true })
+                // 这里调同步包装：本函数是启动期的同步迁移，单独改成 async 会牵动调用链；
+                // 走 rmSync 语义一致（junction 安全由 removeTreeAsync 保证，此处仅是清理重复项）。
+                if (fs.existsSync(to)) removeQuietlySync(from)
                 else fs.renameSync(from, to)
             } catch {
                 /* 被占用（如正在运行的 node.exe）：保留旧处，下次启动再试 */
@@ -148,18 +150,18 @@ export function resolveActive(kind: InstallKind): string | null {
     return list[0]
 }
 
-/** 准备一个空的版本目录（先清掉同名残留）。 */
-export function prepareVersionDir(kind: InstallKind, version: string): string {
+/** 准备一个空的版本目录（先清掉同名残留）。async：目录可能有几万个小文件，同步删会冻住主进程。 */
+export async function prepareVersionDir(kind: InstallKind, version: string): Promise<string> {
     const dir = versionDir(kind, version)
-    fs.rmSync(dir, { recursive: true, force: true })
-    fs.mkdirSync(dir, { recursive: true })
+    await removeTree(dir)
+    await fs.promises.mkdir(dir, { recursive: true })
     return dir
 }
 
 /** 删除某个已安装版本；若删的是生效版本则自动切到剩余最新版。 */
-export function removeVersion(kind: InstallKind, version: string): void {
+export async function removeVersion(kind: InstallKind, version: string): Promise<void> {
     const wasActive = rawActiveVersion(kind) === version
-    fs.rmSync(versionDir(kind, version), { recursive: true, force: true })
+    await removeTree(versionDir(kind, version))
     if (wasActive) setActiveVersion(kind, listInstalled(kind)[0] ?? null)
 }
 
@@ -193,7 +195,8 @@ function moveFlatInto(kind: InstallKind, version: string): boolean {
         if (!fs.existsSync(from)) continue
         const to = path.join(dest, n)
         try {
-            if (fs.existsSync(to)) fs.rmSync(from, { recursive: true, force: true })
+            // 与 migrateLegacyDshDir 同理：整个 moveFlatInto 是启动期同步迁移，这里用同步删除。
+            if (fs.existsSync(to)) removeQuietlySync(from)
             else fs.renameSync(from, to)
         } catch {
             /* 被占用（如正在运行的 node.exe）：保留平铺，读取侧会回退 */

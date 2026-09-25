@@ -4,7 +4,7 @@ import { registerIpc } from './app/ipc'
 import { startAutoCheckIfEnabled, noteGracefulExit } from './app/appupdate'
 import { loadSettings, startConfigWatchers, readDiskSettings, syncNativeTheme, ensureDefaultConfigMigration, waitForConfigMigration } from './app/settings'
 import { createShellWindow, createTray, showMainWindow, syncGlobalHotkey } from './app/ui'
-import { applyHardwareAcceleration, applyWebviewProxy, applyWebviewUserAgent } from './app/webview'
+import { applyHardwareAcceleration, applyWebviewProxy, applyWebviewUserAgent, installWebviewPermissionPolicy } from './app/webview'
 import { applyAutoLaunch } from './app/autolaunch'
 import { resolveInstall } from './dsh/manage'
 import { migrateLegacyInstalls } from './dsh/installs'
@@ -80,6 +80,9 @@ if (!gotLock) {
         syncNativeTheme(cfg.theme) // 建窗前先让 webview 深浅色与外壳一致
         // UA 与代理同理：都只能在 ready 之后设（defaultSession 尚不存在），且必须早于建窗。
         applyWebviewUserAgent(cfg)
+        // 权限策略同样必须在建窗之前装到 defaultSession 上：晚一步的话，先建出来的 webview
+        // 拿到的还是「未装处理器 = 默认放行一切」的策略。
+        installWebviewPermissionPolicy()
         await applyWebviewProxy(cfg)
         registerIpc()
         createShellWindow() // 首个窗口注册为核心窗口（内部登记角色并设为主窗口）

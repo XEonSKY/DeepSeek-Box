@@ -280,12 +280,13 @@ function preallocate(file: string, size: number): void {
 }
 
 /** 把临时文件搬到最终位置；跨盘时 rename 会失败，退回拷贝再删源。 */
-function moveFile(from: string, to: string): void {
+async function moveFile(from: string, to: string): Promise<void> {
     try {
         fs.renameSync(from, to)
     } catch {
-        fs.copyFileSync(from, to)
-        removeQuietly(from)
+        // 跨盘退回拷贝：用 promise 版，避免大安装包同步拷把主进程独占住。
+        await fs.promises.copyFile(from, to)
+        await removeQuietly(from)
     }
 }
 
@@ -314,10 +315,10 @@ async function runDownload(
     }, state)
 
     try {
-        fs.mkdirSync(o.destDir, { recursive: true })
-        fs.mkdirSync(tmpDir, { recursive: true })
-        removeQuietly(tmpPath)
-        removeQuietly(finalPath)
+        await fs.promises.mkdir(o.destDir, { recursive: true })
+        await fs.promises.mkdir(tmpDir, { recursive: true })
+        await removeQuietly(tmpPath)
+        await removeQuietly(finalPath)
 
         const { total, ranges } = await withRetry(() => probe(scope, o.url, ctrl.signal), MAX_RETRY, ctrl.signal)
         state.total = total
@@ -346,11 +347,11 @@ async function runDownload(
         }
 
         report(true)
-        moveFile(tmpPath, finalPath)
+        await moveFile(tmpPath, finalPath)
         return { ok: true }
     } catch (err) {
-        removeQuietly(tmpPath)
-        removeQuietly(finalPath)
+        await removeQuietly(tmpPath)
+        await removeQuietly(finalPath)
         if (ctrl.signal.aborted) return { ok: false, canceled: true, message: '操作已取消' }
         return { ok: false, message: errorMessage(err) }
     }

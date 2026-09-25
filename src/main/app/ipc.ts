@@ -1,8 +1,9 @@
 import { app, dialog, shell, Menu } from 'electron'
 import type { BrowserWindow, MenuItemConstructorOptions } from 'electron'
 import { DEFAULT_SETTINGS, NEWTAB_URL } from '@shared/types'
-import type { InstallKind, InstalledVersions, NodeDeployProgress, Settings } from '@shared/types'
+import type { InstallKind, InstalledVersions, NodeDeployProgress, OperationKind, Settings } from '@shared/types'
 import { resolveLocale, localeCodeOf } from '@shared/i18n'
+import { beginOperation, currentProgress, endOperation, operationsSnapshot, pushProgress } from './operationProgress'
 import { readDiskSettings, persistSettings, syncDshTheme, syncNativeTheme, loadSettings, dshLocale, writeDshLocale, configDirInfo, setConfigDir, revertConfigDir, runConfigMigration, cancelConfigMigration, normalizeNpmSource } from './settings'
 import { readCurrentBalance, readModelsInfo } from './models'
 import type { ModelsEnv } from './models'
@@ -46,6 +47,40 @@ function installProgress(p: NodeDeployProgress): NodeDeployProgress {
         total: p.total,
         speed: p.speed
     }
+}
+
+/**
+ * 把「下载 / 安装」包装成**可被任意页面重新取回**的操作。
+ *
+ * 两件事一起做：
+ *  1. 在 {@link operationProgress} 注册表里登记 / 更新 / 结束，让切页回来的面板能靠
+ *     `GET /operations` 快照把进度找回来（此前进度只活在面板的 ref 里，卸载即丢）；
+ *  2. 按 registry 的节流判定决定是否真的广播 —— 下载是每个数据块回调一次，
+ *     全部转发会给渲染层灌几千条 IPC（界面发卡的来源之一）。
+ *
+ * 各链路（node / npm / pnpm / 插件）此前共用一个 `installProgress` 回调 + 不同频道，
+ * 这里统一收口：`kind` 既进注册表也进广播载荷，渲染层据此区分，不再串台。
+ */
+async function trackedOperation<T>(kind: OperationKind, run: (onProgress: (p: NodeDeployProgress) => void) => Promise<T>): Promise<T> {
+    beginOperation(kind)
+    try {
+        return await run((p) => {
+            if (pushProgress(kind, installProgress(p))) {
+                const current = currentProgress(kind)
+                if (current) broadcast(channelOf(kind), current)
+            }
+        })
+    } finally {
+        // 成功 / 失败 / 取消都要清空：否则快照里会永远留着一条「假的进行中」。
+        endOperation(kind)
+    }
+}
+
+/** 操作种类 → 广播频道（沿用既有频道名，渲染层订阅点不必改协议）。 */
+function channelOf(kind: OperationKind): 'nodeenv:deploy-progress' | 'npmenv:progress' | 'pnmenv:progress' {
+    if (kind === 'node') return 'nodeenv:deploy-progress'
+    if (kind === 'npm') return 'npmenv:progress'
+    return 'pnmenv:progress'
 }
 
 /** 版本化安装对象（node / npm / dsh）的入参校验。 */
@@ -144,6 +179,9 @@ export function registerIpc(): void {
         // ---- 日志 ----
         .get('/logs', () => getLogHistory())
 
+        // 正在进行的操作快照：面板切走再切回来时靠它把进度找回来（见 operationProgress.ts）。
+        .get('/operations', () => operationsSnapshot())
+
         // ---- dsh 子进程 ----
         .get('/dsh/url', () => getCurrentUrl())
         .get('/dsh/running', () => isDshRunning())
@@ -174,7 +212,7 @@ export function registerIpc(): void {
         })
         .post('/dsh/plugins/:profile/install', ({ params, body }) => {
             const spec = typeof body?.spec === 'string' ? body.spec : ''
-            return installDshPlugin(params.profile, spec, (p) => broadcast('pnmenv:progress', installProgress(p)))
+            return trackedOperation('dsh-plugin', (onProgress) => installDshPlugin(params.profile, spec, onProgress))
         })
         .post('/dsh/plugins/:profile/remove', ({ params, body }) => {
             const name = typeof body?.name === 'string' ? body.name : ''
@@ -210,7 +248,7 @@ export function registerIpc(): void {
         .get('/node/versions', ({ query }) => listNodeVersions(query?.includeNonLts === true))
         .post('/node/deploy', ({ body }) => {
             const version = typeof body?.version === 'string' && body.version ? body.version : undefined
-            return deployLocalNode((p) => broadcast('nodeenv:deploy-progress', installProgress(p)), version)
+            return trackedOperation('node', (onProgress) => deployLocalNode(onProgress, version))
         })
 
         // ---- npm ----
@@ -218,18 +256,22 @@ export function registerIpc(): void {
         .get('/npm/status', () => npmStatus())
         .get('/npm/versions', ({ query }) => listNpmVersions(loadSettings(), query?.prerelease === true))
         .post('/npm/update', ({ body }) =>
-            updateNpm(
-                {
-                    source: normalizeNpmSource(body?.source),
-                    version: typeof body?.version === 'string' && body.version ? body.version : undefined
-                },
-                (p) => broadcast('npmenv:progress', installProgress(p))
+            trackedOperation('npm', (onProgress) =>
+                updateNpm(
+                    {
+                        source: normalizeNpmSource(body?.source),
+                        version: typeof body?.version === 'string' && body.version ? body.version : undefined
+                    },
+                    onProgress
+                )
             )
         )
         .post('/npm/ensure', ({ body }) =>
-            ensureBundledNpmReady(
-                { version: typeof body?.version === 'string' && body.version ? body.version : undefined },
-                (p) => broadcast('npmenv:progress', installProgress(p))
+            trackedOperation('npm', (onProgress) =>
+                ensureBundledNpmReady(
+                    { version: typeof body?.version === 'string' && body.version ? body.version : undefined },
+                    onProgress
+                )
             )
         )
 
@@ -237,18 +279,22 @@ export function registerIpc(): void {
         .get('/pnpm/status', () => pnpmStatus())
         .get('/pnpm/versions', ({ query }) => listPnpmVersions(loadSettings(), query?.prerelease === true))
         .post('/pnpm/update', ({ body }) =>
-            updatePnpm(
-                {
-                    source: body?.source === 'system' ? 'system' : 'bundled',
-                    version: typeof body?.version === 'string' && body.version ? body.version : undefined
-                },
-                (p) => broadcast('pnmenv:progress', installProgress(p))
+            trackedOperation('pnpm', (onProgress) =>
+                updatePnpm(
+                    {
+                        source: body?.source === 'system' ? 'system' : 'bundled',
+                        version: typeof body?.version === 'string' && body.version ? body.version : undefined
+                    },
+                    onProgress
+                )
             )
         )
         .post('/pnpm/ensure', ({ body }) =>
-            ensureBundledPnpmReady(
-                { version: typeof body?.version === 'string' && body.version ? body.version : undefined },
-                (p) => broadcast('pnmenv:progress', installProgress(p))
+            trackedOperation('pnpm', (onProgress) =>
+                ensureBundledPnpmReady(
+                    { version: typeof body?.version === 'string' && body.version ? body.version : undefined },
+                    onProgress
+                )
             )
         )
 

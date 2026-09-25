@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { AppstoreOutlined, CodeFilled, DeploymentUnitOutlined, DownloadOutlined, LinkOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
 import type {
@@ -22,6 +22,7 @@ import TagLabel from '../../components/TagLabel.vue'
 import { formatDownload } from '../../lib/format'
 import { useSettingsStore } from './useSettingsStore'
 import { useInstallCancel } from './useInstallCancel'
+import { refreshOperations, useOperation } from '../../shell/progressStore'
 
 /**
  * 「环境」页：Node 运行时（系统自带 / 本地部署）与各自的版本情况。
@@ -80,55 +81,44 @@ async function loadStatus(): Promise<void> {
 }
 
 const deploying = ref(false)
-const percent = ref(0)
-const downloaded = ref(0)
-const total = ref(0)
-const speed = ref(0)
-/** 当前部署阶段：extract 时显示不确定动画，不显示百分比。 */
-const deployPhase = ref<'download' | 'extract'>('download')
-/** 进度条下方的「已下载 / 总大小 · 速度」。 */
-const progressInfo = computed(() => formatDownload(total.value, downloaded.value, speed.value))
-let offNodeProgress: (() => void) | null = null
-let offNpmProgress: (() => void) | null = null
-let offPnpmProgress: (() => void) | null = null
+/**
+ * 进度状态来自**共享 store**（shell/progressStore），不再在本组件里订阅 / 存 ref：
+ * 切到别的设置子页再切回来时，面板重新挂载会先拉一次快照，正在跑的操作依然可见。
+ */
+const nodeOp = useOperation('node')
+const progressInfo = computed(() =>
+    formatDownload(nodeOp.op.value?.total ?? 0, nodeOp.op.value?.downloaded ?? 0, nodeOp.op.value?.speed ?? 0)
+)
 
-/** 内置 npm 的下载进度（非 bundled 来源不上报，用 progressSeen 区分）。 */
-const npmInstalling = ref(false)
-const npmPercent = ref(0)
-const npmDownloaded = ref(0)
-const npmTotal = ref(0)
-const npmSpeed = ref(0)
-const npmPhase = ref<'download' | 'extract'>('download')
-const npmProgressSeen = ref(false)
-const npmProgressInfo = computed(() => formatDownload(npmTotal.value, npmDownloaded.value, npmSpeed.value))
+/**
+ * 本组件自己发起的操作在途标记（按钮 loading 用）。
+ *
+ * 与 `nodeOp.busy` 的区别：广播**先**到、`await post()` 后**才**返回，且取消时主进程会
+ * 立刻清空进度 → `busy` 变假，但发起方还在等返回。所以按钮要「两者取或」，否则取消瞬间按钮会闪回可点。
+ * 「离开面板期间由**别处**发起的操作」只有 `busy` 能反映，这就是必须要共享 store 的原因。
+ */
+const nodeBusy = computed(() => deploying.value || nodeOp.busy.value)
+const deployPhase = computed(() => nodeOp.op.value?.phase ?? 'download')
+const percent = computed(() => nodeOp.op.value?.percent ?? 0)
+
+/** 内置 npm 的进度（非 bundled 来源不上报，所以「有没有 op」即是否已见进度）。 */
+const npmOp = useOperation('npm')
+const npmPhase = computed(() => npmOp.op.value?.phase ?? 'download')
+const npmPercent = computed(() => npmOp.op.value?.percent ?? 0)
+const npmProgressSeen = computed(() => npmOp.op.value !== null)
+const npmProgressInfo = computed(() =>
+    formatDownload(npmOp.op.value?.total ?? 0, npmOp.op.value?.downloaded ?? 0, npmOp.op.value?.speed ?? 0)
+)
+
+/** 内置 pnpm 的进度（与 npm 同构）。 */
+const pnpmOp = useOperation('pnpm')
+const pnpmProgressInfo = computed(() =>
+    formatDownload(pnpmOp.op.value?.total ?? 0, pnpmOp.op.value?.downloaded ?? 0, pnpmOp.op.value?.speed ?? 0)
+)
 
 onMounted(() => {
-    // Node 部署下载 / 解压进度由主进程广播（与 dsh 向导同一个事件源）。
-    offNodeProgress = window.api.on('nodeenv:deploy-progress', (p) => {
-        deployPhase.value = p.phase
-        percent.value = p.percent
-        downloaded.value = p.downloaded
-        total.value = p.total
-        speed.value = p.speed
-    })
-    // 内置 npm 下载 / 解压进度（只有 bundled 来源广播）。
-    offNpmProgress = window.api.on('npmenv:progress', (p) => {
-        npmProgressSeen.value = true
-        npmPhase.value = p.phase
-        npmPercent.value = p.percent
-        npmDownloaded.value = p.downloaded
-        npmTotal.value = p.total
-        npmSpeed.value = p.speed
-    })
-    // 内置 pnpm 下载 / 解压进度（只有 bundled 来源广播）。
-    offPnpmProgress = window.api.on('npmenv:progress', (p) => {
-        pnpmProgressSeen.value = true
-        pnpmPhase.value = p.phase
-        pnpmPercent.value = p.percent
-        pnpmDownloaded.value = p.downloaded
-        pnpmTotal.value = p.total
-        pnpmSpeed.value = p.speed
-    })
+    // 先补一次快照：离开本页期间由别处（初始化向导 / 插件页）发起的操作也应当出现在这里。
+    void refreshOperations()
     void loadStatus()
     void loadVersions()
     void loadNpmStatus()
@@ -138,12 +128,6 @@ onMounted(() => {
     void loadInstalledNode()
     void loadInstalledNpm()
     void loadInstalledPnpm()
-})
-
-onBeforeUnmount(() => {
-    offNodeProgress?.()
-    offNpmProgress?.()
-    offPnpmProgress?.()
 })
 
 /** 探测未完成时统一显示省略号，而不是「未检测到」。 */
@@ -269,11 +253,6 @@ async function installNode(version?: string): Promise<void> {
     const stop = await stopDshForNode()
     if (stop === 'cancelled') return
     deploying.value = true
-    deployPhase.value = 'download'
-    percent.value = 0
-    downloaded.value = 0
-    total.value = 0
-    speed.value = 0
     try {
         const r = await window.api.post('/node/deploy', { body: version ? { version } : {} })
         // 用户主动取消不算失败，静默返回即可（不弹错误 toast）。
@@ -285,6 +264,7 @@ async function installNode(version?: string): Promise<void> {
         ElMessage.error(errorMessage(err))
     } finally {
         deploying.value = false
+        await refreshOperations()
         // 先重启 dsh，再刷新状态 —— 否则刚部署的 Node 可能正被 dsh 用着，版本读不准。
         if (stop === 'stopped') await actions.restartDsh()
         await loadStatus()
@@ -385,6 +365,9 @@ function openNodeDownload(): void {
 
 const npmStatus = ref<NpmStatus | null>(null)
 const npmProbed = ref(false)
+/** 本组件自己发起的 npm 操作在途标记（按钮 loading 用，理由同 nodeBusy）。 */
+const npmInstalling = ref(false)
+const npmBusy = computed(() => npmInstalling.value || npmOp.busy.value)
 
 async function loadNpmStatus(): Promise<void> {
     try {
@@ -462,7 +445,7 @@ function npmNeedsAction(src: NpmSource): boolean {
 }
 
 function npmActionLabel(src: NpmSource): string {
-    if (npmInstalling.value) return tt('sv.env.npmWorking')
+    if (npmBusy.value) return tt('sv.env.npmWorking')
     return npmStatus.value?.[src]?.present ? tt('sv.env.npmUpdate') : tt('sv.env.npmDownload')
 }
 
@@ -478,12 +461,6 @@ async function installNpm(version?: string): Promise<void> {
     if (npmInstalling.value) return
     const source = state.npmSource
     npmInstalling.value = true
-    npmProgressSeen.value = false
-    npmPhase.value = 'download'
-    npmPercent.value = 0
-    npmDownloaded.value = 0
-    npmTotal.value = 0
-    npmSpeed.value = 0
     try {
         const r = await window.api.post('/npm/update', { body: version ? { source, version } : { source } })
         // 用户主动取消不算失败，静默返回即可（不弹错误 toast）。
@@ -495,6 +472,8 @@ async function installNpm(version?: string): Promise<void> {
         ElMessage.error(errorMessage(err))
     } finally {
         npmInstalling.value = false
+        // 操作已结束：把主进程的快照重新取一次，进度条才会收起来（事件流不含结束信号）。
+        await refreshOperations()
         await loadNpmStatus()
         await loadNpmVersions()
         await loadInstalledNpm()
@@ -542,14 +521,9 @@ const pnpmVersions = ref<string[]>([])
 const pnpmVersionsLoading = ref(false)
 const pnpmIncludePre = ref(false)
 const pnpmSelected = ref('')
+/** 本组件自己发起的 pnpm 操作在途标记（理由同 nodeBusy）。 */
 const pnpmInstalling = ref(false)
-const pnpmProgressSeen = ref(false)
-const pnpmPhase = ref<'download' | 'extract'>('download')
-const pnpmPercent = ref(0)
-const pnpmDownloaded = ref(0)
-const pnpmTotal = ref(0)
-const pnpmSpeed = ref(0)
-const pnpmProgressInfo = computed(() => formatDownload(pnpmTotal.value, pnpmDownloaded.value, pnpmSpeed.value))
+const pnpmBusy = computed(() => pnpmInstalling.value || pnpmOp.busy.value)
 
 async function loadPnpmVersions(): Promise<void> {
     if (pnpmVersionsLoading.value) return
@@ -598,7 +572,7 @@ function pnpmNeedsAction(src: PnpmSource): boolean {
 }
 
 function pnpmActionLabel(src: PnpmSource): string {
-    if (pnpmInstalling.value) return tt('sv.env.pnpmWorking')
+    if (pnpmBusy.value) return tt('sv.env.pnpmWorking')
     return pnpmStatus.value?.[src]?.present ? tt('sv.env.pnpmUpdate') : tt('sv.env.pnpmDownload')
 }
 
@@ -615,12 +589,6 @@ async function installPnpm(version?: string): Promise<void> {
     if (pnpmInstalling.value) return
     const source = state.pnpmSource
     pnpmInstalling.value = true
-    pnpmProgressSeen.value = false
-    pnpmPhase.value = 'download'
-    pnpmPercent.value = 0
-    pnpmDownloaded.value = 0
-    pnpmTotal.value = 0
-    pnpmSpeed.value = 0
     try {
         const r = await window.api.post('/pnpm/update', { body: version ? { source, version } : { source } })
         // 用户主动取消不算失败，静默返回即可（不弹错误 toast）。
@@ -632,6 +600,7 @@ async function installPnpm(version?: string): Promise<void> {
         ElMessage.error(errorMessage(err))
     } finally {
         pnpmInstalling.value = false
+        await refreshOperations()
         await loadPnpmStatus()
         await loadPnpmVersions()
         await loadInstalledPnpm()
@@ -706,27 +675,27 @@ async function installPnpm(version?: string): Promise<void> {
                         </div>
 
                         <a-progress
-                            v-if="deploying"
+                            v-if="nodeBusy"
                             :percent="deployPhase === 'extract' ? 100 : percent"
                             :status="deployPhase === 'extract' ? 'active' : 'normal'"
                             :show-info="deployPhase !== 'extract'"
                             :stroke-width="6"
                             class="dep-progress"
                         />
-                        <div v-if="deploying" class="hint dep-info">
+                        <div v-if="nodeBusy" class="hint dep-info">
                             {{ deployPhase === 'extract' ? $t('sv.env.extracting') : progressInfo }}
                         </div>
 
-                        <div v-if="deploying" class="act">
+                        <div v-if="nodeBusy" class="act">
                             <a-button :loading="canceling" @click="cancelInstall()">
                                 {{ canceling ? $t('sv.env.canceling') : $t('sv.env.cancelInstall') }}
                             </a-button>
                         </div>
 
                         <div v-if="localNeedsAction" class="act">
-                            <a-button type="primary" :icon="DownloadOutlined" :loading="deploying" @click="installNode()">
+                            <a-button type="primary" :icon="DownloadOutlined" :loading="nodeBusy" @click="installNode()">
                                 {{
-                                    deploying
+                                    nodeBusy
                                         ? $t('sv.env.deploying')
                                         : deployKind === 'update'
                                             ? $t('sv.env.localUpdate', { version: latestText })
@@ -746,7 +715,7 @@ async function installPnpm(version?: string): Promise<void> {
                                         show-search
                                         :placeholder="$t('sv.env.selectPlaceholder')"
                                         class="vm-sel"
-                                        :disabled="versionsLoading || deploying"
+                                        :disabled="versionsLoading || nodeBusy"
                                     />
                                     <a-button :icon="ReloadOutlined" :loading="versionsLoading" @click="loadVersions()">
                                         {{ $t('sv.env.refresh') }}
@@ -754,8 +723,8 @@ async function installPnpm(version?: string): Promise<void> {
                                     <a-button
                                         type="primary"
                                         :icon="DownloadOutlined"
-                                        :loading="deploying"
-                                        :disabled="deploying || versionsLoading || !selectedVersion || sameVersion(selectedVersion, deployedNode)"
+                                        :loading="nodeBusy"
+                                        :disabled="nodeBusy || versionsLoading || !selectedVersion || sameVersion(selectedVersion, deployedNode)"
                                         @click="installNode(selectedVersion)"
                                     >
                                         {{ $t('sv.env.installVersion') }}
@@ -851,7 +820,7 @@ async function installPnpm(version?: string): Promise<void> {
                             <a-button
                                 type="primary"
                                 :icon="DownloadOutlined"
-                                :loading="npmInstalling"
+                                :loading="npmBusy"
                                 @click="installNpm()"
                             >
                                 {{ npmActionLabel(t.key) }}
@@ -891,7 +860,7 @@ async function installPnpm(version?: string): Promise<void> {
                     </a-tab-pane>
                 </a-tabs>
 
-                <div v-if="npmInstalling" class="act">
+                <div v-if="npmBusy" class="act">
                     <a-progress
                         v-if="npmProgressSeen"
                         :percent="npmPhase === 'extract' ? 100 : npmPercent"
@@ -919,7 +888,7 @@ async function installPnpm(version?: string): Promise<void> {
                                 show-search
                                 :placeholder="$t('sv.env.selectPlaceholder')"
                                 class="vm-sel"
-                                :disabled="npmVersionsLoading || npmInstalling"
+                                :disabled="npmVersionsLoading || npmBusy"
                             />
                             <a-button :icon="ReloadOutlined" :loading="npmVersionsLoading" @click="loadNpmVersions()">
                                 {{ $t('sv.env.refresh') }}
@@ -927,8 +896,8 @@ async function installPnpm(version?: string): Promise<void> {
                             <a-button
                                 type="primary"
                                 :icon="DownloadOutlined"
-                                :loading="npmInstalling"
-                                :disabled="npmInstalling || npmVersionsLoading || !npmSelected || sameVersion(npmSelected, npmCur?.version)"
+                                :loading="npmBusy"
+                                :disabled="npmBusy || npmVersionsLoading || !npmSelected || sameVersion(npmSelected, npmCur?.version)"
                                 @click="installNpm(npmSelected)"
                             >
                                 {{ $t('sv.env.installVersion') }}
@@ -967,7 +936,7 @@ async function installPnpm(version?: string): Promise<void> {
                         <div class="hint">{{ pnpmLatestUnknown ? $t('sv.env.latestUnknown') : $t(t.hintKey) }}</div>
 
                         <div v-if="pnpmNeedsAction(t.key)" class="act">
-                            <a-button type="primary" :icon="DownloadOutlined" :loading="pnpmInstalling" @click="installPnpm()">
+                            <a-button type="primary" :icon="DownloadOutlined" :loading="pnpmBusy" @click="installPnpm()">
                                 {{ pnpmActionLabel(t.key) }}
                             </a-button>
                         </div>
@@ -1006,17 +975,17 @@ async function installPnpm(version?: string): Promise<void> {
                     </a-tab-pane>
                 </a-tabs>
 
-                <div v-if="pnpmInstalling" class="act">
+                <div v-if="pnpmBusy" class="act">
                     <a-progress
-                        v-if="pnpmProgressSeen"
-                        :percent="pnpmPhase === 'extract' ? 100 : pnpmPercent"
-                        :status="pnpmPhase === 'extract' ? 'active' : 'normal'"
-                        :show-info="pnpmPhase !== 'extract'"
+                        v-if="pnpmOp.op.value"
+                        :percent="pnpmOp.op.value.phase === 'extract' ? 100 : pnpmOp.op.value.percent"
+                        :status="pnpmOp.op.value.phase === 'extract' ? 'active' : 'normal'"
+                        :show-info="pnpmOp.op.value.phase !== 'extract'"
                         :stroke-width="6"
                         class="dep-progress"
                     />
-                    <div v-if="pnpmProgressSeen" class="hint dep-info">
-                        {{ pnpmPhase === 'extract' ? $t('sv.env.extracting') : pnpmProgressInfo }}
+                    <div v-if="pnpmOp.op.value" class="hint dep-info">
+                        {{ pnpmOp.op.value.phase === 'extract' ? $t('sv.env.extracting') : pnpmProgressInfo }}
                     </div>
                     <a-button :loading="canceling" @click="cancelInstall()">
                         {{ canceling ? $t('sv.env.canceling') : $t('sv.env.cancelInstall') }}
@@ -1034,7 +1003,7 @@ async function installPnpm(version?: string): Promise<void> {
                                 show-search
                                 :placeholder="$t('sv.env.selectPlaceholder')"
                                 class="vm-sel"
-                                :disabled="pnpmVersionsLoading || pnpmInstalling"
+                                :disabled="pnpmVersionsLoading || pnpmBusy"
                             />
                             <a-button :icon="ReloadOutlined" :loading="pnpmVersionsLoading" @click="loadPnpmVersions()">
                                 {{ $t('sv.env.refresh') }}
@@ -1042,8 +1011,8 @@ async function installPnpm(version?: string): Promise<void> {
                             <a-button
                                 type="primary"
                                 :icon="DownloadOutlined"
-                                :loading="pnpmInstalling"
-                                :disabled="pnpmInstalling || pnpmVersionsLoading || !pnpmSelected || sameVersion(pnpmSelected, pnpmCur?.version)"
+                                :loading="pnpmBusy"
+                                :disabled="pnpmBusy || pnpmVersionsLoading || !pnpmSelected || sameVersion(pnpmSelected, pnpmCur?.version)"
                                 @click="installPnpm(pnpmSelected)"
                             >
                                 {{ $t('sv.env.installVersion') }}

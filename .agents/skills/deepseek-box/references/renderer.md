@@ -17,7 +17,8 @@
 | `components/` | `DshWizard.vue`（安装向导）、`WizardSteps.vue`（自绘步骤条）、`StatusBar.vue`、`TitleBar.vue`、`WindowControls.vue`、`ProxyFields.vue`、`ThreadsField.vue` |
 | `lib/` | 主题、格式化、更新状态、locale、图标等工具 |
 | `lib/update.ts` | 版本状态中心：`versionStatus` / `checkDsh` / `checkAllUpdates` / `applyAppUpdateEvent` |
-| `shell/` | 路由、标签、窗口元信息、标签拖拽、dsh 缺失状态（`router` / `tabs` / `shellmeta` / `useTabDrag` / `viewnav` / `dshstate`） |
+| `shell/` | 路由、标签、窗口元信息、标签拖拽、dsh 缺失状态、进行中操作（`router` / `tabs` / `shellmeta` / `useTabDrag` / `viewnav` / `dshstate` / `progressStore`） |
+| `shell/progressStore.ts` | 「进行中的操作」在渲染层的**唯一**状态源：`startOperationTracking()`（`main.ts` 启动时订阅一次三条进度频道）、`refreshOperations()`（重取主进程快照）、`useOperation(kind)` → `{ op, busy }`。**面板不要自己 `window.api.on` 进度**：面板卸载订阅就没了，切页回来只剩空进度条 |
 | `styles/` | 分层：`base.css`（reset + Element Plus 变量）→ `shared.css` → `settings.css` |
 
 ### 窗口装饰只有一处出口：`TitleBar.vue`
@@ -59,6 +60,42 @@
 向导共 **5 步**：`0 安装方式 · 1 镜像源 · 2 Node · 3 NPM · 4 DSH`。
 第 0 步选「简易安装」后由 `runSimpleInstall()` 自动跑完 1–4（测速选源 → 本地 Node → 内置 npm → dsh 最新版），
 选「自定义安装」则回到逐步选择。改动步骤顺序时，`watch(step)`、各 `v-if="step === n"` 与主按钮文案要一起改。
+
+### 进度状态一律走 `shell/progressStore.ts`（不要自己订阅）
+
+下载 / 安装是**主进程**在跑，渲染层只是显示。此前每个面板各自 `window.api.on(...)`
+把进度存进自己的 `ref` —— 面板一卸载（切到设置里别的子页、从初始化页跳走）订阅与状态一起没了，
+而主进程里的操作还在跑，切回来只剩空进度条。现在的分工：
+
+| 谁 | 做什么 |
+|---|---|
+| `main.ts` | `startOperationTracking()` —— 启动时**订阅一次**三条进度频道（`nodeenv:deploy-progress` / `npmenv:progress` / `pnmenv:progress`，载荷带 `kind` 用来归位） |
+| 主进程 `operationProgress.ts` | 记住进行中的操作；操作结束（成功 / 失败 / 取消）时清空 |
+| 面板 | 只读 `useOperation(kind)` → `{ op, busy }`；`onMounted` 与操作返回后调 `refreshOperations()` |
+
+两条必须记住的：
+
+- **按钮的 loading 用「本组件在途标记 ∨ `busy`」**，不要只用其一。广播**先**到、`await post()`
+  后**才**返回；取消时主进程立刻清空 → `busy` 会先变假，但发起方还在等返回（只信 `busy` 会让按钮
+  在取消瞬间闪回可点）。反过来，「离开本页期间由别处发起的操作」只有 `busy` 能反映 —— 这正是
+  必须共享的原因。
+- **事件流里没有「结束」信号**，所以操作 `finally` 里要 `refreshOperations()`，否则进度条不会收起来。
+
+`busy` 还兼作「这个种类正在跑」的判据：EnvPanel 的 npm / pnpm / node 三块都靠它，插件页靠
+`pnpm` 与 `dsh-plugin` 两个 kind 判断「是否正在准备 pnpm」。
+
+## 主进程别做同步阻塞
+
+长耗时或大批量文件操作**不要用同步 API**，它会把主进程独占到界面完全没响应
+（「一些操作时整个程序会卡住」）。已有两处收口：
+
+- **进程终止**：`logbus.killTree()` 是 async（`spawn('taskkill', …)` + `unref()`）。Windows 上
+  `taskkill /T` 常要几百毫秒遍历子孙进程，`spawnSync` 就是把界面冻在那里。只有紧接着要删被占用目录
+  的场合才 `await`，退出收尾之类的直接 `void` 掉。
+- **文件删除 / 拷贝**：`fsutil.removeTree` / `removeQuietly` / `prepareVersionDir` / `removeVersion`
+  以及 `fs.promises.cp` —— 一个版本目录动辄几万个小文件。`removeQuietlySync` **只**给启动期
+  无法 await 的同步迁移（`installs.ts` 的目录改名）用。
+
 ## 启动（`src/renderer/src/main.ts`）
 
 ```ts

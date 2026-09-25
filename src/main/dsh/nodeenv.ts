@@ -137,11 +137,11 @@ export function useNodeVersion(version: string): NodeDeployResult {
 }
 
 /** 删除某个本地 Node 版本；正在使用该版本运行 dsh 时拒绝。 */
-export function removeInstalledNodeVersion(version: string): NodeDeployResult {
+export async function removeInstalledNodeVersion(version: string): Promise<NodeDeployResult> {
     if (activeVersion('node') === version && loadSettings().nodeRuntime === 'local' && isDshRunning()) {
         return { ok: false, message: 'dsh 正在使用该 Node 版本运行，请先停止 dsh。', version }
     }
-    removeVersion('node', version)
+    await removeVersion('node', version)
     return { ok: true, message: `已删除 Node ${version}`, version }
 }
 
@@ -169,8 +169,8 @@ export async function deployLocalNode(
         const stage = path.join(installRoot('node'), '.tmp')
         const file = path.join(stage, `${dir}.${extOf()}`)
         try {
-            fs.rmSync(stage, { recursive: true, force: true })
-            fs.mkdirSync(stage, { recursive: true })
+            await removeQuietly(stage)
+            await fs.promises.mkdir(stage, { recursive: true })
         } catch {
             return { ok: false, message: '无法创建配置目录', version: ver }
         }
@@ -192,38 +192,39 @@ export async function deployLocalNode(
 
         onProgress?.({ phase: 'extract', percent: 100, downloaded: 0, total: 0, speed: 0 })
         const okExtract = await extract(stage, file, token.signal)
-        removeQuietly(file)
+        await removeQuietly(file)
         if (token.signal.aborted) return { ok: false, canceled: true, message: CANCELED_MESSAGE, version: ver }
         if (!okExtract) {
-            removeQuietly(stage)
+            await removeQuietly(stage)
             return { ok: false, message: '解压 Node 失败', version: ver }
         }
 
         const src = path.join(stage, dir)
         if (!fs.existsSync(src)) {
-            removeQuietly(stage)
+            await removeQuietly(stage)
             return { ok: false, message: '解压后未找到 Node 目录', version: ver }
         }
 
         let dest: string
         try {
-            dest = prepareVersionDir('node', ver)
+            dest = await prepareVersionDir('node', ver)
             // 逐项搬进版本目录（同盘 rename 很快）；被占用时退回整目录拷贝。
+            // 拷贝走 promise 版：几万个小文件同步拷会把主进程独占住，界面完全没响应。
             try {
                 for (const n of fs.readdirSync(src)) fs.renameSync(path.join(src, n), path.join(dest, n))
-                removeQuietly(src)
+                await removeQuietly(src)
             } catch {
-                removeQuietly(dest)
-                fs.cpSync(src, dest, { recursive: true })
-                removeQuietly(src)
+                await removeQuietly(dest)
+                await fs.promises.cp(src, dest, { recursive: true })
+                await removeQuietly(src)
             }
         } catch (err) {
-            removeVersion('node', ver)
-            removeQuietly(stage)
+            await removeVersion('node', ver)
+            await removeQuietly(stage)
             return { ok: false, message: err instanceof Error ? err.message : '移动 Node 到配置目录失败', version: ver }
         }
         setActiveVersion('node', ver)
-        removeQuietly(stage)
+        await removeQuietly(stage)
         pushLog('o', `[Manager] Node ${ver} 已部署到 ${dest}`)
         return { ok: true, message: `Node ${ver} 已部署并生效`, version: ver }
     } finally {

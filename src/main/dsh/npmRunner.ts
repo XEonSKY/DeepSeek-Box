@@ -274,8 +274,8 @@ async function ensureBundledNpm(
     const base = registryBase(cfg.npmRegistry)
     const stage = path.join(installRoot('npm'), '.tmp')
     try {
-        fs.rmSync(stage, { recursive: true, force: true })
-        fs.mkdirSync(stage, { recursive: true })
+        await removeQuietly(stage)
+        await fs.promises.mkdir(stage, { recursive: true })
     } catch (err) {
         return { ok: false, message: errorMessage(err) }
     }
@@ -292,34 +292,34 @@ async function ensureBundledNpm(
         onProgress: (p) => onProgress?.({ phase: 'download', ...p })
     })
     if (dl.canceled) {
-        removeQuietly(stage)
+        await removeQuietly(stage)
         return { ok: false, canceled: true, message: CANCELED_MESSAGE }
     }
     if (!dl.ok) {
-        removeQuietly(stage)
+        await removeQuietly(stage)
         return { ok: false, message: mt('m.dsh.bundledNpmFetchFail') }
     }
     if (!findSystemTar()) {
-        removeQuietly(stage)
+        await removeQuietly(stage)
         return { ok: false, message: mt('m.dsh.bundledNpmNoTar') }
     }
 
     onProgress?.({ phase: 'extract', percent: 100, downloaded: 0, total: 0, speed: 0 })
     let destDir: string
     try {
-        destDir = prepareVersionDir('npm', target)
+        destDir = await prepareVersionDir('npm', target)
     } catch (err) {
-        removeQuietly(stage)
+        await removeQuietly(stage)
         return { ok: false, message: errorMessage(err) }
     }
     const okExtract = await extractTar(tgz, destDir, signal)
-    removeQuietly(stage)
+    await removeQuietly(stage)
     if (signal?.aborted) {
-        removeVersion('npm', target)
+        await removeVersion('npm', target)
         return { ok: false, canceled: true, message: CANCELED_MESSAGE }
     }
     if (!okExtract || !fs.existsSync(cli)) {
-        removeVersion('npm', target)
+        await removeVersion('npm', target)
         return { ok: false, message: okExtract ? mt('m.dsh.bundledNpmMissing') : mt('m.dsh.bundledNpmExtractFail') }
     }
     setActiveVersion('npm', target)
@@ -387,8 +387,8 @@ export function useNpmVersion(version: string): ToolActionResult {
 }
 
 /** 删除某个已安装的内置 npm 版本。 */
-export function removeInstalledNpmVersion(version: string): ToolActionResult {
-    removeVersion('npm', version)
+export async function removeInstalledNpmVersion(version: string): Promise<ToolActionResult> {
+    await removeVersion('npm', version)
     return { ok: true, message: `已删除 npm ${version}`, version }
 }
 

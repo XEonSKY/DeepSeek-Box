@@ -441,6 +441,22 @@ export interface NodeDeployProgress {
     speed: number
 }
 
+/** 会报进度的操作种类。必须区分：npm 与 pnpm 的下载曾共用一条通道，进度会互相串台。 */
+export type OperationKind = 'node' | 'npm' | 'pnpm' | 'dsh-plugin'
+
+/**
+ * 「进行中的操作」当前状态。
+ *
+ * 与 `NodeDeployProgress` 的区别是多了 `kind` 与 `startedAt`：状态由**主进程**持有，
+ * 渲染层切页 / 重挂面板后可以重新取快照（`GET /operations`），操作结束时主进程清空。
+ * 进度本身只活在面板的 ref 里时，切一次页面就再也看不到正在跑的操作了。
+ */
+export interface OperationProgress extends NodeDeployProgress {
+    kind: OperationKind
+    /** 操作开始时间（epoch ms）。 */
+    startedAt: number
+}
+
 /** 某个工具的已安装版本与当前生效版本。 */
 export interface InstalledVersions {
     /** 已安装版本（新 → 旧）。 */

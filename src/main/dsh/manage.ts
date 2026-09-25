@@ -9,6 +9,7 @@ import { loadSettings, mt, localDshDir } from '../app/settings'
 import { isDshRunning, stopAllDsh, restart } from './dsh'
 import { rememberChild } from './logbus'
 import { isPrerelease, compareVersions, filterByPrerelease, pickLatest, sortVersionsDesc } from './semver'
+import { removeTree } from './fsutil'
 import { runNpm, runNpmInstallGlobal, runLocalNpmInstall } from './npmRunner'
 import { registryBase } from './registry'
 import { httpFetch } from './http'
@@ -287,8 +288,8 @@ export async function uninstallDsh(): Promise<DshActionResult> {
             try {
                 // 删除当前生效的版本目录即可（npm 在 `<configDir>/dsh/<版本>` 下管理它）。
                 const active = activeVersion('dsh')
-                if (active) removeVersion('dsh', active)
-                else fs.rmSync(path.join(localDshDir(), 'node_modules'), { recursive: true, force: true })
+                if (active) await removeVersion('dsh', active)
+                else await removeTree(path.join(localDshDir(), 'node_modules'))
             } catch (err) {
                 return { ok: false, message: errorMessage(err), version: null }
             }
@@ -322,9 +323,9 @@ export function useDshVersion(version: string): DshActionResult {
 }
 
 /** 删除某个已安装的本地 dsh 版本；删掉生效版本会自动切到剩余最新版。 */
-export function removeInstalledDshVersion(version: string): DshActionResult {
+export async function removeInstalledDshVersion(version: string): Promise<DshActionResult> {
     if (activeVersion('dsh') === version) stopAllDsh()
-    removeVersion('dsh', version)
+    await removeVersion('dsh', version)
     if (!listInstalled('dsh').length) broadcast('dsh:missing')
     else if (activeVersion('dsh')) void restart()
     return { ok: true, message: `已删除 dsh ${version}`, version }

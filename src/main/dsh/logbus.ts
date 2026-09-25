@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import type { LogEntry } from '@shared/types'
 import { IS_WIN, broadcast } from '../app/runtime'
@@ -43,27 +43,51 @@ export function rememberChild(child: ChildProcess): ChildProcess {
     return child
 }
 
-/** 结束整个进程树（Windows 用 taskkill /T，类 Unix 先杀进程组）。 */
-export function killTree(pid: number): void {
-    try {
-        if (IS_WIN) spawnSync('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' })
-        else {
+/**
+ * 结束整个进程树（Windows 用 taskkill /T，类 Unix 先杀进程组）。
+ *
+ * **必须异步**：Windows 上 `taskkill /T` 经常要几百毫秒才返回（要遍历并终止子孙进程），
+ * 而这是主进程 —— 同步等待会把界面冻在那几百毫秒里，正是「一些操作时整个程序会卡住」的一部分。
+ * 改用 `spawn` 后主进程立即返回，回收动作在后台完成。
+ *
+ * 立即 `unref()`：不让这个短命进程拖住应用退出（关窗时不应该为了一次 taskkill 卡住）。
+ * 返回的 Promise 只在**确实需要等它杀完**的场合 await（例如紧接着要删除被占用的目录），
+ * 大量调用点（退出收尾、进程 exit 钩子）直接忽略即可 —— 忽略也只是让回收并发进行。
+ *
+ * 杀不掉不算错误：进程可能已经自行退出，或本就没有权限，这两种情况都不影响调用方继续。
+ */
+export function killTree(pid: number): Promise<void> {
+    if (IS_WIN) {
+        return new Promise<void>((resolve) => {
             try {
-                process.kill(-pid, 'SIGTERM')
+                const child = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' })
+                child.unref()
+                child.once('exit', () => resolve())
+                child.once('error', () => resolve())
             } catch {
+                resolve() // spawn 本身失败（taskkill 缺失）：当作已经没了
+            }
+        })
+    }
+    return new Promise<void>((resolve) => {
+        try {
+            process.kill(-pid, 'SIGTERM')
+        } catch {
+            try {
                 process.kill(pid, 'SIGTERM')
+            } catch {
+                /* already gone */
             }
         }
-    } catch {
-        /* already gone */
-    }
+        resolve()
+    })
 }
 
 /** taskkill /T the tree of every still-registered child (best effort). */
 export function killAllChildren(): void {
     for (const c of [...liveChildren]) {
         try {
-            if (c.pid) killTree(c.pid)
+            if (c.pid) void killTree(c.pid)
         } catch {
             /* already gone */
         }

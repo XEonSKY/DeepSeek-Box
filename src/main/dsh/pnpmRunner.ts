@@ -192,8 +192,8 @@ async function ensureBundledPnpm(
     const base = registryBase(cfg.npmRegistry)
     const stage = path.join(installRoot('pnpm'), '.tmp')
     try {
-        fs.rmSync(stage, { recursive: true, force: true })
-        fs.mkdirSync(stage, { recursive: true })
+        await removeQuietly(stage)
+        await fs.promises.mkdir(stage, { recursive: true })
     } catch (err) {
         return { ok: false, message: errorMessage(err) }
     }
@@ -209,34 +209,34 @@ async function ensureBundledPnpm(
         onProgress: (p) => onProgress?.({ phase: 'download', ...p })
     })
     if (dl.canceled) {
-        removeQuietly(stage)
+        await removeQuietly(stage)
         return { ok: false, canceled: true, message: CANCELED_MESSAGE }
     }
     if (!dl.ok) {
-        removeQuietly(stage)
+        await removeQuietly(stage)
         return { ok: false, message: mt('m.dsh.bundledPnpmFetchFail') }
     }
     if (!findSystemTar()) {
-        removeQuietly(stage)
+        await removeQuietly(stage)
         return { ok: false, message: mt('m.dsh.bundledPnpmNoTar') }
     }
 
     onProgress?.({ phase: 'extract', percent: 100, downloaded: 0, total: 0, speed: 0 })
     let destDir: string
     try {
-        destDir = prepareVersionDir('pnpm', target)
+        destDir = await prepareVersionDir('pnpm', target)
     } catch (err) {
-        removeQuietly(stage)
+        await removeQuietly(stage)
         return { ok: false, message: errorMessage(err) }
     }
     const okExtract = await extractTar(tgz, destDir, signal)
-    removeQuietly(stage)
+    await removeQuietly(stage)
     if (signal?.aborted) {
-        removeVersion('pnpm', target)
+        await removeVersion('pnpm', target)
         return { ok: false, canceled: true, message: CANCELED_MESSAGE }
     }
     if (!okExtract || !fs.existsSync(cli)) {
-        removeVersion('pnpm', target)
+        await removeVersion('pnpm', target)
         return { ok: false, message: okExtract ? mt('m.dsh.bundledPnpmMissing') : mt('m.dsh.bundledPnpmExtractFail') }
     }
     setActiveVersion('pnpm', target)
@@ -304,8 +304,8 @@ export function usePnpmVersion(version: string): ToolActionResult {
 }
 
 /** 删除某个已安装的内置 pnpm 版本。 */
-export function removeInstalledPnpmVersion(version: string): ToolActionResult {
-    removeVersion('pnpm', version)
+export async function removeInstalledPnpmVersion(version: string): Promise<ToolActionResult> {
+    await removeVersion('pnpm', version)
     return { ok: true, message: `已删除 pnpm ${version}`, version }
 }
 

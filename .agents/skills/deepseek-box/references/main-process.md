@@ -15,7 +15,8 @@
 | `ui.ts` | 窗口 / 托盘 / 快捷键 | `createShellWindow` / `createTray` / `syncGlobalHotkey` |
 | `appupdate.ts` | 应用自更新 | 解析 GitHub Releases、后台下载、事件广播 |
 | `appslots.ts` | A/B 版本槽 | 归档旧版、生成回退脚本、启动健康守卫 |
-| `webview.ts` | 渲染参数 | 硬件加速、webview UserAgent |
+| `webview.ts` | 渲染参数与内嵌页面策略 | 硬件加速、webview UserAgent、代理，以及 `installWebviewPermissionPolicy()`（与 UA 同理，权限处理器**必须在建窗前**装到 `defaultSession`，晚一步先建出来的 webview 就是「未装处理器 = 默认放行一切」） |
+| `webviewPermissionPolicy.ts` | 内嵌页面权限判定（**纯逻辑**） | `decidePermission` / `isTrustedRequestingUrl`（回环地址与 `file:` / `app:` 算可信）/ `PermissionMemory`（会话级「记住选择」，**不落盘**）/ `checkPermission`。判定是**失败即拒绝**：未列入名单的权限（含将来新出现的）一律拒；往名单里加权限等于把一个能力交给任意网页，改之前先读模块头注释 |
 | `windowreg.ts` | 窗口登记 | 核心 / 副窗口角色与接管 |
 | `runtime.ts` | 运行态 | 托盘、退出标志、广播发送函数 |
 | `contextmenu.ts` | 右键菜单 | 剪切 / 复制 / 粘贴 / 全选 |
@@ -45,6 +46,8 @@
 | `dshHome.ts` | dsh home 与 profile 路径（**纯逻辑**） | `DSH_PROFILE` / `dshHomeDir` / `homePatchFile` / `profilesRoot` / `profileDir` / `hostProfileDir` / `profilePatchFile` / `profileManifestFile`；home 解析语义对齐 dsh 的 `resolveDshHome`（空白覆盖视为未设置、展开 `~`、规范化为绝对路径，改之前先看该文件的注释） |
 | `providers.ts` | 供应商路由与服务商分组（**纯逻辑**） | `collectProviderRoutes` / `groupProviderRoutes` / `routesFromCredentials`（dsh 未安装时的凭据兜底） + `DEEPSEEK_BASE` / `isHttpURL` / `joinURL` / `defaultKeyEnv` |
 | `dshPatchLayers.ts` | 收集 dsh 的**有效** patch 层（**纯逻辑**） | `collectPatchLayers(installNodeModules)`（bundle 层 → profile 层 → home 层）、`composeMountedConfig(layers)`（**条目存在即入表**）。⚠️ dsh 的默认供应商写在 **bundle 层**（`dsh-base` 的 `agent-default-model`，以及只有 id/name、没有 config 的 `llm-deepseek`），只读用户层会让模型页显示「共 0 个供应商」 |
+| `fsutil.ts` | 文件系统助手 | `removeTree` / `removeQuietly`（**均为 async**）、`removeQuietlySync`（只给启动期无法 await 的同步迁移用）、`readPkgVersion`。删除**不跟随符号链接 / Windows 目录联接**（与官方 desktop 的 `removeOwnedDirectory` 同策略）。⚠️ **新增的「整目录删除」一律走这两个**，不要直接写 `fs.rmSync(recursive)`：dsh / pnpm 的安装目录里到处是链接；且一个版本目录动辄几万个小文件，**同步删会把主进程独占到界面卡死**（这正是「操作时整个程序会卡住」的成因之一）。实测 Node 的 `rmSync` 目前也不跟随链接，因此「不跟随」是**把语义写死 + 回归护栏**，不是修某个现存 bug |
+| `operationProgress.ts` | 「进行中的操作」注册表（**纯逻辑**） | `beginOperation` / `pushProgress`（返回「这次要不要广播」）/ `currentProgress` / `endOperation` / `operationsSnapshot` / `isOperationRunning` / `MIN_INTERVAL_MS`。解决两件事：① 进度只活在面板 ref 里，切页卸载即丢 → 由**主进程**记住状态，`GET /operations` 快照让任何页面取回；② npm / pnpm 共用一个进度通道会串台 → 每条进度都带 `kind`。顺带做节流（下载是每块回调一次，全转发会灌几千条 IPC）。**阶段变化与窗口外的进度一定放行**，否则进度条停在半路。ipc.ts 的 `trackedOperation(kind, run)` 把它包在四条链路外面，`finally` 里 `endOperation` —— 成功 / 失败 / 取消都要清空 |
 
 ## settings.ts 关键导出（改设置必看）
 

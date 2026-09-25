@@ -30,8 +30,8 @@ import type {
     LocaleCode,
     LogEntry,
     ModelsInfo,
-    NodeDeployProgress,
     NodeDeployResult,
+    OperationProgress,
     NodeStatus,
     NpmRegistry,
     NpmSource,
@@ -100,6 +100,14 @@ export interface ApiRoutes {
 
     // ---- 日志 ----
     'GET /logs': { result: LogEntry[] }
+
+    /**
+     * 正在进行中的操作快照（Node / npm / pnpm 下载、插件安装…）。
+     *
+     * 渲染层用它做「切页回来仍有进度」：面板卸载后重新挂载时先取一次快照，再靠事件续上。
+     * 操作结束（成功 / 失败 / 取消）时主进程清空对应条目，所以快照里有的就是真的在跑。
+     */
+    'GET /operations': { result: OperationProgress[] }
 
     // ---- dsh 本体（子进程）----
     'GET /dsh/url': { result: string | null }
@@ -224,9 +232,10 @@ export interface ApiRoutes {
 /** 主进程推送给渲染层的全部事件及其载荷类型。 */
 export interface AppEvents {
     'appupdate:event': AppUpdateEvent
-    'nodeenv:deploy-progress': NodeDeployProgress
-    'npmenv:progress': NodeDeployProgress
-    'pnmenv:progress': NodeDeployProgress
+    // 进度载荷都带 kind（同一操作种类只有一条）：曾因 npm / pnpm 共用通道而串台。
+    'nodeenv:deploy-progress': OperationProgress
+    'npmenv:progress': OperationProgress
+    'pnmenv:progress': OperationProgress
     'configdir:migration': ConfigMigrationProgress
     'dsh:url': string | null
     'dsh:log': LogEntry

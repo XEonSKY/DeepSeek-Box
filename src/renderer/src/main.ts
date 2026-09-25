@@ -14,6 +14,7 @@ import './styles/settings.css'
 import { i18n } from './lib/locales'
 import { router } from './shell/router'
 import { loadShellMeta } from './shell/shellmeta'
+import { startOperationTracking } from './shell/progressStore'
 import { setupAntdv } from './lib/antdv'
 import type { ResolvedLocale } from '@shared/types'
 
@@ -54,6 +55,8 @@ async function bootstrap(): Promise<void> {
         return
     }
     await loadShellMeta()
+    // 进度订阅放在外壳启动处（而不是各面板里）：面板卸载不能丢状态，切页回来才还能看到进度。
+    startOperationTracking()
     let resolved: ResolvedLocale = 'zh'
     try {
         resolved = await window.api.get('/locale')

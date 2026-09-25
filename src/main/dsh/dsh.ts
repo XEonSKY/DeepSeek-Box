@@ -37,7 +37,8 @@ export function killServer(): void {
     if (!serverProcess) return
     childKilled = true
     const pid = serverProcess.pid
-    if (pid) killTree(pid)
+    // 不 await：这是「立即停掉」的入口，调用方不等回收完成（killTree 已异步，不会冻结主进程）。
+    if (pid) void killTree(pid)
     serverProcess = null
 }
 
@@ -107,7 +108,7 @@ export function stopDshGracefully(graceMs: number = SHUTDOWN_GRACE_MS): Promise<
         }
         timer = setTimeout(() => {
             if (serverProcess === child) serverProcess = null
-            if (child.pid) killTree(child.pid) // force
+            if (child.pid) void killTree(child.pid) // force
             childKilled = true
             finish()
         }, graceMs + 3000)

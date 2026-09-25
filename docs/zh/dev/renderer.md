@@ -41,3 +41,17 @@
 ## 与主进程通信
 
 所有主进程能力都通过 `window.api`（预加载暴露的 REST 客户端）调用，契约是 `src/shared/api.ts` 的 `ApiRoutes`：`window.api.get('/settings')`、`window.api.on('settings:changed', …)`。新增端点两处同步，见 [IPC 契约](/zh/dev/ipc)。
+
+## 进度状态走共享 store
+
+下载 / 安装由主进程执行，渲染层只负责显示。**面板不要自己 `window.api.on` 进度**：
+面板一卸载（切到设置里别的子页、从初始化页跳走）订阅就没了，而主进程里的操作还在跑 ——
+切回来只剩空进度条。统一用 `shell/progressStore.ts`：
+
+- `main.ts` 启动时 `startOperationTracking()` 订阅一次三条进度频道；
+- 面板只读 `useOperation(kind)` → `{ op, busy }`；
+- 面板 `onMounted` 与操作返回后调 `refreshOperations()` —— 事件流里**没有**「结束」信号，
+  不重新取快照进度条就不会收起来。
+
+按钮的 loading 要用「本组件在途标记 ∨ `busy`」：广播先到、`await post()` 后才返回，取消时主进程
+会立刻清空，只信 `busy` 会让按钮在取消瞬间闪回可点。

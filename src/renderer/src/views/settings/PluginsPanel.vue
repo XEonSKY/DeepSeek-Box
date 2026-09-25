@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { AppstoreOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
 import type { DshPluginEntry, DshPluginsInfo } from '@shared/types'
 import { errorMessage } from '@shared/errors'
 import { tt } from '../../lib/locales'
 import { confirmDialog } from '../../lib/confirm'
+import { refreshOperations, useOperation } from '../../shell/progressStore'
 import TagLabel from '../../components/TagLabel.vue'
 
 /**
@@ -24,9 +25,15 @@ const profile = ref('web')
 const loading = ref(false)
 /** 安装 / 卸载 / 启停在途：禁用重复操作。 */
 const busy = ref(false)
-/** 插件安装时若需要先准备 pnpm（首次下载内置 pnpm），给一行提示。 */
-const pnpmPreparing = ref(false)
-let offPnpmProgress: (() => void) | null = null
+/**
+ * 插件安装会先把内置 pnpm 准备好（首次要下载）—— 那一步的进度现在从共享 store 读。
+ *
+ * 同一个 kind 既能是「插件安装本身」（dsh-plugin）也可能是它内部触发的「pnpm 下载」，
+ * 二者都该让这一行提示亮起来。
+ */
+const { op: pluginOp } = useOperation('dsh-plugin')
+const { op: pnpmOp } = useOperation('pnpm')
+const pnpmPreparing = computed(() => pluginOp.value !== null || pnpmOp.value !== null)
 const installSpec = ref('')
 const restarting = ref(false)
 
@@ -107,7 +114,8 @@ async function onInstall(): Promise<void> {
         ElMessage.error(errorMessage(err))
     } finally {
         busy.value = false
-        pnpmPreparing.value = false
+        // 安装链路可能顺带下载了 pnpm：取一次快照把已结束的进度收起（事件流不含结束信号）。
+        await refreshOperations()
     }
 }
 
@@ -151,15 +159,9 @@ async function restartDsh(): Promise<void> {
 }
 
 onMounted(() => {
-    // 安装插件时 dsh 会转发给 pnpm；首次需要下载内置 pnpm 时把提示亮起来（来源在「设置 → 环境」）。
-    offPnpmProgress = window.api.on('npmenv:progress', () => {
-        pnpmPreparing.value = true
-    })
+    // 取一次快照：进入本页时若已有插件安装 / pnpm 下载在跑（例如刚从初始化页跳过来），提示要立刻可见。
+    void refreshOperations()
     void load()
-})
-
-onBeforeUnmount(() => {
-    offPnpmProgress?.()
 })
 </script>
 

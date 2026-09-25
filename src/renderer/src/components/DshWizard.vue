@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeftOutlined, CloseOutlined, DownloadOutlined, ReloadOutlined, ThunderboltOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
@@ -8,6 +8,7 @@ import { MIN_NODE_MAJOR, isPrerelease, nodeMajor } from '@shared/version'
 import { errorMessage } from '@shared/errors'
 import { useAppIcon } from '../lib/appIcon'
 import { formatDownload } from '../lib/format'
+import { refreshOperations, useOperation } from '../shell/progressStore'
 import WizardSteps from './WizardSteps.vue'
 
 /**
@@ -92,7 +93,7 @@ const overallProgress = computed(() => {
     // 由下方的文字说明「正在做什么」，而不是用动画假装有进度。
     const within = deployingNode.value
         ? (nodeExtracting.value ? 0 : clamp01(deployPercent.value / 100))
-        : installingNpm.value
+        : npmPreparing.value
             ? (npmExtracting.value ? 0 : clamp01(npmPercent.value / 100))
             : 0
     const total = STEP_KEYS.length
@@ -131,22 +132,30 @@ const systemNodeOk = computed(() => {
 
 // 所选 Node 运行时（安装时随设置持久化）。默认本地部署（初始化时自动选最新 LTS）。
 const nodeRuntimeChoice = ref<NodeRuntimeKind>('local')
+/** 本向导自己发起的 Node 部署在途标记（按钮 / 文案用）。 */
 const deployingNode = ref(false)
-const deployPercent = ref(0)
-const deployDownloaded = ref(0)
-const deployTotal = ref(0)
-const deploySpeed = ref(0)
+/**
+ * 进度来自**共享 store**（shell/progressStore）：向导切走（例如用户跑去设置页看日志）再回来时，
+ * 主进程里的下载还在跑，靠 store 的快照就能立刻把进度条接着画出来。
+ */
+const { op: nodeWizardOp } = useOperation('node')
+const nodeExtracting = computed(() => nodeWizardOp.value?.phase === 'extract')
+const deployPercent = computed(() => nodeWizardOp.value?.percent ?? 0)
 /** 进度条下方的「已下载 / 总大小 · 速度」。 */
-const deployInfo = computed(() => formatDownload(deployTotal.value, deployDownloaded.value, deploySpeed.value))
+const deployInfo = computed(() =>
+    formatDownload(nodeWizardOp.value?.total ?? 0, nodeWizardOp.value?.downloaded ?? 0, nodeWizardOp.value?.speed ?? 0)
+)
 
 // 「程序内置」npm：第 2 步选中且尚未缓存时，点下一步先下载再继续（进度由主进程广播）。
-const installingNpm = ref(false)
-const npmPercent = ref(0)
-const npmDownloaded = ref(0)
-const npmTotal = ref(0)
-const npmSpeed = ref(0)
 const npmBundledPresent = ref(false)
-const npmInfo = computed(() => formatDownload(npmTotal.value, npmDownloaded.value, npmSpeed.value))
+const { op: npmWizardOp } = useOperation('npm')
+/** 本向导自己发起的 npm 准备在途标记。 */
+const npmPreparing = ref(false)
+const npmExtracting = computed(() => npmWizardOp.value?.phase === 'extract')
+const npmPercent = computed(() => npmWizardOp.value?.percent ?? 0)
+const npmInfo = computed(() =>
+    formatDownload(npmWizardOp.value?.total ?? 0, npmWizardOp.value?.downloaded ?? 0, npmWizardOp.value?.speed ?? 0)
+)
 
 // ---- Node 版本选择（第 2 步）------------------------------------------------
 // 合并前的三处信息（可下载版本 / 已装版本 / 当前生效版本）现在都进同一个选择器：
@@ -219,8 +228,7 @@ const npmIncludePre = ref(false)
 const npmVersion = ref('')
 
 // 解压阶段改用不确定动画（不显示百分比）；取消进行中禁用「取消」按钮。
-const nodeExtracting = ref(false)
-const npmExtracting = ref(false)
+// 注意：nodeExtracting / npmExtracting 已在上方由共享 store 派生，不要在这里再定义。
 const canceling = ref(false)
 
 /** 没有专用进度条（Node / npm 下载）时，通用执行条的文案。 */
@@ -268,11 +276,6 @@ async function deployOnce(version?: string): Promise<boolean> {
     if (deployingNode.value) return false
     deployingNode.value = true
     canceling.value = false
-    nodeExtracting.value = false
-    deployPercent.value = 0
-    deployDownloaded.value = 0
-    deployTotal.value = 0
-    deploySpeed.value = 0
     try {
         const r = await window.api.post('/node/deploy', { body: version ? { version } : {} })
         if (r.canceled) {
@@ -281,7 +284,6 @@ async function deployOnce(version?: string): Promise<boolean> {
             return false
         }
         if (r.ok) {
-            deployPercent.value = 100
             // 装完把选择器定到刚装好的版本：否则列表刷新后它可能停在别处，
             // 「已安装 / 当前使用」标记看起来就像打错了地方。
             if (version) nodeVersion.value = version
@@ -295,8 +297,9 @@ async function deployOnce(version?: string): Promise<boolean> {
         return false
     } finally {
         deployingNode.value = false
-        nodeExtracting.value = false
         canceling.value = false
+        // 操作已结束：刷新快照把进度收起（事件流不含结束信号）。
+        await refreshOperations()
         // 部署完要同时刷新「环境探测」与「已装 / 生效列表」—— 选择器上的标记依赖后者。
         await Promise.all([probeEnv(), loadInstalledNode()])
     }
@@ -335,7 +338,7 @@ async function ensureLocalNode(): Promise<boolean> {
 /** 确保「程序内置」npm 就绪：已缓存直接通过，未缓存 / 指定版本则先下载（带进度）再进入下一步。 */
 async function ensureNpmOnce(version?: string): Promise<boolean> {
     canceling.value = false
-    npmExtracting.value = false
+    npmPreparing.value = true
     try {
         const r = await window.api.post('/npm/ensure', { body: version ? { version } : {} })
         if (r.canceled) {
@@ -353,9 +356,9 @@ async function ensureNpmOnce(version?: string): Promise<boolean> {
         ElMessage.error(errorMessage(err))
         return false
     } finally {
-        installingNpm.value = false
-        npmExtracting.value = false
+        npmPreparing.value = false
         canceling.value = false
+        await refreshOperations()
     }
 }
 
@@ -711,26 +714,10 @@ watch(npmIncludePre, () => void loadNpmVersions())
 
 const quitShell = (): void => void window.api.post('/app/quit')
 
-let offDeploy: (() => void) | null = null
-let offNpm: (() => void) | null = null
-
 onMounted(() => {
-    offDeploy = window.api.on('nodeenv:deploy-progress', (p) => {
-        // 解压阶段只显示不确定动画，不显示百分比。
-        nodeExtracting.value = p.phase === 'extract'
-        deployPercent.value = p.percent
-        deployDownloaded.value = p.downloaded
-        deployTotal.value = p.total
-        deploySpeed.value = p.speed
-    })
-    offNpm = window.api.on('npmenv:progress', (p) => {
-        installingNpm.value = true
-        npmExtracting.value = p.phase === 'extract'
-        npmPercent.value = p.percent
-        npmDownloaded.value = p.downloaded
-        npmTotal.value = p.total
-        npmSpeed.value = p.speed
-    })
+    // 进度订阅已上移到外壳启动处（shell/progressStore）—— 这里只补一次快照，
+    // 把「向导挂载前就已经在跑」的操作接上（例如用户从设置页环境面板发起部署后又回到向导）。
+    void refreshOperations()
     void (async () => {
         try {
             const s = await window.api.get('/settings')
@@ -747,11 +734,6 @@ onMounted(() => {
             envError.value = errorMessage(err)
         }
     })()
-})
-
-onBeforeUnmount(() => {
-    offDeploy?.()
-    offNpm?.()
 })
 </script>
 
@@ -974,7 +956,7 @@ onBeforeUnmount(() => {
 
                     <!-- 「程序内置」npm：未缓存 / 选版本时下一步会先下载 -->
                     <div v-if="installNpm === 'bundled'" class="wiz-field">
-                        <template v-if="installingNpm">
+                        <template v-if="npmPreparing">
                             <template v-if="npmExtracting">
                                 <div class="wiz-hint">{{ $t('dshMissing.extractingNpm') }}</div>
                                 <div class="activity-bar" />
@@ -1069,7 +1051,7 @@ onBeforeUnmount(() => {
 
             <!-- 执行进度：仅在无专用进度条（Node / npm 下载）时显示，避免重复的加载动画 -->
             <div
-                v-if="installingDsh && !deployingNode && !installingNpm && !nodeExtracting && !npmExtracting"
+                v-if="installingDsh && !deployingNode && !npmPreparing && !nodeExtracting && !npmExtracting"
                 class="install-progress"
             >
                 <div class="activity">
