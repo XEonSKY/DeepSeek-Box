@@ -1,41 +1,39 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue'
-import { DeepSeekFilled, MessageFilled, SearchOutlined, WalletFilled } from '@antdv-next/icons'
+import { DeepSeekFilled, MessageFilled, ArrowRightOutlined, WalletFilled } from '@antdv-next/icons'
 import { useAppIcon } from '../lib/appIcon'
 import { useGoView } from '../shell/viewnav'
 import { webTabs, activateTab, closeTab, activeTab, findTab, launchFromNewTab } from '../shell/tabs'
-import { SEARCH_ENGINE_IDS, ENGINE_LABEL_KEY, buildSearchUrl } from '../lib/engines'
-import type { SearchEngineId, Shortcut } from '@shared/types'
+
+/**
+ * 「新建标签页」的**兜底页** —— 只在没有扩展贡献该视图时渲染。
+ *
+ * 完整的导航页（常用站点、跳转框）由内置扩展 `xeonsky.browser` 提供
+ * （见 `extensions/tabviews.ts` 与 `src/extensions/xeonsky.browser/NewTab.vue`）。
+ * 但「点＋新建标签页」是外壳自己的动作，扩展被停用时**不能出现空白页** ——
+ * 所以留这一份极简实现：Logo + 一个跳转框 + 三个固定站入口。
+ *
+ * 它刻意**不含**搜索引擎选择、常用站点管理这些东西 —— 那些属于浏览器的知识，
+ * 随功能一起在扩展里；外壳这份只保证「没有扩展也能用」。
+ */
 
 const q = ref('')
-const engine = ref<SearchEngineId>('bing')
-const shortcuts = ref<Shortcut[]>([])
 // 应用 Logo：随深浅色切换（深色用 icon-dark.png），见 appIcon.ts
 const appIcon = useAppIcon()
 const go = useGoView()
 
-/**
- * 搜索框聚焦。`autofocus` 只是「挂载时聚焦」的声明，而导航页内容是**动态插入**的标签页视图；
- * 这里再显式聚焦一次（`focus` 走可选调用，拿不到组件实例就静默跳过），保证新开标签页能直接打字。
- */
+/** 搜索框聚焦。导航页内容是动态插入的标签页视图，`autofocus` 不一定生效，这里再显式聚焦一次。 */
 const inputRef = ref<{ focus?: () => void } | null>(null)
 
-/** 顶部固定三站（直达已有固定标签页）。图标与标题栏保持一致用实心，见 AGENT.md §6。 */
+/** 顶部固定三站（直达已有固定标签页）。图标与标题栏保持一致用实心。 */
 const fixedSites = [
     { id: 'home', key: 'app.nav.ui', icon: DeepSeekFilled },
     { id: 'chat', key: 'app.nav.chat', icon: MessageFilled },
     { id: 'platform', key: 'app.nav.platform', icon: WalletFilled }
 ] as const
 
-onMounted(async () => {
+onMounted(() => {
     void nextTick(() => inputRef.value?.focus?.())
-    try {
-        const s = await window.api.get('/settings')
-        engine.value = s.searchEngine || 'bing'
-        shortcuts.value = Array.isArray(s.shortcuts) ? s.shortcuts : []
-    } catch {
-    /* defaults */
-    }
 })
 
 /** 离开当前导航页（导航页是一次性的）。 */
@@ -55,33 +53,30 @@ function goFixed(id: string): void {
 }
 
 /**
- * 打开一个 URL（新建动态标签页）。
- * `launchFromNewTab` 自己就会开新标签**并关掉发起它的导航页**，所以直接调用即可 ——
- * 原先前置的 `activeTab()?.kind === 'newtab'` 分支与 `leave()` 包装都是等价路径（死分支）。
+ * 提交跳转。
+ *
+ * 只做「跳转」：解析交给主进程（规则在浏览器扩展里，扩展不可用时返回 external）。
+ * 不猜搜索引擎 —— 外壳不认识「搜索引擎」这个概念。
  */
-function openUrl(url: string, title?: string): void {
-    launchFromNewTab(url, title)
-}
-
-/** 提交搜索/网址。 */
 async function submit(): Promise<void> {
-    const s = q.value.trim()
-    if (!s) return
-    const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(s)
-    if (scheme) {
-        const proto = scheme[1].toLowerCase()
-        if (proto === 'http' || proto === 'https') openUrl(s)
-        else await window.api.post('/shell/open-external', { body: { url: s } }) // 扩展/非内置协议交给系统
+    const raw = q.value.trim()
+    if (!raw) return
+    let r: { kind: 'url' | 'external' | 'none'; url?: string }
+    try {
+        r = await window.api.post('/shell/resolve-target', { body: { raw } })
+    } catch {
+        // 本地 IPC 理论上不会失败；兜底只做「补 https://」，不复制扩展的知识
+        r = { kind: 'url', url: /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw) ? raw : `https://${raw}` }
+    }
+    if (r.kind === 'none' || !r.url) return
+    if (r.kind === 'external') {
+        await window.api.post('/shell/open-external', { body: { url: r.url } })
         return
     }
-    if (/^[\w.-]+\.[a-zA-Z]{2,}$/.test(s)) {
-        openUrl('https://' + s, s)
-        return
-    }
-    openUrl(buildSearchUrl(engine.value, s), s)
+    launchFromNewTab(r.url, r.url)
 }
 
-/** 空状态里的「去设置添加」：切到设置页（分类在常规页）。 */
+/** 打开设置页（去扩展管理里启用浏览器扩展）。 */
 function openSettings(): void {
     go('settings')
 }
@@ -95,9 +90,6 @@ function openSettings(): void {
             <h1 class="nt__title">{{ $t('app.title') }}</h1>
 
             <form class="nt__search" @submit.prevent="submit">
-                <el-select v-model="engine" class="nt__engine" :placeholder="$t('navPage.engineLabel')">
-                    <el-option v-for="id in SEARCH_ENGINE_IDS" :key="id" :value="id" :label="$t(ENGINE_LABEL_KEY[id])" />
-                </el-select>
                 <!-- 回车只走表单的 submit：再挂 keyup.enter 会与原生隐式提交叠加，同一个查询开两个标签页 -->
                 <el-input
                     ref="inputRef"
@@ -108,13 +100,12 @@ function openSettings(): void {
                     autofocus
                 />
                 <el-button native-type="submit" type="primary" class="nt__go">
-                    <el-icon :size="16"><SearchOutlined /></el-icon>
-                    <span>{{ $t('navPage.search') }}</span>
+                    <el-icon :size="16"><ArrowRightOutlined /></el-icon>
+                    <span>{{ $t('navPage.go') }}</span>
                 </el-button>
             </form>
 
             <section class="nt__quick">
-                <h2 class="nt__h">{{ $t('navPage.quick') }}</h2>
                 <div class="nt__grid">
                     <button
                         v-for="site in fixedSites"
@@ -126,26 +117,15 @@ function openSettings(): void {
                         <span class="nt__badge nt__badge--brand"><el-icon :size="18"><component :is="site.icon" /></el-icon></span>
                         <span class="nt__label">{{ $t(site.key) }}</span>
                     </button>
-
-                    <a
-                        v-for="(sc, i) in shortcuts"
-                        :key="i"
-                        class="nt__cell"
-                        href="#"
-                        @click.prevent="openUrl(sc.url, sc.title)"
-                    >
-                        <span class="nt__badge">{{ (sc.title || '☆').slice(0, 1) }}</span>
-                        <span class="nt__label">{{ sc.title }}</span>
-                    </a>
                 </div>
-
-                <p v-if="!shortcuts.length" class="nt__empty">
-                    <span>{{ $t('navPage.noShortcuts') }}</span>
-                    <el-button text type="primary" size="small" @click="openSettings">
-                        {{ $t('navPage.addInSettings') }}
-                    </el-button>
-                </p>
             </section>
+
+            <p class="nt__empty">
+                <span>{{ $t('navPage.noBrowserExt') }}</span>
+                <el-button text type="primary" size="small" @click="openSettings">
+                    {{ $t('navPage.addInSettings') }}
+                </el-button>
+            </p>
         </div>
     </div>
 </template>
@@ -186,10 +166,6 @@ function openSettings(): void {
     gap: 8px;
     width: min(680px, 92%);
 }
-.nt__engine {
-    flex: 0 1 132px;
-    min-width: 112px;
-}
 .nt__input {
     flex: 1 1 auto;
 }
@@ -199,12 +175,6 @@ function openSettings(): void {
 .nt__quick {
     margin-top: 34px;
     width: min(680px, 92%);
-}
-.nt__h {
-    font-size: 14px;
-    color: var(--el-text-color-secondary);
-    margin: 0 0 12px;
-    font-weight: 600;
 }
 .nt__grid {
     display: grid;
@@ -237,7 +207,6 @@ function openSettings(): void {
     outline: 2px solid var(--el-color-primary);
     outline-offset: 2px;
 }
-/* 固定三站与常用站点统一成同一枚徽标，两种格子的首行才对得齐 */
 .nt__badge {
     width: 30px;
     height: 30px;

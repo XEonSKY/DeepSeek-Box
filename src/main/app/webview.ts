@@ -1,210 +1,218 @@
-import os from 'node:os'
-import { app, BrowserWindow, dialog, session } from 'electron'
-import type { MessageBoxOptions, WebContents } from 'electron'
-import type { Settings } from '@shared/types'
-import { loadSettings, mt } from './settings'
-import { proxyActive, proxyUrl } from '../dsh/net'
-import { proxyConfigFor } from '../dsh/http'
-import { APP_TITLE } from './const'
-import {
-    PermissionMemory,
-    checkPermission,
-    decidePermission,
-    originOf,
-    permissionKindKey
-} from './webviewPermissionPolicy'
+import { app } from 'electron'
+import type { ResolveResult, Settings } from '@shared/types'
+import { logger } from '../kernel/logger'
+import { actionsOf } from '../extensions/loader/capability'
 
 /**
- * Webview（内嵌页面）相关的渲染与身份设置：硬件加速开关 + UserAgent + 代理。
+ * 内核侧的**内嵌浏览器门面** —— 内嵌页面（webview）的会话设置都从这里走。
  *
- * 作用范围：内嵌 `<webview>` 用的是 **defaultSession**（见 appupdate.ts 里那段注释：自更新
- * 刻意只改 `partition: 'electron-updater'`，不动 defaultSession，所以 webview 不受它影响），
- * 因此 UA 与代理设到 `session.defaultSession` 就正好命中所有 webview，而不会波及自更新。
- */
-
-/** Chromium 的 WebKit 兼容标记：真实 Chrome/Electron 一直发 537.36，与版本无关。 */
-const WEBKIT_TOKEN = '537.36'
-
-/**
- * UA 里的平台段，按各平台真实 Chrome 的写法生成：
- *  - Windows：`Windows NT 10.0; Win64; x64`（NT 版本取 `os.release()` 的主次版本）
- *  - macOS：`Macintosh; Intel Mac OS X 10_15_7` —— Chrome 自 Catalina 起就把这个串冻住了，
- *    即使 Apple Silicon 也照发，所以这里写死而不去猜 Darwin 版本到产品版本的映射
- *  - Linux：`X11; Linux x86_64` / `aarch64`
- */
-function platformToken(platform: string, arch: string, osRelease: string): string {
-    if (platform === 'win32') {
-        const nt = /^(\d+\.\d+)/.exec(osRelease)?.[1] ?? '10.0'
-        const cpu = arch === 'arm64' ? 'Win64; ARM64' : arch === 'ia32' ? 'WOW64' : 'Win64; x64'
-        return `Windows NT ${nt}; ${cpu}`
-    }
-    if (platform === 'darwin') return 'Macintosh; Intel Mac OS X 10_15_7'
-    const cpu = arch === 'arm64' ? 'aarch64' : arch === 'ia32' ? 'i686' : 'x86_64'
-    return `X11; Linux ${cpu}`
-}
-
-/** 默认 UserAgent：Mozilla/5.0 (平台) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/<Chromium> Safari/537.36 XEonSKY/<程序版本>。 */
-export function defaultUserAgent(): string {
-    const plat = platformToken(process.platform, process.arch, os.release())
-    const chrome = process.versions.chrome ?? '0.0.0.0'
-    return `Mozilla/5.0 (${plat}) AppleWebKit/${WEBKIT_TOKEN} (KHTML, like Gecko) Chrome/${chrome} Safari/${WEBKIT_TOKEN} XEonSKY/${app.getVersion()}`
-}
-
-/** 实际生效的 UA：设置里留空就用默认。 */
-export function effectiveUserAgent(cfg: Settings = loadSettings()): string {
-    const custom = (cfg.webviewUserAgent || '').trim()
-    return custom || defaultUserAgent()
-}
-
-/** 已应用到 defaultSession 的值（幂等用）。 */
-let appliedUa = ''
-
-/**
- * 把 UA 应用到 webview 所在的 defaultSession。**必须在 `app.whenReady()` 之后调用**
- * （`session.defaultSession` 在 ready 前拿不到），且要在建窗之前 —— 这样 webContents 一创建
- * 拿到的就是它。值没变时什么都不做。
- */
-export function applyWebviewUserAgent(cfg: Settings = loadSettings()): void {
-    const ua = effectiveUserAgent(cfg)
-    if (ua === appliedUa) return
-    try {
-        session.defaultSession.setUserAgent(ua)
-        appliedUa = ua
-    } catch {
-    /* ready 之前调用会抛：忽略，启动流程里 ready 后还会再调一次 */
-    }
-}
-
-/**
- * 硬件加速开关。**必须在 `app ready` 之前调用**（Electron 限制，之后调用无效），
- * 所以它只在启动时读一次设置 —— 改动它必须重启应用，UI 里也是这么提示的。
- */
-export function applyHardwareAcceleration(cfg: Settings = loadSettings()): void {
-    if (cfg.hardwareAcceleration === false) app.disableHardwareAcceleration()
-}
-
-// ---------------------------------------------------------------------------
-// 内嵌网页的代理（「程序本体」范围）
-// ---------------------------------------------------------------------------
-
-/** 已应用到 defaultSession 的代理 URL；null = 从未显式设置（沿用系统代理）。 */
-let appliedProxy: string | null = null
-
-/**
- * 把「程序本体」范围的代理应用到 webview 所在的 defaultSession。
+ * ## 为什么只剩下这一层
  *
- * 这一档覆盖的是**应用自己的浏览**：home 页 / 标签页里打开的外部网站。dsh 界面跑在
- * 127.0.0.1 上，由 proxyConfigFor() 的 `<local>` 绕过规则保证永远直连 —— 否则代理一开，
- * 内嵌界面会连自己都请求不到。
+ * webview 功能（UA 生成、代理应用、权限策略判定）已迁到内置扩展 `xeonsky.browser`
+ * （见 `src/extensions/xeonsky.browser/`）。内核不能直接 `import` 一个扩展 ——
+ * 那等于内核依赖一个**可被用户停用**的东西，且方向与「扩展依赖内核」相反。
  *
- * 与更新器 session 同样的克制：未启用代理时**不调用 setProxy**，保留 Electron 默认的
- * 「跟随系统代理」，只有从「有」变「无」时才显式回落 system。
+ * 于是按加载器已有的惯例（见 `dsh/download.ts` 的门面）：内核不 import 扩展，
+ * 而是**按约定名查能力槽**。查到就用扩展，查不到就降级为「不配置会话」
+ * （内嵌页面用 Electron 默认行为）并打 warn。
  *
- * 返回 Promise：`setProxy` 是异步生效的，建窗 / 保存设置时应当 await，
- * 否则「设置了代理后的第一批请求」仍会按旧配置发出去。
+ * ## 为什么降级不是回落一份实现
+ *
+ * 与下载不同，webview 的会话设置**没有必须保住的核心路径**：扩展被停用时内嵌页面
+ * 用 Electron 默认策略（默认放行权限、默认 UA）也能跑，只是安全性/兼容性打折。
+ * 为此在内核里再留一份权限判定实现，等于把刚迁出去的东西又复制回来（两份实现必然漂移），
+ * 违背迁移初衷。故这里只做转发 + 降级告警。
+ *
+ * 唯一保留内联实现的是 `parsePopupSize`（纯几何计算，没有「策略」可言）。
+ * 而 `decideOpenAction` / `resolveAddressInput` / `resolveTarget` 的降级是**行为切换**：
+ * 扩展不可用时一律「交系统默认浏览器」—— 这正是用户要的规则（浏览器扩展关掉，
+ * 就不再由外壳承担浏览），不是把策略复制一份回来。
+ *
+ * ## 时机约束（别改）
+ *
+ * 本函数必须在 `startLoader()` **之后**（扩展才已激活）、`createShellWindow()`
+ * **之前**调用 —— 晚于建窗的话，先建出来的 webview 拿到的是「未装处理器 = 默认放行一切」。
+ * 硬件加速不在这里：它必须早于 `app.whenReady()`，由 `extensions/preready.ts` 预读处理。
  */
-export async function applyWebviewProxy(cfg: Settings = loadSettings()): Promise<void> {
-    const url = proxyActive(cfg, 'app') ? proxyUrl(cfg) : null
-    if (appliedProxy === url) return
-    // 先登记再 await：并发的两次调用不会因为 await 顺序颠倒而把状态记反。
-    appliedProxy = url
-    try {
-        await session.defaultSession.setProxy(proxyConfigFor(url))
-    } catch {
-    /* ready 之前调用会抛：撤销登记，启动流程里 ready 后还会再调一次 */
-        appliedProxy = null
-    }
+
+/** 内嵌浏览器能力的约定名（由内置扩展 `xeonsky.browser` 提供）。 */
+const BROWSER_CAPABILITY = 'ext:xeonsky.browser'
+
+/** 扩展 `applySession` 动作的返回形状。 */
+interface ApplySessionResult {
+    ua: string
+    proxy: string | null
 }
 
-// ---------------------------------------------------------------------------
-// 内嵌页面的权限策略
-// ---------------------------------------------------------------------------
-
-/** 会话级「记住选择」：同一来源 + 同一权限只问一次（重启后重新询问，不落盘）。 */
-const permissionMemory = new PermissionMemory()
-
-/** 权限询问串行化：多个站点同时请求时不该叠出一堆系统弹窗。 */
-let promptQueue: Promise<unknown> = Promise.resolve()
-
-function queuePrompt(task: () => Promise<boolean>): Promise<boolean> {
-    const next = promptQueue.then(task, task)
-    promptQueue = next.catch(() => undefined)
-    return next
+/** 窗口级 webview 的纯策略（内核 `app/ui.ts` 经门面查询，机制仍在内核）。 */
+interface WindowPolicyActions {
+    /** 从 `window.open` 的 features 解析弹窗宽高。 */
+    parsePopupSize?: (features: string) => { width: number; height: number }
+    /**
+     * 一次 `window.open` 的处置决策。
+     *
+     * `external` = 本扩展不接管（非 http(s) 协议）；**「扩展不可用」不在这里表达** ——
+     * 那是内核兜底（见 {@link decideOpenAction}）。
+     */
+    decideOpenAction?: (url: string, frameName: string, features: string) => 'external' | 'popup' | 'tab'
+    /** 地址栏输入解析（网址就跳、否则按扩展配置的默认引擎搜）。 */
+    resolveAddressInput?: (raw: string) => ResolveResult
+    /** 导航页的纯跳转解析（不搜索）。 */
+    resolveTarget?: (raw: string) => ResolveResult
 }
 
-/** 弹系统询问框问用户；拿不到宿主窗口时用无父窗口的对话框。弹不出来按拒绝。 */
-async function askPermission(
-    contents: WebContents,
-    permission: string,
-    requestingUrl: string,
-    mediaTypes: readonly string[] | undefined
-): Promise<boolean> {
-    const options: MessageBoxOptions = {
-        type: 'question',
-        title: APP_TITLE,
-        message: mt('m.webviewPerm.message', {
-            origin: originOf(requestingUrl),
-            kind: mt(`m.webviewPerm.${permissionKindKey(permission, mediaTypes)}`)
-        }),
-        detail: requestingUrl,
-        buttons: [mt('m.webviewPerm.allow'), mt('m.webviewPerm.deny')],
-        defaultId: 1,
-        cancelId: 1,
-        noLink: true
-    }
-    const parent = BrowserWindow.fromWebContents(contents)
-    try {
-        const { response } = parent && !parent.isDestroyed()
-            ? await dialog.showMessageBox(parent, options)
-            : await dialog.showMessageBox(options)
-        return response === 0
-    } catch {
-        return false
-    }
+/** 一次输入解析的结果（契约形状见 `@shared/types` 的 {@link ResolveResult}）。 */
+export type { ResolveResult }
+
+/** 扩展提供的动作表（只在扩展激活后存在）。 */
+interface BrowserActions extends WindowPolicyActions {
+    /** 应用 UA / 代理 / 权限策略（版本号与标题由内核传入，扩展不 import `app`）。 */
+    applySession?: (version: string, appTitle: string) => Promise<ApplySessionResult>
+    /** 重新应用代理（代理设置变化时调用）。 */
+    reapplyProxy?: () => Promise<string | null>
+}
+
+/** 取扩展的浏览器动作表；不可用返回 null。 */
+function browserActions(): BrowserActions | null {
+    const table = actionsOf(BROWSER_CAPABILITY)
+    return table ? (table as unknown as BrowserActions) : null
+}
+
+/** 内核兜底弹窗尺寸（扩展不可用时用）—— 与扩展侧同一默认值。 */
+const FALLBACK_POPUP_SIZE = { width: 900, height: 720 }
+
+/** 内核兜底夹取（非正数 = 未指定，其余夹到 [300, 1600]）。 */
+function clampPx(n: number): number {
+    if (!Number.isFinite(n) || n <= 0) return 0
+    return Math.max(300, Math.min(1600, Math.round(n)))
 }
 
 /**
- * 给内嵌页面（webview / 标签页）装上权限策略。**必须在 `app.whenReady()` 之后调用**
- * （`session.defaultSession` 在 ready 前拿不到），且要在建窗之前。
+ * 解析 `window.open` 的弹窗尺寸。
  *
- * 四个处理器缺一不可：`request` 管主动请求（`getUserMedia` 等），`check` 管同步查询
- * （`navigator.permissions.query`、设备枚举），`device` 管 HID / 串口 / USB（**不走
- * request**），`displayMedia` 管屏幕共享。只装 request 会被后三条绕过。
+ * 规则本身已迁到扩展（`xeonsky.browser` 的 `parsePopupSize`），这里只做转发；
+ * 扩展不可用时**回落一份等价的内联实现** —— 与「会话策略可降级」不同，弹窗尺寸
+ * 若缺失会让真弹窗尺寸错乱，且这是一段纯几何计算、不存在两份实现漂移的风险。
  */
-export function installWebviewPermissionPolicy(): void {
-    const s = session.defaultSession
-    s.setDevicePermissionHandler(() => false)
-    // 屏幕共享一律不给：内嵌页面是任意站点，录制桌面属于最不该开放的一类能力。
-    s.setDisplayMediaRequestHandler((_request, callback) => callback({}))
-    s.setPermissionCheckHandler((_contents, permission, requestingOrigin) =>
-        checkPermission(permission, requestingOrigin, permissionMemory)
-    )
-    s.setPermissionRequestHandler((contents, permission, callback, details) => {
-        const url = typeof details?.requestingUrl === 'string' ? details.requestingUrl : ''
-        // `mediaTypes` 只在媒体类请求上存在，联合类型里必须收窄后再取。
-        const mediaTypes = details && 'mediaTypes' in details ? details.mediaTypes : undefined
-        const verdict = decidePermission(permission, url)
-        if (verdict === 'grant') {
-            callback(true)
-            return
+export function parsePopupSize(features: string): { width: number; height: number } {
+    const fromExt = browserActions()?.parsePopupSize
+    if (typeof fromExt === 'function') {
+        try {
+            return fromExt(features)
+        } catch {
+            /* 落到内联兜底 */
         }
-        if (verdict === 'deny') {
-            callback(false)
-            return
+    }
+    const out = { ...FALLBACK_POPUP_SIZE }
+    const mW = /(?:^|,)width=(\d+)/i.exec(features)
+    const mH = /(?:^|,)height=(\d+)/i.exec(features)
+    const w = mW ? clampPx(Number(mW[1])) : 0
+    const h = mH ? clampPx(Number(mH[1])) : 0
+    if (w) out.width = w
+    if (h) out.height = h
+    return out
+}
+
+/**
+ * 一次 `window.open` 的处置决策（`external` / `popup` / `tab`）。
+ *
+ * 优先问扩展；**扩展不可用时一律返回 `external`** —— 这就是「浏览器扩展关闭了，
+ * 就在系统默认浏览器里打开」这条规则：外壳内容区仍靠 `<webview>` 渲染（那是核心通路），
+ * 但「新开一个目标」这件事在浏览器扩展缺席时不再由外壳自己承担。
+ */
+export function decideOpenAction(url: string, frameName: string, features: string): 'external' | 'popup' | 'tab' {
+    const fromExt = browserActions()?.decideOpenAction
+    if (typeof fromExt === 'function') {
+        try {
+            return fromExt(url, frameName, features)
+        } catch {
+            /* 落到下方兜底 */
         }
-        const origin = originOf(url)
-        const remembered = permissionMemory.recall(origin, permission)
-        if (remembered !== undefined) {
-            callback(remembered)
-            return
+    }
+    return 'external'
+}
+
+/** 扩展不可用时的输入解析兜底：一律交系统默认程序（外壳不再自己当浏览器）。 */
+function fallbackResolve(raw: string): ResolveResult {
+    const s = raw.trim()
+    return s ? { kind: 'external', url: s } : { kind: 'none' }
+}
+
+/**
+ * 解析**地址栏**输入（网址就跳、否则按扩展配置的默认引擎搜）。
+ *
+ * 规则整体在扩展里（`resolveAddressInput`）；内核只转发。扩展不可用时交系统默认程序。
+ */
+export function resolveAddressInput(raw: string): ResolveResult {
+    const fromExt = browserActions()?.resolveAddressInput
+    if (typeof fromExt === 'function') {
+        try {
+            return fromExt(raw)
+        } catch {
+            /* 落到下方兜底 */
         }
-        void queuePrompt(async () => {
-            const granted = await askPermission(contents, permission, url, mediaTypes)
-            permissionMemory.remember(origin, permission, granted)
-            return granted
-        }).then(
-            (granted) => callback(granted),
-            () => callback(false)
-        )
-    })
+    }
+    return fallbackResolve(raw)
+}
+
+/**
+ * 解析**导航页**输入（纯跳转语义，不搜索）。
+ *
+ * 与 {@link resolveAddressInput} 走同一套转发，只是问扩展的另一个动作 ——
+ * 「不猜搜索」这条差别留在扩展里，内核不认识「搜索引擎」这个概念。
+ */
+export function resolveTarget(raw: string): ResolveResult {
+    const fromExt = browserActions()?.resolveTarget
+    if (typeof fromExt === 'function') {
+        try {
+            return fromExt(raw)
+        } catch {
+            /* 落到下方兜底 */
+        }
+    }
+    return fallbackResolve(raw)
+}
+
+/**
+ * 代理设置变化后重新应用到内嵌页面会话。
+ *
+ * 由设置模块在保存 / 重置后调用。UA 不走这里 —— 它是扩展自己的设置项，
+ * 由扩展侧在保存时自应用；这里只管仍属内核设置的「程序本体代理范围」。
+ */
+export async function reapplyWebviewProxy(): Promise<void> {
+    const actions = browserActions()
+    const reapply = actions?.reapplyProxy
+    if (typeof reapply !== 'function') return
+    try {
+        await reapply()
+    } catch {
+        /* 扩展未激活 / 未就绪：代理保持现状，不影响设置保存 */
+    }
+}
+
+/**
+ * 把内嵌页面的会话设置（UA / 代理 / 权限策略）落地。
+ *
+ * 由 `index.ts` 在 `startLoader()` 之后、`createShellWindow()` 之前调用。
+ * 扩展未激活时降级为不配置，并打一条 warn 让问题在开发期暴露。
+ *
+ * @param cfg 当前设置（保留形参以便将来需要另读项；会话配置本身已由扩展内部决定）
+ * @param log 调用方的 logger（沿用其 tag，便于日志归口）
+ */
+export async function initWebviewSession(cfg: Settings, log: ReturnType<typeof logger>): Promise<void> {
+    void cfg
+    const actions = browserActions()
+    const apply = actions?.applySession
+    if (typeof apply !== 'function') {
+        log.warn('browser extension unavailable, embedded pages use Electron default session policy')
+        return
+    }
+    // 必须 await：权限处理器要在 createShellWindow() 之前装好，否则先建出来的 webview
+    // 会拿到「未装处理器 = 默认放行一切」的策略。失败只降级为打日志，不阻断启动。
+    try {
+        const r = await apply(app.getVersion(), app.getName())
+        log.info({ ua: r?.ua, proxy: r?.proxy ?? 'system' }, 'webview session configured')
+    } catch (err) {
+        log.warn({ err }, 'webview session configuration failed')
+    }
 }

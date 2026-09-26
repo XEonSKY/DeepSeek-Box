@@ -7,6 +7,8 @@ import * as xeonskyExtm from '@ext/xeonsky.extm/main'
 import { manifest as xeonskyExtmManifest } from '@ext/xeonsky.extm/manifest'
 import * as xeonskyDownload from '@ext/xeonsky.download/main'
 import { manifest as xeonskyDownloadManifest } from '@ext/xeonsky.download/manifest'
+import * as xeonskyBrowser from '@ext/xeonsky.browser/main'
+import { manifest as xeonskyBrowserManifest } from '@ext/xeonsky.browser/manifest'
 
 /**
  * 内置扩展登记表：源码在本目录，随构建产物发布。
@@ -61,5 +63,17 @@ export const builtinExtensions: StaticExt[] = [
         sourceDir: 'src/extensions/xeonsky.download',
         manifest: xeonskyDownloadManifest,
         module: xeonskyDownload
+    },
+    {
+        // 内嵌浏览器：webview 功能（UA / 代理 / 权限策略）已从内核迁到本扩展。
+        // 申请 webview（Session 包装）与 fs（读写自己的配置）两项系统能力，
+        // 对外提供 ext:xeonsky.browser。内核在建窗之前经能力槽取用它应用会话设置
+        // （见 app/webview.ts 的薄转发）。
+        // manifest 的 preReady 字段声明硬件加速归属 —— 由内核在 ready 前预读
+        // （见 extensions/preready.ts）。
+        kind: 'builtin',
+        sourceDir: 'src/extensions/xeonsky.browser',
+        manifest: xeonskyBrowserManifest,
+        module: xeonskyBrowser
     }
 ]
