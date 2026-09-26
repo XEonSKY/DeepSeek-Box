@@ -7,11 +7,14 @@ The renderer is a Vue 3 application responsible for the tab shell, settings page
 | Path | Description |
 |---|---|
 | `App.vue` | Root component: title bar, webview container, settings overlay, status bar, global toasts and the migration progress dialog |
-| `views/` | Pages: `WebHost.vue` (dsh Web UI / web), `NewTab.vue` (built-in navigation page), `LogView.vue` (terminal) |
-| `views/settings/` | Settings panels: General / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / Webview / About |
+| `views/` | Pages: `WebHost.vue` (dsh Web UI / web / new-tab host), `NewTabFallback.vue` (minimal new-tab page used when the extension is disabled), `LogView.vue` (terminal) |
+| `views/settings/` | Settings panels: General / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / About |
 | `views/settings/ModelsPanel.vue` | The “Models” page: consent flow + the model / provider / balance columns and “Refresh all” |
+| `views/settings/use{Node,Npm,Pnpm}Env.ts` | State and actions for each of the three “Env” sections; `EnvPanel.vue` keeps only the template and load orchestration |
 | `views/settings/actions/` | Settings actions: `dshActions.ts` (start-stop / install wizard), `dshManageActions.ts` (DeepSeek Harness version management) |
 | `components/` | `DshWizard.vue` (four-step install wizard), `StatusBar.vue` (bottom status bar: balance and version badge), `TitleBar.vue`, etc. |
+| `components/wizard/` | The wizard’s three self-contained logic modules: `useWizardRegistry.ts` (registry speed test), `useWizardNpm.ts` (bundled npm prep), `useWizardNode.ts` (local Node and deploy) |
+| `shell/state.ts` | Shell-level cross-component shared state: `dshMissing` plus `shellMeta` / `loadShellMeta()` |
 | `lib/` | Theme, formatting, update state, locale and similar utilities (tab logic lives in `shell/`) |
 | `lib/update.ts` | The version-update state hub: `versionStatus` / `checkDsh` / `checkAllUpdates` / `applyAppUpdateEvent` / `hasUpdate` |
 | `views/settings/useSettingsStore.ts` / `views/settings/settingsStore.ts` | Pinia state and settings mirror |

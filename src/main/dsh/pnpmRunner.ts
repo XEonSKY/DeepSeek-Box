@@ -4,12 +4,12 @@ import type { InstalledVersions, NodeDeployProgress, PnpmSource, PnpmStatus, Pnp
 import { errorMessage } from '@shared/errors'
 import { IS_WIN } from '../kernel/runtime'
 import { loadSettings, mt, bundledPnpmDir, tempDownloadDir, tempNpmDir, tempPnpmStoreDir } from '../app/settings'
-import { nodeRuntimeForCfg, pathEnv, findInDirs, findSystemPnpm } from './tools'
+import { nodeRuntimeForCfg, findSystemPnpm } from './tools'
 import { hasSystemNpm, runNpm } from './npmRunner'
-import { probeVersion, runChild } from './child'
+import { probeVersion } from './child'
 import { removeQuietly } from '../kernel/treeops'
+import { extractTar, findSystemTar } from './tarutil'
 import { compareVersions, stripV, sortVersionsDesc } from './semver'
-import { pushLog } from './logbus'
 import { downloadFile } from './download'
 import { pnpmEntryIn } from './pnpmEntry'
 import { httpFetch } from './http'
@@ -19,10 +19,10 @@ import { registryBase } from './registry'
 
 /**
  * pnpm 的获取 / 运行层：与内置 npm（npmRunner.ts）同一套「版本化目录 + 下载 tarball 解压」流程，
- * 供 dsh 插件管理（plugins.ts）把 `dsh plugin` 的参数转发给 pnpm。
+ * 供 dsh 自身的 `dsh plugin` 等命令在 profile 目录里执行字面量 `pnpm` 时使用。
  *
  * **两种来源**（settings.pnpmSource）：
- *  - `bundled`（默认）：应用把 pnpm 的 tarball 解压到 `<configDir>/pnpm/<版本>`，插件安装时用垫片让 dsh 找到它；
+ *  - `bundled`（默认）：应用把 pnpm 的 tarball 解压到 `<configDir>/pnpm/<版本>`，运行时用垫片让 dsh 找到它；
  *  - `system`：直接用系统 PATH 上的 pnpm（dsh 本来就能找到），这里只负责探测版本 / 用系统 npm 升级它。
  *
  * pnpm 以 npm 包形式发布，运行方式与内置 npm-cli.js 一致：用当前 Node 运行时直接执行它的 JS 入口。
@@ -149,22 +149,6 @@ export async function pnpmStatus(): Promise<PnpmStatus> {
     return { latest, system: mk(system), bundled: mk(bundled) }
 }
 
-/** Locate a system `tar` (Windows ships tar.exe in System32). */
-function findSystemTar(): string | null {
-    const dirs = pathEnv()
-    const names = IS_WIN ? ['tar.exe', 'tar'] : ['tar']
-    if (IS_WIN) dirs.push(path.join(process.env.WINDIR || 'C:\\Windows', 'System32'))
-    return findInDirs(dirs, names) ?? null
-}
-
-/** 解压 tar.gz 到目标目录；取消时杀掉子进程。 */
-function extractTar(tgz: string, dest: string, signal?: AbortSignal): Promise<boolean> {
-    const tar = findSystemTar()
-    if (!tar) return Promise.resolve(false)
-    pushLog('o', '[Manager] 解压 pnpm 压缩包…')
-    return runChild(tar, { argv: ['-xzf', tgz, '-C', dest], onStderr: (s) => pushLog('e', s) }, signal).then((r) => r.ok)
-}
-
 /**
  * 确保内置 pnpm 可用：把 tarball 解压到 `<configDir>/pnpm/<版本>/` 并设为生效版本。
  * 不传 version 时：已有生效版本直接复用，否则拉最新版。
@@ -229,7 +213,7 @@ async function ensureBundledPnpm(
         await removeQuietly(stage)
         return { ok: false, message: errorMessage(err) }
     }
-    const okExtract = await extractTar(tgz, destDir, signal)
+    const okExtract = await extractTar(tgz, destDir, 'pnpm', signal)
     await removeQuietly(stage)
     if (signal?.aborted) {
         await removeVersion('pnpm', target)

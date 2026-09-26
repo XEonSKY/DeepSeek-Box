@@ -1,4 +1,4 @@
-import { computed, readonly, ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { OperationKind, OperationProgress } from '@shared/types'
 
 /**
@@ -22,7 +22,7 @@ const running = ref<Partial<Record<OperationKind, OperationProgress>>>({})
 
 /** 是否已启用一次订阅（幂等，多窗口 / 组件重复挂载也只订阅一次）。 */
 let started = false
-/** 已注册的取消订阅函数。 */
+/** 已注册的取消订阅函数（订阅随渲染进程同寿，无需在组件卸载时退订）。 */
 const offs: (() => void)[] = []
 
 /** 把一条进度并入状态（同一 kind 只保留最新一条）。 */
@@ -62,13 +62,6 @@ export function startOperationTracking(): void {
     void refreshOperations()
 }
 
-/** 供测试 / HMR 复位订阅（正常流程不需要调用）。 */
-export function stopOperationTracking(): void {
-    for (const off of offs.splice(0)) off()
-    started = false
-    running.value = {}
-}
-
 /**
  * 取某个种类的进行中操作（没有则 null）。
  *
@@ -81,6 +74,3 @@ export function useOperation(kind: OperationKind) {
     const busy = computed(() => op.value !== null)
     return { op, busy }
 }
-
-/** 只读快照（调试 / 聚合展示用）。 */
-export const operationsState = readonly(running)

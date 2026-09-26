@@ -113,3 +113,18 @@ export function readPkgVersion(pkgJsonPath: string): string | null {
         return null
     }
 }
+
+/**
+ * 路径是否存在（异步）。
+ *
+ * `fs.promises` 没有 `exists` 版，各处都写一遍 try/catch access —— 收敛到这里。
+ * 不抛错：不存在与「无权限访问」都算「拿不到」，调用方据此走「跳过 / 回落」分支。
+ */
+export async function pathExists(target: string): Promise<boolean> {
+    try {
+        await fs.promises.access(target)
+        return true
+    } catch {
+        return false
+    }
+}

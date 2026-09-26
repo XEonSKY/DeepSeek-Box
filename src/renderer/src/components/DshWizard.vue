@@ -3,13 +3,15 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeftOutlined, CloseOutlined, DownloadOutlined, ReloadOutlined, ThunderboltOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
-import type { EnvProbe, NodeRuntimeKind, NpmSource, RegistrySpeedResult } from '@shared/types'
+import type { EnvProbe, NodeRuntimeKind, NpmSource } from '@shared/types'
 import { MIN_NODE_MAJOR, isPrerelease, nodeMajor } from '@shared/version'
 import { errorMessage } from '@shared/errors'
 import { useAppIcon } from '../lib/appIcon'
-import { formatDownload } from '../lib/format'
-import { refreshOperations, useOperation } from '../shell/progressStore'
+import { refreshOperations } from '../shell/progressStore'
 import WizardSteps from './WizardSteps.vue'
+import { useWizardNode } from './wizard/useWizardNode'
+import { useWizardRegistry } from './wizard/useWizardRegistry'
+import { useWizardNpm } from './wizard/useWizardNpm'
 
 /**
  * @deepseek-ai/dsh 包缺失时的安装向导（初始化页的主体）。
@@ -71,7 +73,6 @@ const STEP_KEYS = ['mode', 'source', 'node', 'npm', 'dsh'] as const
  * antdv-next 的 `a-select` 用 `:options` 而不是子组件 `<a-option>`：
  * 选项少且是纯数据时，一个数组比一层嵌套模板好读，也省掉每个选项一行 `$t`。
  */
-const npmVersionOptions = computed(() => npmVersions.value.map((v) => ({ value: v, label: v })))
 const dshVersionOptions = computed(() => installVersions.value.map((v) => ({ value: v, label: v })))
 /** 步骤条的分段：文字取自 i18n，与 STEP_KEYS 一一对应。 */
 const wizardSteps = computed(() => STEP_KEYS.map((k) => ({ key: k, label: t(`dshMissing.wiz.${k}`) })))
@@ -106,10 +107,14 @@ function clamp01(n: number): number {
     return Math.max(0, Math.min(1, n))
 }
 
-// ---- 镜像源测速（简易安装用来自动选源）----
-const speedTesting = ref(false)
-const speedResult = ref<RegistrySpeedResult | null>(null)
-const speedFailed = computed(() => speedResult.value !== null && speedResult.value.fastest === null)
+// 解压阶段改用不确定动画（不显示百分比）；取消进行中禁用「取消」按钮。
+// Node 部署与 npm 准备共用这一个取消按钮状态（主进程的 /installs/cancel 会中止全部在途操作）。
+const canceling = ref(false)
+
+// ---- 镜像源测速（简易安装用来自动选源）与内置 npm（均自持状态，见 wizard/）----
+const { testing: speedTesting, result: speedResult, failed: speedFailed, pickFastest: pickFastestRegistry } =
+    useWizardRegistry(installReg)
+const npmWiz = useWizardNpm(canceling)
 
 // ---- 简易安装 ----
 const simpleRunning = ref(false)
@@ -132,104 +137,41 @@ const systemNodeOk = computed(() => {
 
 // 所选 Node 运行时（安装时随设置持久化）。默认本地部署（初始化时自动选最新 LTS）。
 const nodeRuntimeChoice = ref<NodeRuntimeKind>('local')
-/** 本向导自己发起的 Node 部署在途标记（按钮 / 文案用）。 */
-const deployingNode = ref(false)
-/**
- * 进度来自**共享 store**（shell/progressStore）：向导切走（例如用户跑去设置页看日志）再回来时，
- * 主进程里的下载还在跑，靠 store 的快照就能立刻把进度条接着画出来。
- */
-const { op: nodeWizardOp } = useOperation('node')
-const nodeExtracting = computed(() => nodeWizardOp.value?.phase === 'extract')
-const deployPercent = computed(() => nodeWizardOp.value?.percent ?? 0)
-/** 进度条下方的「已下载 / 总大小 · 速度」。 */
-const deployInfo = computed(() =>
-    formatDownload(nodeWizardOp.value?.total ?? 0, nodeWizardOp.value?.downloaded ?? 0, nodeWizardOp.value?.speed ?? 0)
-)
+
+// ---- Node 环境（第 2 步，见 wizard/useWizardNode）----
+// 状态与动作在组合式函数里；这里保留模板用的短名。
+// 部署进度来自共享 store：向导切走再回来时，主进程里的下载还在跑，靠 store 的快照就能接着画。
+const nodeWiz = useWizardNode(envProbe, t)
+const deployingNode = computed(() => nodeWiz.deploying)
+const nodeExtracting = nodeWiz.extracting
+const deployPercent = nodeWiz.percent
+const deployInfo = nodeWiz.info
+const nodeVersionsLoading = nodeWiz.versionsLoading
+const nodeIncludeNonLts = nodeWiz.includeNonLts
+const nodeVersion = nodeWiz.version
+const nodeInstalled = nodeWiz.installed
+const nodeVersionOptions = nodeWiz.versionOptions
+const selectedNodeInstalled = nodeWiz.selectedInstalled
+const selectedNodeIsActive = nodeWiz.selectedIsActive
+const loadNodeVersions = nodeWiz.loadVersions
+const loadInstalledNode = nodeWiz.loadInstalled
+const recheckNode = (): Promise<void> => nodeWiz.recheck(probeEnv)
 
 // 「程序内置」npm：第 2 步选中且尚未缓存时，点下一步先下载再继续（进度由主进程广播）。
-const npmBundledPresent = ref(false)
-const { op: npmWizardOp } = useOperation('npm')
-/** 本向导自己发起的 npm 准备在途标记。 */
-const npmPreparing = ref(false)
-const npmExtracting = computed(() => npmWizardOp.value?.phase === 'extract')
-const npmPercent = computed(() => npmWizardOp.value?.percent ?? 0)
-const npmInfo = computed(() =>
-    formatDownload(npmWizardOp.value?.total ?? 0, npmWizardOp.value?.downloaded ?? 0, npmWizardOp.value?.speed ?? 0)
-)
-
-// ---- Node 版本选择（第 2 步）------------------------------------------------
-// 合并前的三处信息（可下载版本 / 已装版本 / 当前生效版本）现在都进同一个选择器：
-// 每个选项自带「已安装」「当前使用」标记，用户不必再对照另一块表单看状态。
-const nodeVersions = ref<string[]>([])
-const nodeVersionsLoading = ref(false)
-const nodeIncludeNonLts = ref(false)
-const nodeVersion = ref('')
-/** 已下载到配置目录的本地 Node 版本（来自 /versions/node）。 */
-const nodeInstalled = ref<string[]>([])
-/** 当前生效的本地 Node 版本。 */
-const nodeActiveVersion = ref<string | null>(null)
-/** 当前生效的本地 Node 版本：优先环境探测，其次已安装版本列表。 */
-const localNodeActive = computed(() => envProbe.value?.local.version ?? nodeActiveVersion.value)
-
-/** 选中项是否已经装在本地（决定下一步是「部署」还是「切换生效版本」）。 */
-const selectedNodeInstalled = computed(() => !!nodeVersion.value && nodeInstalled.value.includes(nodeVersion.value))
-/** 选中项是否就是当前生效的版本。 */
-const selectedNodeIsActive = computed(() => !!nodeVersion.value && nodeVersion.value === localNodeActive.value)
-
-/**
- * 选择器的选项：可下载版本 ∪ 已安装版本，按 semver 降序，逐个打标记。
- *
- * 必须**并集**而不是只用远端列表：用户可能处于离线状态、或某个已装版本的发布条目
- * 已经不在远端列表里 —— 只列远端会让「已安装且正在用」的版本在选择器里找不到，
- * 一打开这一步看起来就像什么都没装。
- */
-const nodeVersionOptions = computed(() => {
-    const tagsOf = (v: string): { label: string; color: string }[] => {
-        const tags: { label: string; color: string }[] = []
-        if (v === localNodeActive.value) tags.push({ label: t('dshMissing.node.tagActive'), color: 'green' })
-        else if (nodeInstalled.value.includes(v)) tags.push({ label: t('dshMissing.node.tagInstalled'), color: 'blue' })
-        return tags
-    }
-    // 已装的版本可能不在远端列表里（离线、或发布条目已撤），这些也要排进去。
-    // 远端列表本身已是 semver 降序，这里只做稳定合并：远端在前，补上它没覆盖到的已装版本。
-    const ordered = [
-        ...nodeVersions.value,
-        ...nodeInstalled.value.filter((v) => !nodeVersions.value.includes(v)).sort().reverse()
-    ]
-    return ordered.map((v) => ({ value: v, label: v, tags: tagsOf(v) }))
-})
-
-/**
- * 检查版本：把主进程的版本列表、已装版本、当前生效版本一次全刷一遍。
- *
- * 合并了原来分开的两个动作 —— 「重新检测」（只刷环境探测）与版本下拉旁的刷新按钮
- * （只刷远端列表）。两者用户根本分不清，且总是想同时要最新结果。
- */
-async function recheckNode(): Promise<void> {
-    await Promise.all([loadNodeVersions(), loadInstalledNode(), probeEnv()])
-}
-
-/** 拉取已安装 / 生效的本地 Node 版本。 */
-async function loadInstalledNode(): Promise<void> {
-    try {
-        const r = await window.api.get('/versions/:kind', { params: { kind: 'node' } })
-        nodeInstalled.value = r.installed
-        nodeActiveVersion.value = r.active
-    } catch {
-        nodeInstalled.value = []
-        nodeActiveVersion.value = null
-    }
-}
-
-// ---- npm 版本选择（第 2 步「程序内置」）----
-const npmVersions = ref<string[]>([])
-const npmVersionsLoading = ref(false)
-const npmIncludePre = ref(false)
-const npmVersion = ref('')
-
-// 解压阶段改用不确定动画（不显示百分比）；取消进行中禁用「取消」按钮。
-// 注意：nodeExtracting / npmExtracting 已在上方由共享 store 派生，不要在这里再定义。
-const canceling = ref(false)
+// 状态与动作在 wizard/useWizardNpm；这里只保留模板用的短名。
+const npmBundledPresent = npmWiz.bundledPresent
+const npmPreparing = npmWiz.preparing
+const npmExtracting = npmWiz.extracting
+const npmPercent = npmWiz.percent
+const npmInfo = npmWiz.info
+const npmVersionsLoading = npmWiz.versionsLoading
+const npmIncludePre = npmWiz.includePre
+const npmVersion = npmWiz.version
+const npmVersionOptions = npmWiz.versionOptions
+const loadNpmStatus = npmWiz.loadStatus
+const loadNpmVersions = npmWiz.loadVersions
+const ensureNpmOnce = npmWiz.ensure
+// ---- npm 版本选择（第 2 步「程序内置」，见 wizard/useWizardNpm）----
 
 /** 没有专用进度条（Node / npm 下载）时，通用执行条的文案。 */
 const installLabel = computed(() => (step.value === 4 ? t('dshMissing.progressDsh') : t('dshMissing.executing')))
@@ -272,145 +214,35 @@ const runtimeHint = computed(() => {
         : t('dshMissing.node.hintLocal')
 })
 
+/**
+ * Node 部署 / 切换生效版本：包一层组合式函数，把「部署完要同时刷新环境探测与已装列表」补上
+ * （选择器上的「已安装 / 当前使用」标记依赖后者），并接管取消按钮状态。
+ */
 async function deployOnce(version?: string): Promise<boolean> {
-    if (deployingNode.value) return false
-    deployingNode.value = true
     canceling.value = false
     try {
-        const r = await window.api.post('/node/deploy', { body: version ? { version } : {} })
-        if (r.canceled) {
-            // 用户主动取消：不算失败，也不弹错误提示。
-            ElMessage.info(r.message || t('dshMissing.cancel'))
-            return false
-        }
-        if (r.ok) {
-            // 装完把选择器定到刚装好的版本：否则列表刷新后它可能停在别处，
-            // 「已安装 / 当前使用」标记看起来就像打错了地方。
-            if (version) nodeVersion.value = version
-            ElMessage.success(r.message)
-            return true
-        }
-        ElMessage.error(r.message)
-        return false
-    } catch (err) {
-        ElMessage.error(errorMessage(err))
-        return false
+        const ok = await nodeWiz.deployOnce(version, t('dshMissing.cancel'))
+        return ok
     } finally {
-        deployingNode.value = false
         canceling.value = false
-        // 操作已结束：刷新快照把进度收起（事件流不含结束信号）。
-        await refreshOperations()
         // 部署完要同时刷新「环境探测」与「已装 / 生效列表」—— 选择器上的标记依赖后者。
         await Promise.all([probeEnv(), loadInstalledNode()])
     }
 }
-/**
- * 把已安装的本地 Node 版本切成「当前生效」。
- * 已装过的版本不该再走一遍下载 —— 那既慢又没必要，用户想要的只是切过去。
- */
+
+/** 把已安装的本地 Node 版本切成「当前生效」（已装过则不重下）。 */
 async function activateNode(version: string): Promise<boolean> {
-    try {
-        const r = await window.api.put('/versions/:kind/active', { params: { kind: 'node' }, body: { version } })
-        if (!r.ok) {
-            ElMessage.error(r.message)
-            return false
-        }
-        ElMessage.success(r.message)
-        await Promise.all([loadInstalledNode(), probeEnv()])
-        return true
-    } catch (err) {
-        ElMessage.error(errorMessage(err))
-        return false
-    }
+    const ok = await nodeWiz.activate(version)
+    if (ok) await probeEnv()
+    return ok
 }
 
-/**
- * 确保「本地 Node」就绪：选中的版本已安装就切为生效版本（不重下），
- * 否则按选中版本部署；未选版本时由主进程默认部署最新 LTS。
- */
+/** 确保「本地 Node」就绪：已装就切生效版本，否则按选中版本部署。 */
 async function ensureLocalNode(): Promise<boolean> {
     if (nodeVersion.value && selectedNodeInstalled.value) {
         return selectedNodeIsActive.value || activateNode(nodeVersion.value)
     }
     return deployOnce(nodeVersion.value || undefined)
-}
-
-/** 确保「程序内置」npm 就绪：已缓存直接通过，未缓存 / 指定版本则先下载（带进度）再进入下一步。 */
-async function ensureNpmOnce(version?: string): Promise<boolean> {
-    canceling.value = false
-    npmPreparing.value = true
-    try {
-        const r = await window.api.post('/npm/ensure', { body: version ? { version } : {} })
-        if (r.canceled) {
-            // 用户主动取消：不算失败，也不弹错误提示。
-            ElMessage.info(r.message || t('dshMissing.cancel'))
-            return false
-        }
-        if (r.ok) {
-            npmBundledPresent.value = true
-            return true
-        }
-        ElMessage.error(r.message)
-        return false
-    } catch (err) {
-        ElMessage.error(errorMessage(err))
-        return false
-    } finally {
-        npmPreparing.value = false
-        canceling.value = false
-        await refreshOperations()
-    }
-}
-
-/** 探测「程序内置」npm 是否已缓存：决定第 2 步是否需要先下载。 */
-async function loadNpmStatus(): Promise<void> {
-    try {
-        npmBundledPresent.value = (await window.api.get('/npm/status')).bundled.present
-    } catch {
-        npmBundledPresent.value = false
-    }
-}
-
-/**
- * 拉取可部署的 Node 版本（新 → 旧）；默认只 LTS，勾选后含 Current，默认选中最新一项。
- *
- * 这里用共享 promise 去重：watch(step) 与调用方可能几乎同时请求，早退会让
- * 「简易安装」拿到还没填好的版本列表。并发调用共享同一次请求、都能等到结果。
- */
-let nodeVersionsPromise: Promise<void> | null = null
-async function loadNodeVersions(): Promise<void> {
-    if (nodeVersionsPromise) return nodeVersionsPromise
-    const p = (async () => {
-        nodeVersionsLoading.value = true
-        try {
-            const list = await window.api.get('/node/versions', { query: { includeNonLts: nodeIncludeNonLts.value } })
-            nodeVersions.value = list
-            if (!list.includes(nodeVersion.value)) nodeVersion.value = list[0] ?? ''
-        } catch {
-            nodeVersions.value = []
-        } finally {
-            nodeVersionsLoading.value = false
-        }
-    })().finally(() => {
-        if (nodeVersionsPromise === p) nodeVersionsPromise = null
-    })
-    nodeVersionsPromise = p
-    return p
-}
-
-/** 拉取可下载的 npm 版本（新 → 旧）；是否含预发布由开关决定，默认选中最新一项。 */
-async function loadNpmVersions(): Promise<void> {
-    if (npmVersionsLoading.value) return
-    npmVersionsLoading.value = true
-    try {
-        const list = await window.api.get('/npm/versions', { query: { prerelease: npmIncludePre.value } })
-        npmVersions.value = list
-        if (!list.includes(npmVersion.value)) npmVersion.value = list[0] ?? ''
-    } catch {
-        npmVersions.value = []
-    } finally {
-        npmVersionsLoading.value = false
-    }
 }
 
 /** 取消正在进行的下载 / 解压；按钮在安装流程结束前保持禁用。 */
@@ -559,28 +391,6 @@ async function runCurrentStep(): Promise<void> {
 }
 
 /**
- * 测速选出最快的镜像源。全部失败时返回 null（调用方保留用户当前设置，不瞎选）。
- * 结果写进 `speedResult` 供界面展示每个源的实测延迟。
- */
-async function pickFastestRegistry(): Promise<string | null> {
-    speedTesting.value = true
-    try {
-        const r = await window.api.post('/registries/speed')
-        speedResult.value = r
-        if (r.fastest) installReg.value = r.fastest
-        return r.fastest
-    } catch {
-        // 测速本身失败不该阻断安装：沿用当前设置继续。
-        // 但结果要留一个「空的成功结构」而不是 null —— 否则结果框整个消失，
-        // 用户既看不到「测速失败」的说明，也不知道为什么源没被自动切换。
-        speedResult.value = { samples: [], fastest: null }
-        return null
-    } finally {
-        speedTesting.value = false
-    }
-}
-
-/**
  * 选 dsh 版本：**优先最新正式版，没有正式版时退回最新测试版**。
  *
  * 无需自己判两次：主进程的 `filterByPrerelease` 在「过滤掉预发布后为空」时会自动回退到全量，
@@ -708,9 +518,8 @@ watch([installPrerelease, installReg], () => {
     if (step.value === 4) void loadInstallVersions()
 })
 
-// 「包含非 LTS（Current）」/「包含预发布」切换后重新拉取对应版本列表。
+// 「包含非 LTS（Current）」切换后重新拉取版本列表（npm 的预发布开关由 useWizardNpm 自持）。
 watch(nodeIncludeNonLts, () => void loadNodeVersions())
-watch(npmIncludePre, () => void loadNpmVersions())
 
 const quitShell = (): void => void window.api.post('/app/quit')
 

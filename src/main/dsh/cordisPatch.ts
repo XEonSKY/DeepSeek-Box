@@ -1,5 +1,6 @@
 import { isMap, isSeq, parseDocument } from 'yaml'
 import type { YAMLMap, YAMLSeq } from 'yaml'
+import { asRecord } from '@shared/json'
 
 /**
  * dsh 的 **Cordis patch 层**（`cordis.patch.yml`）纯文本助手。
@@ -40,11 +41,6 @@ export interface PatchEntry {
     disabled: boolean | null
     /** 该层的 config 覆盖；null = 该层没声明。 */
     config: Record<string, unknown> | null
-}
-
-/** 只接受「普通对象」：数组与 null 都不算。 */
-function asRecord(v: unknown): Record<string, unknown> | null {
-    return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 }
 
 /** 从一条原始条目里读出我们关心的字段；无 id（例如纯 insert 行）返回 null。 */

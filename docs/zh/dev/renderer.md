@@ -7,11 +7,14 @@
 | 路径 | 说明 |
 |---|---|
 | `App.vue` | 根组件：标题栏、webview 容器、设置覆盖层、状态栏、全局提示与迁移进度框 |
-| `views/` | 页面：`WebHost.vue`（dsh Web UI / 网页）、`NewTab.vue`（内置导航页）、`LogView.vue`（终端） |
-| `views/settings/` | 设置面板：General / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / Webview / About |
+| `views/` | 页面：`WebHost.vue`（dsh Web UI / 网页 / 新建标签页宿主）、`NewTabFallback.vue`（新建标签页兜底页，扩展停用时用）、`LogView.vue`（终端） |
+| `views/settings/` | 设置面板：General / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / About |
 | `views/settings/ModelsPanel.vue` | 「模型」页：同意流程 + 模型 / 供应商 / 余额三列与「刷新全部」 |
+| `views/settings/use{Node,Npm,Pnpm}Env.ts` | 「环境」页三档各自的状态与动作；`EnvPanel.vue` 只剩模板与加载编排 |
 | `views/settings/actions/` | 设置动作：`dshActions.ts`（启停 / 安装向导）、`dshManageActions.ts`（DeepSeek Harness 版本管理） |
 | `components/` | `DshWizard.vue`（四步安装向导）、`StatusBar.vue`（底部状态栏：余额与版本徽标）、`TitleBar.vue` 等 |
+| `components/wizard/` | 向导三块自持逻辑：`useWizardRegistry.ts`（镜像源测速）、`useWizardNpm.ts`（内置 npm 准备）、`useWizardNode.ts`（本地 Node 与部署） |
+| `shell/state.ts` | 外壳级跨组件共享状态：`dshMissing` 与 `shellMeta` / `loadShellMeta()` |
 | `lib/` | 主题、格式化、更新状态、locale 等工具（标签相关在 `shell/`） |
 | `lib/update.ts` | 版本更新状态中心：`versionStatus` / `checkDsh` / `checkAllUpdates` / `applyAppUpdateEvent` / `hasUpdate` |
 | `views/settings/useSettingsStore.ts` / `views/settings/settingsStore.ts` | Pinia 状态与设置镜像 |

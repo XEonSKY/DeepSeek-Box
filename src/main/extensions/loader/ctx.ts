@@ -291,11 +291,6 @@ export function createContext(options: {
     }
 }
 
-/** 当前已提供的能力快照（供加载器在构造 ctx 前收集动作表）。 */
-export function capabilitySnapshot(): Array<{ name: string; owner: string }> {
-    return capability.snapshot()
-}
-
 /** 停止某个扩展时：撤销它的全部贡献与能力。 */
 export function releaseOwner(owner: string): { contributions: number; capabilities: number } {
     const capabilities = capability.revoke(owner)

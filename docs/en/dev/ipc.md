@@ -100,7 +100,7 @@ Event names are still `domain:action` (`settings:changed`, `configdir:migration`
 |---|---|---|
 | `settings.ts` | `GET` / `PUT /settings`, `POST /settings/apply`, `/settings/reset`, `GET` / `PUT /locale`, `/logs`, `/operations` | App settings, UI language, logs and the in-progress operations snapshot |
 | `configdir.ts` | `GET` / `PUT /config-dir`, `POST /config-dir/revert`, `/config-dir/migration`, `DELETE /config-dir/migration`, `/models/*`, `/icons*` | Config-dir change / migration / cancel, models & balances, app icon |
-| `dsh.ts` | `GET /dsh/*`, `POST /dsh/start`, `/stop`, `/restart`, `/update`, `/install`, `/reload`, `DELETE /dsh` | Install / update / uninstall / run state / version management / plugins |
+| `dsh.ts` | `GET /dsh/*`, `POST /dsh/start`, `/stop`, `/restart`, `/update`, `/install`, `/reload`, `DELETE /dsh` | Install / update / uninstall / run state / version management |
 | `env.ts` | `GET /env`, `/node/*`, `/npm/*`, `/pnpm/*`, `POST /node/deploy`, `PUT /versions/:kind/active` | Node / npm / pnpm deployment, status, versions |
 | `appupdate.ts` | `GET /app/meta`, `/app/update/state`, `/slots`, `POST /app/update/check`, `/rollback`, `/restart`, `/app/relaunch`, `/app/quit` | Check / trigger / version slots / rollback / restart-quit |
 | `shell.ts` | `GET /shell/meta`, `POST /shell/open-url`, `/focus-core`, `/move-tab`, `PUT /shell/title`, `/windows/*`, `/dialog/*` | Multi-window and tab transfer, window controls, dialogs |

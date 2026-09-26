@@ -77,11 +77,6 @@ export function revokeAll(owner: string): number {
     return owned.length
 }
 
-/** 某个扩展当前挂着的贡献（界面展示与排查用）。 */
-export function listByOwner(owner: string): Array<{ kind: string; key: string }> {
-    return items.filter((i) => i.owner === owner).map((i) => ({ kind: i.kind, key: i.key }))
-}
-
 /** 某类贡献的全部 key（用于检查冲突与调试）。 */
 export function listByKind(kind: string): Array<{ owner: string; key: string }> {
     return items.filter((i) => i.kind === kind).map((i) => ({ owner: i.owner, key: i.key }))

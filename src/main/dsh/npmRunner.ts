@@ -9,6 +9,7 @@ import { nodeRuntimeFor, nodeRuntimeForCfg, localNodeNpmCli, findSystemNpm, path
 import { localNodeDir } from './nodeenv'
 import { probeVersion, runChild } from './child'
 import { removeQuietly } from '../kernel/treeops'
+import { extractTar, findSystemTar } from './tarutil'
 import { compareVersions, stripV, sortVersionsDesc } from './semver'
 import { pushLog } from './logbus'
 import { downloadFile } from './download'
@@ -232,28 +233,12 @@ export async function npmStatus(): Promise<NpmStatus> {
     return { latest, system: mk(system), bundled: mk(bundled), localnode: mk(localnode) }
 }
 
-/** Locate a system `tar` (Windows ships tar.exe in System32). */
-function findSystemTar(): string | null {
-    const dirs = pathEnv()
-    const names = IS_WIN ? ['tar.exe', 'tar'] : ['tar']
-    if (IS_WIN) dirs.push(path.join(process.env.WINDIR || 'C:\\Windows', 'System32'))
-    return findInDirs(dirs, names) ?? null
-}
-
 /**
  * 确保「程序内置」npm 可用：把 tarball 解压到 `<configDir>/npm/<版本>/` 并设为生效版本。
  *
  * `version` 指定要装哪个版本；不传时：已有生效版本直接复用，否则拉最新版。
  * cpu/取消经 signal 传递（下载与解压阶段都可中止）。
  */
-/** 解压 tar.gz 到目标目录；取消时杀掉子进程。 */
-function extractTar(tgz: string, dest: string, signal?: AbortSignal): Promise<boolean> {
-    const tar = findSystemTar()
-    if (!tar) return Promise.resolve(false)
-    pushLog('o', '[Manager] 解压 npm 压缩包…')
-    return runChild(tar, { argv: ['-xzf', tgz, '-C', dest], onStderr: (s) => pushLog('e', s) }, signal).then((r) => r.ok)
-}
-
 async function ensureBundledNpm(
     cfg: Settings,
     version?: string,
@@ -315,7 +300,7 @@ async function ensureBundledNpm(
         await removeQuietly(stage)
         return { ok: false, message: errorMessage(err) }
     }
-    const okExtract = await extractTar(tgz, destDir, signal)
+    const okExtract = await extractTar(tgz, destDir, 'npm', signal)
     await removeQuietly(stage)
     if (signal?.aborted) {
         await removeVersion('npm', target)

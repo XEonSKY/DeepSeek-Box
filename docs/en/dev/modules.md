@@ -28,7 +28,7 @@ in `ApiRoutes` (`src/shared/api.ts`) — a wrong path is a **compile-time error*
 | Module | Endpoints covered |
 |---|---|
 | `settings.ts` | `/settings*`, `/locale`, `/logs`, `/operations` |
-| `dsh.ts` | `/dsh*` (start/stop / update / install / plugins) |
+| `dsh.ts` | `/dsh*` (start/stop / update / install) |
 | `env.ts` | `/env`, `/node/*`, `/npm/*`, `/pnpm/*`, `/versions/*`, `/registries/speed`, `/installs/cancel` |
 | `shell.ts` | `/shell/*`, `/windows/*`, `/dialog/*`, `/hotkeys/state`, `/webview/info` |
 | `tabdrag.ts` | `/tab-drag*` (cross-window tab dragging) |
@@ -75,7 +75,7 @@ in `ApiRoutes` (`src/shared/api.ts`) — a wrong path is a **compile-time error*
 | `downloader.ts` | Download **fallback** | `downloadFile` (HTTP Range segmentation, deduplication, cancellation); reached only when the extension is disabled / safe mode |
 | `child.ts` | Common child-process flow (pure orchestration) | spawn → register → collect logs → cancellable → settle exactly once |
 | `logbus.ts` | Log ring buffer + child-process registry | Independent of dsh service state; shared by the whole dsh chain |
-| `plugins.ts` / `pluginManifest.ts` | dsh plugin (profile bundle) management | Reads / toggles `dsh.profile.bundles`, installs / removes via `dsh plugin --profile`; manifest parsing is pure logic |
+| `pluginManifest.ts` | dsh profile / bundle manifest **read-only** | No fs, no electron; `readBundleList` / `readBundlePatchFiles` / `requiredBundles` feed `dshPatchLayers.ts` to compose the effective config layers |
 | `ptcNode.ts` / `ptcNodeSync.ts` | Point the dsh PTC worker at a real node | Writes `nodeExecutable` into the home-level patch layer; fixes the crash when the worker clears the env of an electron.exe-as-Node |
 | `installs.ts` | Versioned directories | `installRoot` / `versionDir` / `activeVersion` / `setActiveVersion` / `resolveActive` / `isVersionComplete` / `listInstalled` / `removeVersion` / `migrateLegacyInstalls`; `InstallKind` is `node` / `npm` / `pnpm` / `dsh` |
 | `tools.ts` | Path resolution | `localNodeExecPath` / `nodeRuntimeFor` / `resolveDshModule` / `findSystemNode` |

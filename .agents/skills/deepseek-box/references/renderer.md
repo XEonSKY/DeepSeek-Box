@@ -9,15 +9,19 @@
 | `App.vue` | 根组件：标题栏、webview 容器、设置覆盖层、状态栏、全局提示与迁移进度框 |
 | `views/WebHost.vue` | dsh Web UI / 网页宿主 |
 | `views/SetupView.vue` | 初始化页（安装向导；`/setup` 路由，与设置页同级） |
-| `views/NewTab.vue` | 内置导航页 |
+| `views/NewTabFallback.vue` | 新建标签页**兜底页**（扩展 `xeonsky.browser` 停用时才渲染；正常由扩展的 `NewTab.vue` 贡献） |
 | `views/LogView.vue` | 终端（`@xterm/xterm`） |
-| `views/settings/*.vue` | 设置面板：General / Appearance / Network / Env / Dsh / Plugins / Models / Log / Hotkeys / Webview / About。**pnpm 的来源与版本在「环境」页**（与 npm 同构：折叠卡片 + 标签即来源），插件页只管装哪些插件 |
+| `views/settings/*.vue` | 设置面板：General / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / About。**pnpm 的来源与版本在「环境」页**（与 npm 同构：折叠卡片 + 标签即来源）。原先的「插件」页已随 dsh 插件管理体系一并移除；「Webview」页已随 webview 功能迁出：浏览器标识（UA）现由内置扩展 `xeonsky.browser` 用自己的设置面板承载（`src/extensions/xeonsky.browser/BrowserPanel.vue`，经 `renderer/src/extensions/panels.ts` 登记） |
 | `views/settings/actions/` | `dshActions.ts`（启停 / 向导）、`dshManageActions.ts`（版本管理） |
 | `views/settings/useSettingsStore.ts`、`settingsStore.ts` | Pinia 设置镜像与写回 |
+| `views/settings/use{Node,Npm,Pnpm}Env.ts` | 「环境」页三档各自的**状态与动作**（`useNodeEnv` / `useNpmEnv` / `usePnpmEnv`）；`EnvPanel.vue` 只剩模板与一次加载编排 |
+| `views/settings/useInstallCancel.ts` | 「取消当前在途安装」的共享实现（dsh / node / npm / pnpm 共用） |
 | `components/` | `DshWizard.vue`（安装向导）、`WizardSteps.vue`（自绘步骤条）、`StatusBar.vue`、`TitleBar.vue`、`WindowControls.vue`、`ProxyFields.vue`、`ThreadsField.vue` |
+| `components/wizard/` | 向导的三块自持逻辑：`useWizardRegistry.ts`（镜像源测速）、`useWizardNpm.ts`（内置 npm 准备）、`useWizardNode.ts`（本地 Node 版本与部署） |
 | `lib/` | 主题、格式化、更新状态、locale、图标等工具 |
 | `lib/update.ts` | 版本状态中心：`versionStatus` / `checkDsh` / `checkAllUpdates` / `applyAppUpdateEvent` |
-| `shell/` | 路由、标签、窗口元信息、标签拖拽、dsh 缺失状态、进行中操作（`router` / `tabs` / `shellmeta` / `useTabDrag` / `viewnav` / `dshstate` / `progressStore`） |
+| `shell/` | 路由、标签、窗口元信息、标签拖拽、外壳共享状态、进行中操作（`router` / `tabs` / `useTabDrag` / `viewnav` / `state` / `progressStore`） |
+| `shell/state.ts` | 外壳级**跨组件共享状态**：`dshMissing`（dsh 缺失标记）与 `shellMeta` + `loadShellMeta()`（窗口元信息）。原 `dshstate.ts` / `shellmeta.ts` 已并入此文件 |
 | `shell/progressStore.ts` | 「进行中的操作」在渲染层的**唯一**状态源：`startOperationTracking()`（`main.ts` 启动时订阅一次三条进度频道）、`refreshOperations()`（重取主进程快照）、`useOperation(kind)` → `{ op, busy }`。**面板不要自己 `window.api.on` 进度**：面板卸载订阅就没了，切页回来只剩空进度条 |
 | `styles/` | 分层：`base.css`（reset + Element Plus 变量）→ `shared.css` → `settings.css` |
 
@@ -81,8 +85,7 @@
   必须共享的原因。
 - **事件流里没有「结束」信号**，所以操作 `finally` 里要 `refreshOperations()`，否则进度条不会收起来。
 
-`busy` 还兼作「这个种类正在跑」的判据：EnvPanel 的 npm / pnpm / node 三块都靠它，插件页靠
-`pnpm` 与 `dsh-plugin` 两个 kind 判断「是否正在准备 pnpm」。
+`busy` 还兼作「这个种类正在跑」的判据：EnvPanel 的 npm / pnpm / node 三块都靠它判断「是否正在准备」。
 
 ## 主进程别做同步阻塞
 
@@ -151,6 +154,10 @@ async function bootstrap() {
 ## 标签与窗口
 
 标签创建、保活、拖动迁移在 `shell/tabs.ts` 等；核心 / 副窗口角色由主进程 `windowreg.ts` 与渲染层共同决定。跨窗口拖标签用 `/tab-drag` 系列端点，屏幕坐标决定落点。
+
+**新建标签页（`kind === 'newtab'`）是「程序内置标签页视图」，不是 webview**：内容由扩展贡献（`ExtTabContribution.view`），渲染层 `extensions/tabviews.ts` 的 `LOCAL_TAB_VIEWS` 按名字解析本地组件（**只有 builtin / system** 能解析），`WebHost.vue` 用 `defineAsyncComponent(newTabViewLoader())` 挂载；取不到就回落 `views/NewTabFallback.vue`。带 `view` 的贡献**不会**被 `registerExtTabs` 打开成标签页（`isTabViewContribution` 跳过）。
+
+**扩展视图与外壳标签模型交互的唯一通道是 `renderer-api.ts` 的 `extShell`**（`openTab` / `activateFixed` / `goSettings`）—— 扩展不能 import `@/shell/*`。需要新交互**先扩 `extShell`**，不要在扩展里绕主进程发端点（标签模型是渲染层单例）。
 
 ## 新增一个设置面板
 

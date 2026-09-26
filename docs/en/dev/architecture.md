@@ -84,7 +84,9 @@ Main-process entry `src/main/index.ts`:
 
 ## Settings and state propagation
 
-- The single source of truth for app settings is `settings.json` in the config directory; `loadSettings()` performs a **one-off migration** on read, gated by `settingsVersion` (currently 3) — only genuinely old configs get keys renamed / defaults upgraded, so values the user typed later are never rewritten. **Keep the `legacy` check** when touching that normalization logic.
+- The single source of truth for app settings is `settings.json` in the config directory; `loadSettings()` performs a **one-off migration** on read, gated by `settingsVersion` (currently **5**) — only genuinely old configs get keys renamed / defaults upgraded, so values the user typed later are never rewritten. **Keep the `legacy` check** when touching that normalization logic.
+  - v4 moved `webviewUserAgent` into the built-in `xeonsky.browser` extension's data file (`data/extensions/xeonsky.browser/config.json`);
+  - v5 moved `searchEngine` / `shortcuts` there too (new-tab navigation became a tab view contributed by that extension), and dropped `newTabMode` / `newTabUrl` outright. Both steps live in `migrateBrowserPrefs`, which writes **per key** only when the target file lacks it — idempotent, and failures only warn.
 - Saving from the renderer goes through `PUT /settings`: after writing to disk the main process **broadcasts `settings:changed` to every window**; the config-file watcher covers **external edits** only and deliberately stays silent about the app's own writes.
 - So **every component whose state derives from settings must subscribe to `settings:changed`** — missing that subscription shows up as “the change only takes effect after a restart”. The window that initiated the save ignores the echo itself (the settings store's `lastSaveAt`).
 - `PUT /settings` also performs a few idempotent extras: sync the dsh theme, write the launch-at-login entry, refresh the embedded pages' UA / proxy, and apply the app icon.

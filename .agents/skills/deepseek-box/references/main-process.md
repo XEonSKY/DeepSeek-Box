@@ -58,7 +58,7 @@ export default defineModule({
   快照让任何页面取回；② npm / pnpm 共用一个进度通道会串台 → 每条进度都带 `kind`。顺带做节流
   （下载是每块回调一次，全转发会灌几千条 IPC）。**阶段变化与窗口外的进度一定放行**，否则进度条停在半路。
 - **trackedOperation**（同上文件）：`trackedOperation(kind, emit, run)` 把「开表 → 转发节流后的进度 → `finally` 关表」
-  包在四条长任务链路（node 部署 / npm / pnpm / dsh-plugin）外面，成功 / 失败 / 取消都清空。
+  包在三条长任务链路（node 部署 / npm / pnpm）外面，成功 / 失败 / 取消都清空。
   `emit` 是**注入**的（kernel 不认识 `broadcast`，保持纯逻辑可测）；`CHANNEL_OF` 常量把 `kind` 映射到推送通道。
 - **整目录删除**（`kernel/treeops.ts`）：只转发 `dsh/fsutil` 的 `removeTree` / `removeQuietly` /
   `removeQuietlySync` / `readPkgVersion`。**红线**：任何「整目录删除」都从 `treeops` 走，
@@ -83,12 +83,11 @@ export default defineModule({
 | `configmigrate.ts` | 配置目录迁移 | 计划持久化、`scanTree` / `migrateTree`、`rollbackMoves`（**全 async**：逐目录 `setImmediate` 让出事件循环，避免大目录搬迁把界面卡死） |
 | `models.ts` | 模型与余额 | `readModelsInfo(consented, env)` / `readCurrentBalance(consented, env)`；读 dsh 的**合成**配置（`dshPatchLayers`）+ `.credentials.yaml`；**不依赖 electron**（`installNodeModules` 由 `ipc.ts` 注入），密钥只留主进程。两个入口都以 `settings.modelsCredConsent` 为前置：未授权时直接回 `no-consent`，**不读配置、不读凭据文件、不联网**（把关在主进程，不靠渲染层自觉）。缺 dsh 安装（无 bundle 层）时退回只看凭据引用，并区分 `dsh-missing`（提示去装）与 `no-provider`（提示去配） |
 | `ipc.ts` | **装配器**（已瘦身到 ~50 行） | 建 `Router` + `new ModuleRegistry(allModules())` + `mountRoutes`；导出 `registerIpc` / `runModuleReady` / `runModuleQuit`。**不再直接登记端点** |
-| `ui.ts` | 窗口 / 托盘 / 快捷键 | `createShellWindow` / `createTray` / `syncGlobalHotkey` |
+| `ui.ts` | 窗口 / 托盘 / 快捷键 | `createShellWindow` / `createTray` / `syncGlobalHotkey`。**窗口级 webview 机制留在这里**（`buildShellWindow` 的 `webviewTag: true`、`did-attach-webview` 挂右键菜单 / 快捷键、`will-attach-webview` 阻止嵌套、`openWebWindow` / `createPopupWindow`）—— 因外壳内容区全靠 `<webview>` 渲染，属核心通路；其中**纯策略**（弹窗尺寸 / 真弹窗 vs 新标签判定）经 `app/webview.ts` 门面转发到内置扩展 `xeonsky.browser` |
 | `appupdate.ts` | 应用自更新 | 解析 GitHub Releases、后台下载、事件广播；启动守卫 `runBootGuard` / `rollbackAppUpdate` / `startAutoCheckIfEnabled` **均为 async**（内部等 `restorePrevious` / `takeRollbackResult`） |
 | `appslots.ts` | A/B 版本槽 | 归档旧版、生成回退脚本、启动健康守卫。文件操作（`pruneArchives` / `takeRollbackResult` / `pruneRollbackScripts` / `writeRollbackScript` / `restorePrevious` / `canWriteDir`）**全 async** |
 | `bootguard.ts` | 启动守卫判定（**纯逻辑**） | `decideBootGuard`：无记录 / 记录过期 / 计数 / 触发回退 / 放弃回退，五选一 |
-| `webview.ts` | 渲染参数与内嵌页面策略 | 硬件加速、webview UserAgent、代理，以及 `installWebviewPermissionPolicy()`（与 UA 同理，权限处理器**必须在建窗前**装到 `defaultSession`，晚一步先建出来的 webview 就是「未装处理器 = 默认放行一切」） |
-| `webviewPermissionPolicy.ts` | 内嵌页面权限判定（**纯逻辑**） | `decidePermission` / `isTrustedRequestingUrl`（回环地址与 `file:` / `app:` 算可信）/ `PermissionMemory`（会话级「记住选择」，**不落盘**）/ `checkPermission`。判定是**失败即拒绝**：未列入名单的权限（含将来新出现的）一律拒；往名单里加权限等于把一个能力交给任意网页，改之前先读模块头注释 |
+| `webview.ts` | **内核侧内嵌浏览器门面** | 四类导出：`initWebviewSession()` / `reapplyWebviewProxy()`（按约定名查能力槽 `ext:xeonsky.browser` 并转发，查不到就降级并打 warn）、`parsePopupSize()` / `decideOpenAction()`（窗口级**纯策略**转发，查不到回落内核内联兜底）。**注意时机**：`initWebviewSession` 必须在 `startLoader()` 之后、`createShellWindow()` 之前 **await** 调用（权限处理器要在建窗前装好）。UA / 代理 / 权限判定与窗口级纯策略本身已迁到内置扩展 `xeonsky.browser`（`src/extensions/xeonsky.browser/`）；硬件加速更早（ready 前），由 `extensions/preready.ts` 预读 manifest 处理 |
 | `autolaunch.ts` | 开机自启（「启动增强」） | Windows / macOS 走 `app.setLoginItemSettings`，Linux 写 `~/.config/autostart` 的 .desktop |
 | `confirmDialog.ts` | 独立确认子窗口 | 替代内嵌 `ElMessageBox.confirm`：OS 管理焦点与模态，不遮挡页面；外观由渲染层 `ConfirmWindow.vue` 负责 |
 | `rollbackscript.ts` | 回退脚本纯文本构造（**纯逻辑**） | 老实现内联在 appslots.ts 的三个坑逐条规避（不靠 `tasklist | findstr` errorlevel 判存活等） |
@@ -116,8 +115,7 @@ export default defineModule({
 | `downloader.ts` | 下载**兜底**实现 | `downloadFile`（HTTP Range 分段、去重、取消）；扩展不可用时才走到 |
 | `child.ts` | 子进程共同流程（**纯编排**） | spawn → 登记 → 收日志 → 可取消 → 只 settle 一次（原在 npm / 解压三处各写一遍） |
 | `logbus.ts` | 日志环形缓冲 + 子进程登记表 | 不依赖 dsh 服务状态，被整条 dsh 链路共用 |
-| `plugins.ts` | dsh 插件（profile 组合包）管理 | 读取 / 启停 `dsh.profile.bundles`，经 `dsh plugin --profile` 安装 / 卸载 |
-| `pluginManifest.ts` | 插件清单**纯逻辑** | 不碰 fs、不 import electron；文件读写与 pnpm 调用分别在 plugins.ts / pnpmRunner.ts |
+| `pluginManifest.ts` | dsh profile / 组合包清单**纯读取** | 不碰 fs、不 import electron；`readBundleList` / `readBundlePatchFiles` / `requiredBundles` 供 `dshPatchLayers.ts` 合成有效配置层。（插件的增删启停原在此体系内，随「设置 → 插件」页移除） |
 | `ptcNode.ts` / `ptcNodeSync.ts` | 给 dsh PTC（run_code）worker 指定真正的 node | 把 `nodeExecutable` 写进 **home 级** patch 层（home 层压过 profile 层）；修复 electron.exe 冒充 Node 被 dsh worker 清环境后崩溃的问题 |
 | `installs.ts` | 版本化目录 | 见下 |
 | `pnpmEntry.ts` | 内置 pnpm 入口解析（**纯逻辑**） | `pnpmEntryRel` / `pnpmEntryIn` / `isPnpmPackageReady`。⚠️ 入口名随 pnpm 大版本变（12+ = `package/bin/pnpm.mjs`，≤ 11 = `package/bin/pnpm.cjs`），**不要写死文件名**；manifest 的 `bin.pnpm` 在 12 指向根级 sh 脚本，node 跑不了 |
@@ -131,7 +129,8 @@ export default defineModule({
 | `dshHome.ts` | dsh home 与 profile 路径（**纯逻辑**） | `DSH_PROFILE` / `dshHomeDir` / `homePatchFile` / `profilesRoot` / `profileDir` / `hostProfileDir` / `profilePatchFile` / `profileManifestFile`；home 解析语义对齐 dsh 的 `resolveDshHome`（空白覆盖视为未设置、展开 `~`、规范化为绝对路径，改之前先看该文件的注释） |
 | `providers.ts` | 供应商路由与服务商分组（**纯逻辑**） | `collectProviderRoutes` / `groupProviderRoutes` / `routesFromCredentials`（dsh 未安装时的凭据兜底） + `DEEPSEEK_BASE` / `isHttpURL` / `joinURL` / `defaultKeyEnv` |
 | `dshPatchLayers.ts` | 收集 dsh 的**有效** patch 层（**纯逻辑**） | `collectPatchLayers(installNodeModules)`（bundle 层 → profile 层 → home 层）、`composeMountedConfig(layers)`（**条目存在即入表**）。⚠️ dsh 的默认供应商写在 **bundle 层**（`dsh-base` 的 `agent-default-model`，以及只有 id/name、没有 config 的 `llm-deepseek`），只读用户层会让模型页显示「共 0 个供应商」 |
-| `fsutil.ts` | 文件系统助手 | `removeTree` / `removeQuietly`（**均为 async**）、`removeQuietlySync`（只给启动期无法 await 的同步迁移用）、`readPkgVersion`。删除**不跟随符号链接 / Windows 目录联接**（与官方 desktop 的 `removeOwnedDirectory` 同策略）。⚠️ **新增的「整目录删除」一律走 kernel 的 `treeops.ts`（转发这几个函数）**，不要直接写 `fs.rmSync(recursive)`：dsh / pnpm 的安装目录里到处是链接；且一个版本目录动辄几万个小文件，**同步删会把主进程独占到界面卡死**（这正是「操作时整个程序会卡住」的成因之一）。实测 Node 的 `rmSync` 目前也不跟随链接，因此「不跟随」是**把语义写死 + 回归护栏**，不是修某个现存 bug |
+| `fsutil.ts` | 文件系统助手 | `removeTree` / `removeQuietly`（**均为 async**）、`removeQuietlySync`（只给启动期无法 await 的同步迁移用）、`readPkgVersion`、`pathExists`。删除**不跟随符号链接 / Windows 目录联接**（与官方 desktop 的 `removeOwnedDirectory` 同策略）。⚠️ **新增的「整目录删除」一律走 kernel 的 `treeops.ts`（转发这几个函数）**，不要直接写 `fs.rmSync(recursive)`：dsh / pnpm 的安装目录里到处是链接；且一个版本目录动辄几万个小文件，**同步删会把主进程独占到界面卡死**（这正是「操作时整个程序会卡住」的成因之一）。实测 Node 的 `rmSync` 目前也不跟随链接，因此「不跟随」是**把语义写死 + 回归护栏**，不是修某个现存 bug |
+| `tarutil.ts` | 系统 tar 的定位与调用 | `findSystemTar` / `extractTar(tgz, dest, label, signal)`。内置 npm 与 pnpm 都是「下载 tarball → 解压到版本目录」，原先两个 runner 各抄一份，现收敛于此（`label` 只用于日志前缀） |
 
 ## settings.ts 关键导出（改设置必看）
 
@@ -151,7 +150,7 @@ export default defineModule({
 <配置目录>/
 ├─ node/<版本>/           Node 运行时（含自带 npm）
 ├─ npm/<版本>/package/    应用代管的内置 npm
-├─ pnpm/<版本>/package/   应用代管的内置 pnpm（dsh 插件安装用）
+├─ pnpm/<版本>/package/   应用代管的内置 pnpm（dsh 自身命令如 `dsh plugin` 用）
 └─ dsh/<版本>/            内置 DeepSeek Harness
 ```
 

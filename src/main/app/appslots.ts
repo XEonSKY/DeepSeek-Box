@@ -5,6 +5,7 @@ import { app } from 'electron'
 import type { AppSlotRecord, AppSlotsState } from '@shared/types'
 import writeFileAtomic from 'write-file-atomic'
 import { mt } from './settings'
+import { pathExists } from '../kernel/treeops'
 import { buildPosixRollbackScript, buildWindowsRollbackScript } from './rollbackscript'
 
 /**
@@ -479,14 +480,4 @@ export async function restorePrevious(): Promise<RollbackResult> {
         return { ok: false, message: mt('m.appUpdate.rollbackFail'), version: null }
     }
     return { ok: true, message: mt('m.appUpdate.rollbackStarted', { version: rec.version }), version: rec.version }
-}
-
-/** 异步判断路径是否存在。 */
-async function pathExists(p: string): Promise<boolean> {
-    try {
-        await fs.promises.access(p)
-        return true
-    } catch {
-        return false
-    }
 }

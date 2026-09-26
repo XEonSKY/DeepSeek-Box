@@ -104,13 +104,24 @@ manifest id 与已发现扩展重复，三者任一命中即记 skipped。**7-Zi
 `ctx.ts` 本身不碰 fs。内置 / 系统扩展同样有数据目录（它们的 `dir` 是源码路径，
 打包后在磁盘上不存在 —— 需要落盘的东西一律用 `dataDir`，如 `xeonsky.zip` 的 config.json）。
 
-**系统扩展 id 用 `system.` 前缀**（`system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui`），
+**系统扩展 id 用 `system.` 前缀**（`system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui` / `system.webview` / `system.extmanage`），
 与外部扩展能力名 `ext:<extId>` 对仗。注意**能力名是裸名**（`fs` / `net` / ...，见
 `@shared/extensions` 的 `SysCapability`），与系统扩展 id 是两层 —— 改 id 不影响扩展申请能力的写法。
+`system.webview` 是新增的第六域：把 `defaultSession` 的 UA / 代理 / 权限处理器包装出来，
+目前唯一消费者是内置扩展 `xeonsky.browser`（webview 功能从内核迁出后只能经这条能力触达内核）。
+`system.extmanage` 是第七域：包装加载器的 `reloadExt` / `reloadAllLoader` / `info`，即「重载扩展 /
+列扩展」—— 给扩展生态内部协作（改完代码立刻生效），与内核管理路由 `modules/extensions.ts`
+调用同一份加载器实现（不存在两套行为；基础管理仍走内核路由，因为安全模式下也要可用）。
 `system.net` 现有三动作：`fetch` / `fetchJson`（只回文本）+ **`stream`**（返回 Node
 `Readable`，`fetch → Readable.fromWeb`，可带 `Range` 与 `AbortSignal`，代理档位只开放
 `app` / `npm` / `node`）。**`download` 动作已移除** —— 下载能力整体迁到内置扩展
 `xeonsky.download`，需要下载的扩展请申请 `ext:xeonsky.download` 并调它的 `download`。
+
+**启动前配置（`manifest.preReady`）**：Electron 有一批设置必须在 `app.whenReady()` **之前**
+决定（典型 `app.disableHardwareAcceleration()`），而扩展激活在 ready 之后。解法是内核在 ready 前
+**预读静态扩展的 manifest** 并应用（`src/main/extensions/preready.ts`，直接读 `systemExtensions` /
+`builtinExtensions` 两张常量表，**不经加载器**）。只有内置 / 系统扩展能申报（外部扩展在磁盘上、
+信任度不足）；硬件加速取「用户设置禁用」与「扩展申报禁用」的**或**。
 
 **下载能力在内置扩展 `xeonsky.download`**（`src/extensions/xeonsky.download/`）：
 `engine.ts`（分段 / 跨会话断点续传 / 令牌桶限速 / 重试 / 大小校验）+ `main.ts`
@@ -147,13 +158,18 @@ npm / pnpm）走**门面** `dsh/download.ts`：它按约定名查能力槽，查
 - 核心窗口承载三个固定站（dsh Web UI / 网页对话 / 用量充值）；核心窗口登记与接管见 `src/main/app/windowreg.ts` 与渲染层 `src/renderer/src/shell/tabs.ts`。
 - 副窗口由「在新窗口打开」创建，标签可拖入 / 拖出；核心窗口关闭后由最早的副窗口接管。
 - 内嵌页面用 `<webview>`；地址栏只在动态标签显示，协议 / 搜索分流在渲染层。
-- **内嵌页面里跑的是任意站点**，所以 `defaultSession` 上装了一层权限策略（`app/webviewPermissionPolicy.ts`）：本机回环 / `file:` 的界面（含 dsh 自己的 `127.0.0.1`，它的实验性语音输入要用麦克风）放行；外部站点只放行常规浏览所需，设备与隐私类弹系统询问，其余拒绝；HID / 串口 / USB 与屏幕共享另行单独关掉。**放宽任何一档之前先想清「这是把一个能力交给任意网页」。**
+- **内嵌页面里跑的是任意站点**，所以 `defaultSession` 上装了一层权限策略 —— 该策略现已随 webview 功能迁入内置扩展 **`xeonsky.browser`**（`src/extensions/xeonsky.browser/main.ts` 的 `decidePermission` / `isTrustedRequestingUrl` / `PermissionMemory` / `checkPermission`）。判定规则未变：本机回环 / `file:` 的界面（含 dsh 自己的 `127.0.0.1`，它的实验性语音输入要用麦克风）放行；外部站点只放行常规浏览所需，设备与隐私类弹系统询问，其余拒绝；HID / 串口 / USB 与屏幕共享另行单独关掉。**放宽任何一档之前先想清「这是把一个能力交给任意网页」。**
+- 内核只留**机制**：系统扩展 `system.webview` 把 `defaultSession` 的 UA / 代理 / 权限处理器包装成 `webview` 能力；`app/webview.ts` 是内核侧门面（按约定名查能力槽 `ext:xeonsky.browser` 转发，查不到降级）。硬件加速必须早于 `app.whenReady()`，由内核在 ready 前**预读扩展 manifest 的 `preReady`** 落地（`src/main/extensions/preready.ts`）。
+- **窗口级 webview 机制仍在内核 `app/ui.ts`**：`webviewTag: true`、`did-attach-webview`（挂右键菜单 / 快捷键）、`will-attach-webview`（阻止嵌套）、`openWebWindow` / `createPopupWindow`。原因：外壳**整个内容区（含 dsh Web UI 固定站）都靠 `<webview>` 渲染**（`renderer/views/WebHost.vue` → `useWebviews`），属核心通路，交给可停用的扩展会导致「停用即白屏」。迁出的只有**纯策略**：弹窗尺寸解析与「真弹窗 vs 应用内新标签 vs 系统浏览器」判定在 `xeonsky.browser`，内核经 `app/webview.ts` 的 `parsePopupSize` / `decideOpenAction` 查询（扩展不可用时回落内核内联兜底）。
+- **打开外部链接只有一个出口**：`src/main/app/openlink.ts` 的 `openExternalSafe(url)`（协议白名单 `http/https/mailto/tel/sms`）。内嵌页面里跑的是任意站点，`window.open('file:...')` 之类会拉起系统处理程序，所以**不要**在别处直接调 `shell.openExternal`；被拒时只 warn 不抛。
+- **新建标签页 = 程序内置标签页导航**（不是 webview）：标签控制点新增 `view` 字段（`ExtTabContribution.view`，`url` 变可选），渲染层 `extensions/tabviews.ts` 的 `LOCAL_TAB_VIEWS` 按名字解析本地组件（**只有 builtin / system 能解析** —— 外部扩展注入组件等于在外壳上下文执行任意代码）。`registerExtTabs` / `openExtTab` 会**跳过**带 `view` 的贡献（它只是视图声明，不打开成标签页）；`WebHost.vue` 渲染 `kind === 'newtab'` 时用 `newTabViewLoader()` 取扩展视图，取不到回落外壳的 `views/NewTabFallback.vue`。当前贡献方是 `xeonsky.browser` 的 `NewTab.vue`。
+- **地址栏 / 导航页的输入判定在扩展**：内核只暴露 `POST /shell/resolve-input`（地址栏：能当网址就当网址，否则拼搜索引擎）与 `POST /shell/resolve-target`（导航页跳转框：**不猜搜索**，非网址一律补 `https://`），二者都由 `app/webview.ts` 门面转发到扩展动作，返回 `ResolveResult = { kind: 'url' | 'external' | 'none'; url?: string }`。扩展停用时门面回落 `fallbackResolve`（一律 `external`）。
 - 窗口级操作（缩放 / 最小化 / 关闭 / 对话框）从 `ctx.event.sender` 反查发起请求的壳窗口，**不要用全局主窗口**。
 
 ## 数据与配置位置
 
 - **应用设置**：配置目录下 `settings.json`（不是 Electron userData）。
-- **dsh 的偏好与插件配置**：0.1.7 起全部落在 **Cordis patch 层**，没有 `settings.yaml`：
+- **dsh 的偏好与组合包配置**：0.1.7 起全部落在 **Cordis patch 层**，没有 `settings.yaml`：
   - **profile 层** `$DSH_HOME/profiles/<profile>/cordis.patch.yml` —— 该 profile 的用户覆盖，dsh UI 的设置表单也写这里（Box 承载 `web`）；
   - **home 层** `$DSH_HOME/cordis.patch.yml` —— 对所有 profile 生效且**优先级更高**，放机器级覆盖（如 PTC 的 `nodeExecutable`）；
   - 旧的 `~/.dsh/settings.yaml` 由 dsh 一次性导入进对应条目后改名为 `settings.yaml.imported`，Box 不再读写它。
@@ -176,12 +192,13 @@ npm / pnpm）走**门面** `dsh/download.ts`：它按约定名查能力槽，查
 
 - 主进程所有 HTTP 走 `httpFetch(scope, url, init)`（`src/main/dsh/http.ts`）；未启用代理时回落到全局 `fetch`。
 - `proxyScope` 六个互不牵连的档位：`app`（主进程自身联网：模型 / 余额 + 内嵌网页）、`update`（应用自更新）、`dsh`（dsh 子进程）、`npm`（安装 / 下载）、`node`（Node 下载部署）、`registry`（版本列表 / 更新检查）。
-- 落点三处：`app` → `models.ts` + `app/webview.ts`、`app/appupdate.ts`；`dsh` → `dsh.ts` 注入的代理环境变量；`npm` / `node` / `registry` → `npmRunner.ts`、`nodeenv.ts`、`manage.ts`。三处共用 `proxyConfigFor()`。
+- 落点三处：`app` → `models.ts` + 内嵌网页（经 `app/webview.ts` 门面转发到内置扩展 `xeonsky.browser`，后者调能力面 `webview.applyProxy`）、`app/appupdate.ts`；`dsh` → `dsh.ts` 注入的代理环境变量；`npm` / `node` / `registry` → `npmRunner.ts`、`nodeenv.ts`、`manage.ts`。三处共用 `proxyConfigFor()`。
 - 代理分支只在「启用代理」时走到，改完需真机验证。
 
 ## 设置与状态传播
 
-- 单一来源：配置目录 `settings.json`；`loadSettings()` 读取时按 `settingsVersion`（当前 3）做**一次性迁移**。
+- 单一来源：配置目录 `settings.json`；`loadSettings()` 读取时按 `settingsVersion`（当前 **5**）做**一次性迁移**。
+- **可选功能迁出设置结构是既定方向**：功能一旦独立成扩展，它的设置也随之搬进扩展数据目录（`<configDir>/data/extensions/<id>/config.json`），内核 `Settings` 里**不保留**该字段 —— 否则停用扩展后会留下失效项。先例：`webviewUserAgent`（v4）与 `searchEngine` / `shortcuts`（v5）都搬到了 `xeonsky.browser`，`migrateBrowserPrefs` **逐键**判断目标文件缺键才写（幂等、失败只 warn）。新增这类迁移时照此模式。
 - 渲染层保存走 `PUT /settings`：主进程落盘后**广播 `settings:changed` 给所有窗口**；文件监听只负责**外部改动**，对程序自身写入刻意静默。
 - **凡是从设置派生状态的组件都要订阅 `settings:changed`**；发起保存的窗口忽略这次回放（设置 store 的 `lastSaveAt`）。
 - `PUT /settings` 顺带做幂等操作：同步 dsh 主题、写开机自启、更新内嵌网页 UA 与代理、应用程序图标。

@@ -76,7 +76,9 @@ Electron 44 · electron-vite 6 · Vite 8（rolldown 内核）· Vue 3 · TypeScr
 
 ## 设置与状态传播
 
-- 应用设置的单一来源是配置目录下的 `settings.json`；`loadSettings()` 读取时做**一次性迁移**，由 `settingsVersion`（当前 3）控制——只有真正的老配置才改键名 / 升级默认值，用户后来手填的值不会被反复改写。改归一化逻辑时**必须保留 `legacy` 判断**。
+- 应用设置的单一来源是配置目录下的 `settings.json`；`loadSettings()` 读取时做**一次性迁移**，由 `settingsVersion`（当前 **5**）控制——只有真正的老配置才改键名 / 升级默认值，用户后来手填的值不会被反复改写。改归一化逻辑时**必须保留 `legacy` 判断**。
+  - v4 把 `webviewUserAgent` 搬进内置扩展 `xeonsky.browser` 的数据文件（`data/extensions/xeonsky.browser/config.json`）；
+  - v5 再把 `searchEngine` / `shortcuts` 搬过去（新标签页导航整体成了该扩展的标签页视图），`newTabMode` / `newTabUrl` 直接删除。两次搬迁合并为 `migrateBrowserPrefs`，**逐键**判断「目标文件尚无该键」才写，幂等且失败只 warn。
 - 渲染层保存走 `PUT /settings`：主进程落盘后**广播 `settings:changed` 给所有窗口**；配置文件监听只负责**外部改动**，对程序自己的写入刻意静默。
 - 因此**凡是从设置派生状态的组件都要订阅 `settings:changed`**，漏订阅的表现就是「改完要重启才生效」；发起保存的那个窗口自己忽略这次回放（设置 store 的 `lastSaveAt`）。
 - `PUT /settings` 里还会顺带做几件幂等的事：同步 dsh 主题、写开机自启登录项、更新内嵌网页的 UA 与代理、应用程序图标。

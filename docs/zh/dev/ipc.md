@@ -96,7 +96,7 @@ export default defineModule({
 |---|---|---|
 | `settings.ts` | `GET` / `PUT /settings`、`POST /settings/apply`、`/settings/reset`、`GET` / `PUT /locale`、`/logs`、`/operations` | 读写应用设置、界面语言、日志与进行中操作快照 |
 | `configdir.ts` | `GET` / `PUT /config-dir`、`POST /config-dir/revert`、`/config-dir/migration`、`DELETE /config-dir/migration`、`/models/*`、`/icons*` | 配置目录变更 / 迁移 / 取消、模型与余额、程序图标 |
-| `dsh.ts` | `GET /dsh/*`、`POST /dsh/start`、`/stop`、`/restart`、`/update`、`/install`、`/reload`、`DELETE /dsh` | 安装 / 更新 / 卸载 / 运行状态 / 版本管理 / 插件 |
+| `dsh.ts` | `GET /dsh/*`、`POST /dsh/start`、`/stop`、`/restart`、`/update`、`/install`、`/reload`、`DELETE /dsh` | 安装 / 更新 / 卸载 / 运行状态 / 版本管理 |
 | `env.ts` | `GET /env`、`/node/*`、`/npm/*`、`/pnpm/*`、`POST /node/deploy`、`PUT /versions/:kind/active` | Node / npm / pnpm 部署、状态、版本 |
 | `appupdate.ts` | `GET /app/meta`、`/app/update/state`、`/slots`、`POST /app/update/check`、`/rollback`、`/restart`、`/app/relaunch`、`/app/quit` | 检查 / 触发 / 版本槽 / 回退 / 重启退出 |
 | `shell.ts` | `GET /shell/meta`、`POST /shell/open-url`、`/focus-core`、`/move-tab`、`PUT /shell/title`、`/windows/*`、`/dialog/*` | 多窗口与标签转移、窗口控制、对话框 |

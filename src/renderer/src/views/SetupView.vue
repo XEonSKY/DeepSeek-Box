@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import DshWizard from '../components/DshWizard.vue'
-import { dshMissing } from '../shell/dshstate'
+import { dshMissing } from '../shell/state'
 
 /**
  * 初始化页（DeepSeek Harness 安装向导）。

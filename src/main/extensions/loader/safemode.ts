@@ -52,11 +52,6 @@ export function recordCrash(crashes: Record<string, number>, id: string, reason:
     void reason
 }
 
-/** 某扩展是否已触发阈值。 */
-export function isCrashy(crashes: Record<string, number>, id: string): boolean {
-    return (crashes[id] ?? 0) >= EXT_CRASH_THRESHOLD
-}
-
 /**
  * 判定是否进入安全模式。
  *
@@ -95,9 +90,4 @@ export function decideSafeMode(
  */
 export function clearCrashesAfterCleanBoot(crashes: Record<string, number>): void {
     for (const key of Object.keys(crashes)) delete crashes[key]
-}
-
-/** 只清某个扩展的计数（用户在扩展页手动启用时调用，视为「我已知道并要试一次」）。 */
-export function clearCrash(crashes: Record<string, number>, id: string): void {
-    delete crashes[id]
 }

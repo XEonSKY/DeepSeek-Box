@@ -17,6 +17,8 @@
  *  3. **密钥不出主进程**：本模块只持有 `apiKeyEnv`（引用名），明文由调用方传入。
  */
 
+import { asRecord } from '@shared/json'
+
 /** 供应商路由：一条 patch 条目里能确定的端点与凭据引用。 */
 export interface ProviderRoute {
     id: string
@@ -41,10 +43,8 @@ export const MAX_PROVIDERS = 64
 export const MAX_ID_LEN = 120
 export const MAX_NAME_LEN = 200
 
-/** 只接受「普通对象」：数组与 null 都不算。 */
-export function asRecord(v: unknown): Record<string, unknown> | null {
-    return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
-}
+// 「是否普通对象」的窄化与 cordisPatch / pluginManifest / loader 共用一份实现。
+export { asRecord }
 
 /** 取一个非空、已裁剪且在长度上限内的字符串。 */
 export function str(v: unknown, max: number = MAX_ID_LEN): string | null {

@@ -90,15 +90,6 @@ export function has(name: string): boolean {
     return caps.has(name)
 }
 
-/** 某个扩展提供了哪些能力（卸载与界面展示用）。 */
-export function providedBy(owner: string): string[] {
-    const out: string[] = []
-    for (const [name, entry] of caps) {
-        if (entry.owner === owner) out.push(name)
-    }
-    return out
-}
-
 /**
  * 精确摘除**一个**能力名。
  *
@@ -131,12 +122,7 @@ export function revoke(owner: string): number {
     return n
 }
 
-/** 清空全部能力（仅在整体卸载 / 测试时用）。 */
+/** 清空全部能力（仅在整体卸载时用）。 */
 export function reset(): void {
     caps.clear()
-}
-
-/** 当前能力快照（界面展示与排查用）。 */
-export function snapshot(): Array<{ name: string; owner: string }> {
-    return [...caps.entries()].map(([name, entry]) => ({ name, owner: entry.owner }))
 }

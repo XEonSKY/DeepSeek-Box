@@ -4,6 +4,7 @@ import path from 'node:path'
 import type { ConfigMigrationPlan } from '@shared/types'
 import writeFileAtomic from 'write-file-atomic'
 import { logger } from '../kernel/logger'
+import { pathExists } from '../kernel/treeops'
 
 const log = logger('[Manager]')
 
@@ -223,16 +224,6 @@ async function mergeInto(from: string, to: string, hooks: MigrateHooks, journal:
         if ((await fs.promises.readdir(from)).length === 0) await fs.promises.rmdir(from)
     } catch {
         /* 非空或占用则保留 */
-    }
-}
-
-/** 异步判断路径是否存在（`fs.promises.access` 无 exists 版）。 */
-async function pathExists(p: string): Promise<boolean> {
-    try {
-        await fs.promises.access(p)
-        return true
-    } catch {
-        return false
     }
 }
 

@@ -41,8 +41,8 @@ metadata:
 | `src/main/modules/` | **功能模块（策略）**：`settings` / `dsh` / `env` / `shell` / `tabdrag` / `appupdate` / `configdir` / `extensions`，各自 `defineModule` 声明路由；`index.ts` 汇总 `allModules()` |
 | `src/main/app/` | 应用自身的实现（设置、迁移、模型、窗口、更新、图标）；`ipc.ts` 已瘦成**装配器** |
 | `src/main/dsh/` | DeepSeek Harness 与运行环境（安装、下载、Node/npm、版本目录） |
-| `src/main/extensions/` | **扩展框架**：`loader/`（发现 / 授权 / 激活 / 卸载）、`system/` 与 `builtin/`（系统与内置扩展登记表）；`extensions.ts` 模块是内核与扩展层唯一桥 |
-| `src/extensions/` | **内置 / 系统扩展业务代码**，一扩展一目录（`main.ts` + `manifest.ts` + 可选 `*.vue`）：现有 `xeonsky.download`（下载）/ `xeonsky.zip`（7-Zip）/ `xeonsky.extm`（扩展包管理器）/ `xeonsky.extui`；`renderer-api.ts` 是渲染层扩展 API 面 |
+| `src/main/extensions/` | **扩展框架**：`loader/`（发现 / 授权 / 激活 / 卸载 / 重载）、`system/` 与 `builtin/`（系统与内置扩展登记表）、`preready.ts`（ready 前预读 manifest）；`modules/extensions.ts` 是内核与扩展层唯一桥 |
+| `src/extensions/` | **内置 / 系统扩展业务代码**，一扩展一目录（`main.ts` + `manifest.ts` + 可选 `*.vue`）：现有 `xeonsky.download`（下载）/ `xeonsky.zip`（7-Zip）/ `xeonsky.extm`（扩展包管理器）/ `xeonsky.extui`（扩展管理界面）/ `xeonsky.browser`（内嵌浏览器的 UA / 代理 / 权限策略）；`renderer-api.ts` 是渲染层扩展 API 面 |
 | `src/preload/` | 唯一 `contextBridge` 出口：`window.api`（REST 客户端 + 本地常量 + 事件订阅） |
 | `src/renderer/src/` | Vue 3 界面：标签页外壳、设置页、安装向导、状态栏、终端 |
 | `src/renderer/src/lib/antdv.ts` | antdv-next 运行时基座：`AntdvRoot`（ConfigProvider + App 上下文） |
@@ -96,9 +96,15 @@ metadata:
 | 新增设置面板 | `renderer/src/views/settings/*.vue` | `SettingsView.vue` 注册 + 文案 | references/renderer.md |
 | 改 dsh / Node / npm 安装 | `main/dsh/{manage,nodeenv,npmRunner}.ts` | `dsh/installs.ts` 版本目录 | references/main-process.md |
 | 改下载 / 取消 / 解压 | `main/dsh/download.ts`（门面；实现在 `src/extensions/xeonsky.download/`，兜底 `downloader.ts`）、`kernel/operations.ts` | 进度事件 `phase` | references/main-process.md |
+| 改内嵌浏览器（UA / 搜索引擎 / 常用站点 / 权限策略） | `src/extensions/xeonsky.browser/`（实现）+ `renderer/src/extensions/panels.ts`（面板） | 门面 `main/app/webview.ts`、机制 `main/extensions/system/system.webview/`、`preready.ts` 预读 | references/architecture.md |
+| 改新建标签页 / 地址栏跳转判定 | `src/extensions/xeonsky.browser/`（`shared.ts` / `main.ts` 的 `resolve*` / `NewTab.vue`） | 外壳兜底 `views/NewTabFallback.vue` + `renderer/src/extensions/tabviews.ts`；IPC `/shell/resolve-input`、`/shell/resolve-target` | references/architecture.md |
+| 改窗口级 webview 机制（webviewTag / 嵌套拦截 / 弹窗） | `main/app/ui.ts`（`buildShellWindow` / `did-attach-webview` / `openWebWindow`） | 纯策略在 `src/extensions/xeonsky.browser/`，经 `main/app/webview.ts` 门面查询；渲染层 `views/useWebviews.ts` 的 `allowpopups` | references/architecture.md |
+| 打开外部链接（系统浏览器） | `main/app/openlink.ts`（**唯一出口**，协议白名单） | 站点可经 `window.open` 触发，必须走白名单 | references/architecture.md |
 | 改配置目录与迁移 | `main/app/settings.ts`、`configmigrate.ts` | `main/index.ts` 启动顺序 | references/architecture.md |
 | 改 dsh 的偏好配置（主题 / 语言 / 供应商） | `main/dsh/cordisPatch.ts`、`dshHome.ts` | `settings.ts`（语言 / 主题）、`models.ts`（供应商） | references/main-process.md |
 | 改窗口 / 标签 / 托盘 | `main/app/{ui,windowreg}.ts` + `renderer/src/shell/*` | `modules/shell.ts` 路由与事件 | references/architecture.md |
+| 改扩展加载 / 卸载 / 重载 | `main/extensions/loader/index.ts`（`startLoader` / `stopLoader` / `reloadExt` / `reloadAllLoader`） | `modules/extensions.ts` 路由 + 系统能力 `system.extmanage` | references/architecture.md |
+| 改扩展管理界面 | `src/extensions/xeonsky.extui/`（`ExtensionsPanel.vue` + `locales.ts`） | 端点走 `modules/extensions.ts`；文案键 `ext.xeonskyExtui.*` | references/renderer.md |
 | 新增一个主进程模块 | `main/kernel/module.ts`（契约） | `main/modules/<name>.ts` + `allModules()` | references/main-process.md |
 | 改文档站 | `docs/zh/...` + `docs/en/...` 成对 | `.vitepress/config.mts` nav/sidebar | references/conventions.md |
 | 新增 / 迁移 UI 组件 | `<a-*>` 组件（antdv-next） | 迁移同文件的 `el-*`；查 `antdv-next` 技能 | references/renderer.md |

@@ -21,4 +21,4 @@
  * 「目标已有同名项时的重复项」，不承担删除用户数据目录的职责。
  */
 
-export { removeTree, removeQuietly, removeQuietlySync, readPkgVersion } from '../dsh/fsutil'
+export { removeTree, removeQuietly, removeQuietlySync, readPkgVersion, pathExists } from '../dsh/fsutil'

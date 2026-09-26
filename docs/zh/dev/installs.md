@@ -54,7 +54,7 @@ Node 的 zip / tar 与内置 npm 的 tgz 解压是独立阶段，进度广播携
 ## 进度与「切页不失联」
 
 进度由**主进程**记录，不是渲染层自己的状态：`main/kernel/operations.ts` 按 `kind`
-（`node` / `npm` / `pnpm` / `dsh-plugin`）登记进行中的操作。渲染层任意时刻可 `GET /operations`
+（`node` / `npm` / `pnpm`）登记进行中的操作。渲染层任意时刻可 `GET /operations`
 取快照，操作结束时主进程清空对应条目。这样切换页面（面板卸载）再回来，或者从初始化页跳到设置页，
 正在跑的下载依然看得见 —— 以前进度只活在面板的 `ref` 里，切一次就再也看不到了。
 

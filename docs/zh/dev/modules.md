@@ -26,7 +26,7 @@
 | 模块 | 覆盖端点 |
 |---|---|
 | `settings.ts` | `/settings*`、`/locale`、`/logs`、`/operations` |
-| `dsh.ts` | `/dsh*`（启停 / 更新 / 安装 / 插件） |
+| `dsh.ts` | `/dsh*`（启停 / 更新 / 安装） |
 | `env.ts` | `/env`、`/node/*`、`/npm/*`、`/pnpm/*`、`/versions/*`、`/registries/speed`、`/installs/cancel` |
 | `shell.ts` | `/shell/*`、`/windows/*`、`/dialog/*`、`/hotkeys/state`、`/webview/info` |
 | `tabdrag.ts` | `/tab-drag*`（跨窗口拖标签） |
@@ -72,7 +72,7 @@
 | `downloader.ts` | 下载兜底实现 | `downloadFile`（HTTP Range 分段、去重、取消）；扩展停用 / 安全模式时才走到 |
 | `child.ts` | 子进程共同流程（纯编排） | spawn → 登记 → 收日志 → 可取消 → 只 settle 一次 |
 | `logbus.ts` | 日志环形缓冲 + 子进程登记表 | 不依赖 dsh 服务状态，被整条 dsh 链路共用 |
-| `plugins.ts` / `pluginManifest.ts` | dsh 插件（profile 组合包）管理 | 读取 / 启停 `dsh.profile.bundles`，经 `dsh plugin --profile` 安装 / 卸载；清单解析为纯逻辑 |
+| `pluginManifest.ts` | dsh profile / 组合包清单**纯读取** | 不碰 fs、不 import electron；`readBundleList` / `readBundlePatchFiles` / `requiredBundles`，供 `dshPatchLayers.ts` 合成有效配置层 |
 | `ptcNode.ts` / `ptcNodeSync.ts` | 给 dsh PTC worker 指定真正的 node | 把 `nodeExecutable` 写进 home 级 patch 层，修复 electron.exe 冒充 Node 被 worker 清环境后崩溃 |
 | `installs.ts` | 版本化目录 | `installRoot` / `versionDir` / `activeVersion` / `setActiveVersion` / `resolveActive` / `isVersionComplete` / `listInstalled` / `removeVersion` / `migrateLegacyInstalls`；`InstallKind` 取 `node` / `npm` / `pnpm` / `dsh` |
 | `tools.ts` | 路径解析 | `localNodeExecPath` / `nodeRuntimeFor` / `resolveDshModule` / `findSystemNode` |

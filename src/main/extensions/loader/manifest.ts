@@ -10,17 +10,13 @@
 
 import type { ExtCapability, ExtContributions, ExtManifest, ExtSettingsContribution, ExtTabContribution } from '@shared/extensions'
 import { SYS_CAPABILITIES } from '@shared/extensions'
+import { asRecord as asObject } from '@shared/json'
 import { logger } from '../../kernel/logger'
 
 const log = logger('[ext]')
 
 /** 解析结果：要么给出清单，要么给出「为什么不能用」。 */
 export type ManifestParseResult = { ok: true; manifest: ExtManifest } | { ok: false; reason: string }
-
-/** 只接受「普通对象」：数组与 null 都不算。 */
-function asObject(v: unknown): Record<string, unknown> | null {
-    return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
-}
 
 /** 取非空字符串；其它类型一律视为未提供。 */
 function asString(v: unknown): string | undefined {
@@ -73,8 +69,15 @@ function parseTabs(raw: unknown): ExtTabContribution[] | undefined {
         const key = asString(o.key)
         const titleKey = asString(o.titleKey)
         const url = asString(o.url)
-        if (!key || !titleKey || !url) continue
-        out.push({ key, titleKey, url, openOnStart: o.openOnStart === true })
+        const view = asString(o.view)
+        // `url` 与 `view` 至少要有一个：前者是「开一个 URL 标签页」，
+        // 后者是「注册一个程序内置标签页视图」（如新建标签页页，由外壳按名挂载）。
+        if (!key || !titleKey || (!url && !view)) continue
+        const entry: ExtTabContribution = { key, titleKey }
+        if (url) entry.url = url
+        if (view) entry.view = view
+        if (o.openOnStart === true) entry.openOnStart = true
+        out.push(entry)
     }
     return out.length > 0 ? out : undefined
 }

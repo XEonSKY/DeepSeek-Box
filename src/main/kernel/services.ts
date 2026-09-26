@@ -40,11 +40,6 @@ export function hasService(name: string): boolean {
     return services.has(name)
 }
 
-/** 清空全部服务（测试用）。 */
-export function resetServices(): void {
-    services.clear()
-}
-
 /**
  * 本项目已注册的服务名清单（新增时在这里登记，避免各处散落字符串）。
  *
