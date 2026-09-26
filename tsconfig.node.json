@@ -27,6 +27,7 @@
         "src/main/**/*",
         "src/preload/**/*",
         "src/shared/**/*",
-        "src/extensions/*/**/*.ts"
+        "src/extensions/*/**/*.ts",
+        "src/extensions/*/**/*.json"
     ]
 }

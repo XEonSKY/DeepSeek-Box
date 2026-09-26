@@ -33,7 +33,7 @@
   本仓库已无单测守护这条，务必**人工核对**（新增两处、删除三处，方向不同）。
 - **扩展的界面文案由扩展自管**，不写进外壳的 `shared/locales/{zh,en}`：扩展在自己目录放
   `locales.ts` 导出 `extLocales`（`{ zh, en }` 字典表），键统一挂 `ext.<稳定名>.*` 命名空间
-  （稳定名 = id 驼峰，如 `ext.xeonskyZip.*`）。渲染层 `renderer/src/extensions/locales.ts`
+  （稳定名 = id 驼峰，如 `ext.xeonskyExtm.*`）。渲染层 `renderer/src/extensions/locales.ts`
   的 `EXT_LOCALES` 静态表负责装配（内置扩展编译进 bundle、磁盘上无目录可扫，与 LOCAL_VIEWS
   同构），合并后注入 `shared/locales/ext.ts` 的扩展层并立即并进当前消息目录 —— 扩展键
   不受语言切换 / 翻译风格影响。命名空间冲突只告警不阻断。

@@ -3,7 +3,7 @@ import type { ExtensionLocaleTable } from '@shared/locales/ext'
 /**
  * 内置扩展 `xeonsky.download` 的**自有语言文件**。
  *
- * 与 `xeonsky.zip/locales.ts` 同一套约定：扩展的界面文案不进外壳的 `shared/locales`，
+ * 与 `xeonsky.extm/locales.ts` 同一套约定：扩展的界面文案不进外壳的 `shared/locales`，
  * 而是在自己的目录里带一份字典，键挂在 `ext.<id 驼峰>.*` 命名空间下
  * （本扩展即 `ext.xeonskyDownload.*`），由渲染层扩展框架在启动时合并进文案目录
  * （见 `renderer/src/extensions/locales.ts`）。

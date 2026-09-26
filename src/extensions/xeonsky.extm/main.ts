@@ -30,18 +30,23 @@
  * （`main/modules/extensions.ts`），因为它们是**外壳自身**的能力（即便所有扩展被
  * 安全模式停掉，也要能操作），不能依赖扩展加载成功；本扩展只做依赖扩展生态的部分。
  *
- * **7-Zip 是软依赖**（manifest 不写 dependencies）：`.zip` 与 `.xeonsky-ext` 都是
- * 7-Zip 支持的归档格式，解压内部转发给 `ext:xeonsky.zip`。7-Zip 扩展被停用、
- * 加载失败时本扩展照常激活，但 status 自报不可用、extract 返回 disabled ——
- * 加载器据此**禁用压缩包扩展加载**（不做任何包文件读取）。
+ * ## 7-Zip 是内部模块，不是可启停的扩展
+ *
+ * `sevenzip/` 子目录是本扩展内部的 7-Zip 归档核心（原是独立扩展 `xeonsky.zip`）。
+ * 它既支撑「扩展管理页的归档区块」，也是**扩展包解压**的实现 —— 都是本扩展自身功能，
+ * 因此不该有「用户把它关掉」的状态。核心跑在子进程里（经 `proc` 能力），
+ * 二进制内置在 `sevenzip/bin/<平台>/`。
  *
  * 这个扩展的全部定义就落在本目录（`src/extensions/xeonsky.extm/`）：
  *  - 本文件与同目录的 `manifest.ts` —— 主进程侧（入口 + 清单）；
- *  - 同目录的 `ExtensionsPanel.vue` + `locales.ts` —— 渲染层界面与文案。
+ *  - 同目录的 `ExtensionsPanel.vue` + `locales.ts` —— 渲染层界面与文案；
+ *  - 同目录的 `sevenzip/` —— 内部 7-Zip 模块（含界面与内置二进制）。
  * 一个目录自成一体，主进程与渲染层两端都以 `@ext/<id>/...` 引用它。
  */
 import path from 'node:path'
 import type { ExtContext } from '@main/extensions/loader/ctx'
+import { createSevenZip } from './sevenzip/core'
+import type { CompressOptions, ExtractOptions } from './sevenzip/types'
 
 /** extract 动作的入参（与能力契约同步维护）。 */
 export interface PkgExtractOptions {
@@ -95,15 +100,28 @@ interface IpcContext {
 }
 
 export function activate(ctx: ExtContext): void {
-    const zipCall = <T,>(action: string, ...args: unknown[]): T =>
-        ctx.capabilities.call<T>('ext:xeonsky.zip', action, ...args)
     const fsCall = <T,>(action: string, ...args: unknown[]): T =>
         ctx.capabilities.call<T>('fs', action, ...args)
 
-    /** 7-Zip 是否可用（实时判定：用户可随时停用 / 启用 7-Zip 扩展后刷新）。 */
-    const zipAvailable = (): boolean => ctx.capabilities.has('ext:xeonsky.zip')
+    // ---- 内部 7-Zip 归档核心 ---------------------------------------------------
+    // 原独立扩展 xeonsky.zip，现为本扩展的内部模块（见目录头说明）。
 
-    const status = (): PkgStatus => ({ zipAvailable: zipAvailable(), formats: [...PKG_EXTS.map((e) => e.slice(1))] })
+    const sevenZip = createSevenZip(ctx)
+
+    /** 7-Zip 是否可用（实时判定：探测二进制能否跑出版本）。 */
+    const zipAvailable = async (): Promise<boolean> => {
+        try {
+            const s = await sevenZip.status()
+            return s.available
+        } catch {
+            return false
+        }
+    }
+
+    const status = async (): Promise<PkgStatus> => ({
+        zipAvailable: await zipAvailable(),
+        formats: [...PKG_EXTS.map((e) => e.slice(1))]
+    })
 
     /**
      * 解压一个扩展包到目标目录。
@@ -112,16 +130,16 @@ export function activate(ctx: ExtContext): void {
      * 覆盖策略取 overwrite（-aoa）：加载器在解压前会清空目标目录，包内容是权威来源。
      */
     const extract = async (options: PkgExtractOptions): Promise<PkgExtractResult> => {
-        if (!zipAvailable()) {
-            return { ok: false, disabled: true, message: '7-Zip 扩展不可用，压缩包扩展加载已禁用' }
+        if (!(await zipAvailable())) {
+            return { ok: false, disabled: true, message: '7-Zip 核心不可用，压缩包扩展加载已禁用' }
         }
         try {
-            const r = await zipCall<{ ok: boolean; output?: string; message?: string }>('extract', {
+            const r = await sevenZip.extract({
                 archive: path.resolve(options.file),
                 destDir: path.resolve(options.destDir),
                 overwrite: 'overwrite'
             })
-            return r.ok ? { ok: true } : { ok: false, message: r.message ?? r.output ?? '7-Zip 返回失败' }
+            return r.ok ? { ok: true } : { ok: false, message: r.output || '7-Zip 返回失败' }
         } catch (err) {
             return { ok: false, message: err instanceof Error ? err.message : String(err) }
         }
@@ -154,14 +172,11 @@ export function activate(ctx: ExtContext): void {
     } as unknown as Record<string, (...args: never[]) => unknown>)
 
     // ---- 渲染层通道 ---------------------------------------------------------
-    // 管理页要展示「扩展包」区块，但渲染层没有能力调用权，只能经本扩展的 IPC 端点。
-    // 端点直接调用上面的本地实现（不再经能力槽转发给自己）。
+    // 管理页要展示「扩展包」与「归档」两个区块，但渲染层没有能力调用权，
+    // 只能经本扩展的 IPC 端点。端点直接调用上面的本地实现（不再经能力槽转发）。
 
-    /** 包管理状态：功能是否就绪、7-Zip 是否可用（不可用 = 压缩包加载被禁用）。 */
-    ctx.ipc.handle('pkgStatus', () => {
-        const s = status()
-        return { available: true, zipAvailable: s.zipAvailable, formats: s.formats }
-    })
+    /** 管理页用：7-Zip 是否可用（不可用 = 压缩包加载被禁用）+ 支持的包格式。 */
+    ctx.ipc.handle('pkgStatus', () => status())
 
     /** 列出外部扩展目录下的包文件（渲染层传 `info.externalDir` 进来）。 */
     ctx.ipc.handle('listPackages', (...args: unknown[]) => {
@@ -173,6 +188,45 @@ export function activate(ctx: ExtContext): void {
         } catch {
             return { packages: [] }
         }
+    })
+
+    // ---- 归档区块（原 xeonsky.zip 面板）的 IPC -------------------------------
+    //
+    // 注意 handler 的入参形状：路由器给的是**上下文对象** `{ event, params, query, body }`，
+    // 渲染层 `ext.invoke(channel, payload)` 把 payload 放在 `body` 里（见 preload/index.ts）。
+    // 所以这里统一取 `body`，而不是把它当成位置参数 —— 这是扩展端点最容易踩的一处。
+
+    /** 取请求体（无 body 时给空对象，避免每个 handler 都判空）。 */
+    const bodyOf = (c: unknown): Record<string, unknown> => {
+        const o = c as { body?: unknown } | null
+        return o && typeof o.body === 'object' && o.body !== null ? (o.body as Record<string, unknown>) : {}
+    }
+
+    ctx.ipc.handle('zipStatus', () => sevenZip.status())
+
+    ctx.ipc.handle('zipSetBinaryPath', (c) => {
+        sevenZip.setBinaryPath(bodyOf(c)['path'])
+        return sevenZip.status()
+    })
+
+    ctx.ipc.handle('zipListTargets', () => sevenZip.listTargets())
+    ctx.ipc.handle('zipDescribe', () => sevenZip.describe())
+    ctx.ipc.handle('zipCompress', (c) => sevenZip.compress(bodyOf(c) as unknown as CompressOptions))
+    ctx.ipc.handle('zipExtract', (c) => sevenZip.extract(bodyOf(c) as unknown as ExtractOptions))
+    ctx.ipc.handle('zipList', (c) => {
+        const b = bodyOf(c)
+        return sevenZip.list({
+            archive: String(b['archive'] ?? ''),
+            password: typeof b['password'] === 'string' ? b['password'] : undefined,
+            entries: b['entries'] !== false
+        })
+    })
+    ctx.ipc.handle('zipTest', (c) => {
+        const b = bodyOf(c)
+        return sevenZip.test({
+            archive: String(b['archive'] ?? ''),
+            password: typeof b['password'] === 'string' ? b['password'] : undefined
+        })
     })
 
     ctx.log.info(`builtin extension xeonsky.extm activated (settings panel "Extensions", actions: ${CAPABILITY_ACTIONS.join(', ')})`)

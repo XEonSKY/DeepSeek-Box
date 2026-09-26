@@ -13,7 +13,6 @@ import {
     TARGETS
 } from './archive'
 import {
-    CAPABILITY_ACTIONS,
     type ArchiveListing,
     type CompressOptions,
     type ExtractOptions,
@@ -23,21 +22,24 @@ import {
 } from './types'
 
 /**
- * 内置扩展 `xeonsky.zip` 的主进程实现 —— 基于 7-Zip 核心的归档能力。
+ * `xeonsky.extm` 的**内部 7-Zip 模块** —— 基于 7-Zip 核心的归档能力。
+ *
+ * 它原先是一个独立的内置扩展 `xeonsky.zip`，现已并入扩展管理：7-Zip 是
+ * **「扩展管理页的归档区块」+「外部扩展包解压」** 这一件事的实现细节，不该是可独立
+ * 启停的扩展 —— 独立时用户能在界面里把它关掉，于是「扩展包加载」这种内建功能
+ * 会莫名失灵（停用 7-Zip 就让所有压缩包扩展消失）。并入后不再有「内部模块被
+ * 用户停用」这个状态。
  *
  * ## 它与内核的关系
  *
  * 本文件**不 import 任何内核模块**（除类型 `ExtContext`）：所有能力都经
- * `ctx.capabilities.call(...)` 取用。所以内核换掉子进程实现、换掉日志实现，
- * 本扩展一行都不用改 —— 这正是扩展层「只依赖加载器给的 ctx」的落点。
- *
- * 依赖的系统能力写进了 `manifest.ts`：
+ * `ctx.capabilities.call(...)` 取用。依赖的系统能力写进扩展的 `manifest.ts`：
  *  - `fs`   读写自己的配置、探测二进制、建目录；
  *  - `proc` 跑 7z 命令行（复用内核 runChild 的登记 / 取消 / stderr 收集）。
  *
  * ## 二进制内置（不再运行时下载）
  *
- * 7-Zip 命令行核心**随扩展内置**：`src/extensions/xeonsky.zip/bin/<平台>/`
+ * 7-Zip 命令行核心**随扩展内置**：`src/extensions/xeonsky.extm/sevenzip/bin/<平台>/`
  * （Windows 取官方安装包里的完整版 `7z.exe` + `7z.dll`；Linux / macOS 取 `7zz`）。
  * 打包时用 `asarUnpack` 把这些可执行文件解开（asar 内的可执行文件**不能被执行**），
  * 因此定位路径里要把 `app.asar` 换回 `app.asar.unpacked`。
@@ -48,7 +50,7 @@ import {
  * 2. **内置**的当前平台二进制（绝大多数情况就是它，开箱即用）；
  * 3. **系统已装**的 7-Zip（各平台常见安装位，仅作兜底）。
  *
- * 定位结果会缓存；`locate` 动作与改路径时清缓存。
+ * 定位结果会缓存；改路径时清缓存。
  */
 
 /** 扩展私有配置（存扩展自己的目录，不进内核设置）。 */
@@ -67,13 +69,31 @@ function mergeOutput(r: { stdout: string; stderrTail: string }): string {
     return parts.join('\n')
 }
 
-export function activate(ctx: ExtContext): void {
-    // ---- 能力取用口（全部经 ctx） ---------------------------------------------
+/** 内部 7-Zip 模块的公开面（{@link createSevenZip} 的返回）。 */
+export interface SevenZip {
+    status: () => Promise<SevenZipStatus>
+    locate: () => { path: string; source: SevenZipStatus['source'] }
+    setBinaryPath: (p: unknown) => { path: string; source: SevenZipStatus['source'] }
+    listTargets: () => Array<{ os: string; arch: string; dir: string; label: string; binary: string }>
+    describe: () => ReturnType<typeof describeCapabilities>
+    listFormats: () => ReturnType<typeof describeCapabilities>['formats']
+    listMethods: () => ReturnType<typeof describeCapabilities>['methods']
+    compress: (options: CompressOptions) => Promise<SevenZipRunResult & { archive: string }>
+    extract: (options: ExtractOptions) => Promise<SevenZipRunResult & { destDir: string }>
+    list: (options: { archive: string; password?: string; entries?: boolean }) => Promise<ArchiveListing>
+    test: (options: { archive: string; password?: string }) => Promise<SevenZipRunResult>
+    run: (argv: unknown) => Promise<SevenZipRunResult>
+}
 
+/**
+ * 创建一个 7-Zip 运行时（闭包持有配置与定位缓存）。
+ *
+ * 做成工厂而不是模块级单例：缓存与配置读写都绑定到**这次 activate 的 ctx**
+ * （扩展重载时重新建一份，旧的自然丢弃），与「扩展不该持有跨生命周期的全局态」一致。
+ */
+export function createSevenZip(ctx: ExtContext): SevenZip {
     const fsCall = <T,>(action: string, ...args: unknown[]): T => ctx.capabilities.call<T>('fs', action, ...args)
     const procCall = <T,>(action: string, ...args: unknown[]): T => ctx.capabilities.call<T>('proc', action, ...args)
-
-    // ---- 路径约定 -------------------------------------------------------------
 
     /**
      * 内置二进制目录。
@@ -83,12 +103,10 @@ export function activate(ctx: ExtContext): void {
      * 否则打包后会「文件存在但无法执行」。
      */
     const binDir = path
-        .join(__dirname, '../../src/extensions/xeonsky.zip/bin')
+        .join(__dirname, '../../src/extensions/xeonsky.extm/sevenzip/bin')
         .replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`)
     /** 扩展自己的配置文件（数据目录，重装不丢）。 */
-    const configPath = path.join(ctx.dataDir, 'config.json')
-
-    // ---- 配置读写 -------------------------------------------------------------
+    const configPath = path.join(ctx.dataDir, 'sevenzip.json')
 
     function readConfig(): ExtConfig {
         const raw = fsCall<string | null>('readIfExists', configPath)
@@ -107,8 +125,6 @@ export function activate(ctx: ExtContext): void {
     function writeConfig(cfg: ExtConfig): void {
         fsCall('write', configPath, JSON.stringify(cfg, null, 4))
     }
-
-    // ---- 平台目标 -------------------------------------------------------------
 
     function targetKeyOf(t: { os: string; arch: string }): string {
         return `${t.os}-${t.arch}`
@@ -130,8 +146,6 @@ export function activate(ctx: ExtContext): void {
         if (!target) return null
         return { file: path.join(binDir, target.dir, target.binary), dir: target.dir }
     }
-
-    // ---- 二进制定位 -----------------------------------------------------------
 
     /** 候选路径：用户指定 → 内置 → 系统常见位置。 */
     function candidatePaths(): string[] {
@@ -175,8 +189,6 @@ export function activate(ctx: ExtContext): void {
         return cached
     }
 
-    // ---- 跑 7-Zip -------------------------------------------------------------
-
     /** 跑一次 7z（默认 30 分钟超时，足够压大目录又不会挂死）。 */
     async function run7z(argv: string[], timeoutMs?: number): Promise<SevenZipRunResult> {
         const { path: bin } = locateBinaryPath()
@@ -197,8 +209,6 @@ export function activate(ctx: ExtContext): void {
         const r = await run7z(['i'], 15_000)
         return r.ok ? parseVersion(r.output) : ''
     }
-
-    // ---- 动作实现 -------------------------------------------------------------
 
     /** 状态快照。 */
     async function status(): Promise<SevenZipStatus> {
@@ -248,9 +258,7 @@ export function activate(ctx: ExtContext): void {
         return run7z(buildTestArgs(options.archive, options.password))
     }
 
-    // ---- 对外提供能力 ---------------------------------------------------------
-
-    ctx.provides.register('xeonsky.zip', {
+    return {
         status,
         locate: () => {
             cached = null
@@ -272,52 +280,5 @@ export function activate(ctx: ExtContext): void {
         list,
         test,
         run: (argv: unknown) => run7z(Array.isArray(argv) ? argv.map(String) : [])
-    } as unknown as Record<string, (...args: never[]) => unknown>)
-
-    // ---- 面板用的 IPC（与对外能力同源，避免两套实现） -------------------------
-    //
-    // 注意 handler 的入参形状：路由器给的是**上下文对象** `{ event, params, query, body }`，
-    // 渲染层 `ext.invoke(channel, payload)` 把 payload 放在 `body` 里（见 preload/index.ts）。
-    // 所以这里统一取 `body`，而不是把它当成位置参数 —— 这是扩展端点最容易踩的一处。
-
-    /** 取请求体（无 body 时给空对象，避免每个 handler 都判空）。 */
-    const bodyOf = (c: unknown): Record<string, unknown> => {
-        const o = c as { body?: unknown } | null
-        return o && typeof o.body === 'object' && o.body !== null ? (o.body as Record<string, unknown>) : {}
     }
-
-    ctx.ipc.handle('status', () => status())
-
-    ctx.ipc.handle('setBinaryPath', (c) => {
-        const cfg = readConfig()
-        const p = bodyOf(c)['path']
-        cfg.binaryPath = typeof p === 'string' ? p : ''
-        writeConfig(cfg)
-        cached = null
-        return status()
-    })
-
-    ctx.ipc.handle('setTarget', (c) => {
-        const cfg = readConfig()
-        const key = bodyOf(c)['key']
-        cfg.targetKey = typeof key === 'string' && key ? key : undefined
-        writeConfig(cfg)
-        cached = null
-        return status()
-    })
-
-    ctx.ipc.handle('listTargets', () => TARGETS.map((t) => ({ os: t.os, arch: t.arch, dir: t.dir, label: t.label, binary: t.binary })))
-    ctx.ipc.handle('describe', () => describeCapabilities())
-    ctx.ipc.handle('compress', (c) => compress(bodyOf(c) as unknown as CompressOptions))
-    ctx.ipc.handle('extract', (c) => extract(bodyOf(c) as unknown as ExtractOptions))
-    ctx.ipc.handle('list', (c) => {
-        const b = bodyOf(c)
-        return list({ archive: String(b['archive'] ?? ''), password: typeof b['password'] === 'string' ? b['password'] : undefined, entries: b['entries'] !== false })
-    })
-    ctx.ipc.handle('test', (c) => {
-        const b = bodyOf(c)
-        return test({ archive: String(b['archive'] ?? ''), password: typeof b['password'] === 'string' ? b['password'] : undefined })
-    })
-
-    ctx.log.info(`builtin extension xeonsky.zip activated (actions: ${CAPABILITY_ACTIONS.join(', ')})`)
 }

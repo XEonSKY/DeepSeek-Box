@@ -68,8 +68,9 @@ const LOCAL_VIEWS: Record<string, () => Promise<Component>> = {
     // 视图与它的主进程实现在同一个目录（`src/extensions/xeonsky.extm/`），
     // 两端都用 `@ext/<id>/...` 引用 —— 见本文件顶部说明。
     extensions: () => import('@ext/xeonsky.extm/ExtensionsPanel.vue'),
-    // 「归档（7-Zip）」页（由内置扩展 xeonsky.zip 贡献）。
-    zip: () => import('@ext/xeonsky.zip/ZipPanel.vue'),
+    // 「归档（7-Zip）」页 —— 同为 xeonsky.extm 的贡献（7-Zip 是它的内部模块，
+    // 不再是独立扩展）。视图在它的 sevenzip 子目录里。
+    zip: () => import('@ext/xeonsky.extm/sevenzip/ZipPanel.vue'),
     // 「下载」页（由内置扩展 xeonsky.download 贡献）。
     download: () => import('@ext/xeonsky.download/DownloadPanel.vue'),
     // 「内嵌浏览器」页（由内置扩展 xeonsky.browser 贡献）。

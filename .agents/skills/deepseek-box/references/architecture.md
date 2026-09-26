@@ -68,33 +68,39 @@ node 侧收全部 TS（顶层 `renderer-api.ts` 除外 —— 它引用 `window`
   需要新能力时**先扩 API 面**，让它保持唯一可见面；否则内核重构会波及所有扩展。
 
 **扩展间互调走 `ctx.provides` / `ctx.capabilities` 对**：提供方
-`ctx.provides.register('xeonsky.zip', actions)`（自动补 `ext:` 前缀），消费方
-`ctx.capabilities.call('ext:xeonsky.zip', action, ...)`。实现落在加载器持有的能力槽
+`ctx.provides.register('xeonsky.download', actions)`（自动补 `ext:` 前缀），消费方
+`ctx.capabilities.call('ext:xeonsky.download', action, ...)`。实现落在加载器持有的能力槽
 （`loader/capability.ts` 的 `provideActions` / `actionsOf` / `revokeName`），并经 registry
 按名记账 —— 卸载时逐名精确摘除（`revokeName`），不用按 owner 扫全表的 `revoke`，
 避免误伤同 owner 的其它登记。重复提供同一能力名 = 装配冲突，直接抛错。
 
 **压缩包形态的外部扩展**（`*.zip` / `*.xeonsky-ext` —— 后者是本项目的 zip 变种）：
-由内置扩展 **`xeonsky.extm`（扩展包管理器）** 提供解压能力（内部转发 `ext:xeonsky.zip`
-的 7-Zip 核心），加载器的**第二阶段**（`loadPkgExtensions`，在全部普通扩展加载结束后、
+由内置扩展 **`xeonsky.extm`（扩展管理）** 提供解压能力（它内含 7-Zip 归档核心
+`sevenzip/`，不再跨扩展转发），加载器的**第二阶段**（`loadPkgExtensions`，在全部普通扩展加载结束后、
 安全模式下不运行）处理：扫描包文件 → 解压到暂存目录 `<配置目录>/.remapper/extensions/<包名>/`
 （每次重新解压覆盖，包文件是权威来源）→ 定位 manifest（包根或唯一子目录）→
 按外部扩展激活。**包名冲突则不加载**：与 `extensions/` 下已装文件夹同名、包之间同名、
-manifest id 与已发现扩展重复，三者任一命中即记 skipped。**7-Zip 是 extm 的软依赖**：
-`xeonsky.zip` 被停用 / 加载失败时 extm 照常激活但 status 自报不可用，加载器据此
-**整体禁用压缩包加载**（只登记原因，不读取任何包文件，也不算崩溃失败）。
+manifest id 与已发现扩展重复，三者任一命中即记 skipped。**extm 缺失（被停用 / 激活失败）
+即整体禁用压缩包加载**（加载器查不到 `ext:xeonsky.extm` 能力槽，只登记原因，
+不读取任何包文件，也不算崩溃失败）。
 
-**7-Zip 核心内置于扩展**（`xeonsky.zip`）：全平台命令行二进制放在
-`src/extensions/xeonsky.zip/bin/<平台>/`（Windows 取**完整版** `7z.exe` + `7z.dll` ——
+**7-Zip 核心是 `xeonsky.extm` 的内部模块**（`sevenzip/`，原是独立扩展 `xeonsky.zip`）：
+全平台命令行二进制放在 `src/extensions/xeonsky.extm/sevenzip/bin/<平台>/`
+（Windows 取**完整版** `7z.exe` + `7z.dll` ——
 **不要用 `-extra` 包里的 `7za.exe`**，它只有 12 种格式，而 Linux / macOS 的 `7zz` 有 60 多种，
 跨端行为会不一致；官方 Windows 安装包本身是 7z 自解压包，可直接
 `7z e <installer>.exe 7z.exe 7z.dll -o<dir>` 取出。Linux / macOS 取 `7zz`），
-**不运行时下载**（不申请 `net` 能力）。运行时路径 = `__dirname/../../src/…/bin`，
+**不运行时下载**（不申请 `net` 能力）。运行时路径 = `__dirname/../../src/…/sevenzip/bin`，
 且必须把 `app.asar` 换回 `app.asar.unpacked` —— **asar 内的可执行文件不能执行**，
-因此 `build.files` 要在 `!src/**` **之后**追加 `src/extensions/xeonsky.zip/bin/**`
+因此 `build.files` 要在 `!src/**` **之后**追加 `src/extensions/xeonsky.extm/sevenzip/bin/**`
 （顺序反了会被排除覆盖）并配同 glob 的 `build.asarUnpack`。
 类 Unix 的二进制入库时要用 `git update-index --chmod=+x` 保住可执行位。
 定位顺序：用户指定 → 内置 → 系统。
+
+**为什么 7-Zip 不是独立扩展**：独立时用户能在管理页把它停用，于是「扩展包解压」
+与「归档页」这类**内建功能**会莫名失灵。内部模块没有「被停用」这个状态。
+包能力（`ext:xeonsky.extm` 的 status / extract / listPackages）仍对外提供，
+供加载器第二阶段与其它扩展协作。
 
 **扩展数据目录**：`ctx.dataDir`（懒创建 getter，首次访问才在磁盘建目录），
 路径 `<配置目录>/data/extensions/<extId>`。放运行期产生的数据（扩展配置、状态文件、
@@ -102,7 +108,7 @@ manifest id 与已发现扩展重复，三者任一命中即记 skipped。**7-Zi
 外部扩展卸载时整目录删除的是代码目录，数据目录在重装后仍然保留。
 实现：`sources.ts` 的 `ensureExtDataDir`（mkdir -p），由 loader 注入 ctx，
 `ctx.ts` 本身不碰 fs。内置 / 系统扩展同样有数据目录（它们的 `dir` 是源码路径，
-打包后在磁盘上不存在 —— 需要落盘的东西一律用 `dataDir`，如 `xeonsky.zip` 的 config.json）。
+打包后在磁盘上不存在 —— 需要落盘的东西一律用 `dataDir`，如 `xeonsky.extm` 的 sevenzip.json）。
 
 **系统扩展 id 用 `system.` 前缀**（`system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui` / `system.webview` / `system.extmanage`），
 与外部扩展能力名 `ext:<extId>` 对仗。注意**能力名是裸名**（`fs` / `net` / ...，见

@@ -2,29 +2,31 @@
 import { computed, onMounted, ref } from 'vue'
 import { FolderOpenOutlined, FileZipOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
-import { extApi, extErrorMessage, extT } from '../renderer-api'
+import { extApi, extErrorMessage, extT } from '../../renderer-api'
 import type { ArchiveFormat, CompressionMethod, SevenZipRunResult, SevenZipStatus } from './types'
 import { FEATURES } from './types'
 
 /**
- * 「归档（7-Zip）」设置面板 —— 内置扩展 `xeonsky.zip` 的渲染层实现。
+ * 「归档（7-Zip）」设置面板 —— 内置扩展 `xeonsky.extm` 的渲染层视图之一。
  *
- * 与主进程入口（同目录 `main.ts`）和清单（同目录 `manifest.ts`）放在一起，
- * 三者构成这个扩展的完整定义；挂载入口见 `renderer/src/extensions/panels.ts` 的 `LOCAL_VIEWS`。
+ * 7-Zip 原是独立扩展 `xeonsky.zip`，现为 `xeonsky.extm` 的**内部模块**
+ * （`sevenzip/` 子目录）：它同时支撑「扩展包解压」与这一页，属于扩展自身功能，
+ * 不该是用户能停用的东西。
  *
- * 对外依赖全部收在 `../renderer-api`（渲染层扩展 API 面），不 import 外壳内部模块 ——
+ * 挂载入口见 `renderer/src/extensions/panels.ts` 的 `LOCAL_VIEWS`（`zip` 键）。
+ * 对外依赖全部收在 `../../renderer-api`（渲染层扩展 API 面），不 import 外壳内部模块 ——
  * 与主进程侧「扩展不直接 import 内核」是同一条原则。
  *
- * 与主进程的通信走**本扩展自己的 DIY 通道**（`ext:xeonsky.zip:<action>`），
+ * 与主进程的通信走**本扩展自己的 DIY 通道**（`ext:xeonsky.extm:zip<Action>`），
  * 而不是内核内置端点 —— 扩展端点不占 `ApiRoutes` 契约，这正是它的用途。
  */
 
 /** 本扩展的通道前缀（与主进程 manifest.id 一致）。 */
-const CHANNEL = 'ext:xeonsky.zip'
+const CHANNEL = 'ext:xeonsky.extm'
 
-/** 调一次本扩展的主进程动作。 */
+/** 调一次本扩展的主进程动作（`zip` 前缀区分归档动作与包管理动作）。 */
 function call<T>(action: string, payload?: unknown): Promise<T> {
-    return extApi.ext.invoke(`${CHANNEL}:${action}`, payload) as Promise<T>
+    return extApi.ext.invoke(`${CHANNEL}:zip${action}`, payload) as Promise<T>
 }
 
 const status = ref<SevenZipStatus | null>(null)
@@ -56,7 +58,7 @@ async function reload(): Promise<void> {
 async function applyPath(): Promise<void> {
     try {
         status.value = await call<SevenZipStatus>('setBinaryPath', { path: pathInput.value.trim() })
-        ElMessage.success(extT('ext.xeonskyZip.panel.pathSaved'))
+        ElMessage.success(extT('ext.xeonskyExtm.zip.panel.pathSaved'))
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
     }
@@ -80,8 +82,8 @@ async function tryExtract(): Promise<void> {
             password: trialPassword.value || undefined
         })
         trialOutput.value = r.output
-        if (r.ok) ElMessage.success(extT('ext.xeonskyZip.panel.extractOk'))
-        else ElMessage.error(extT('ext.xeonskyZip.panel.extractFail'))
+        if (r.ok) ElMessage.success(extT('ext.xeonskyExtm.zip.panel.extractOk'))
+        else ElMessage.error(extT('ext.xeonskyExtm.zip.panel.extractFail'))
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
     } finally {
@@ -108,8 +110,8 @@ async function tryCompress(): Promise<void> {
             password: trialPasswordNew.value || undefined
         })
         trialOutput.value = r.output
-        if (r.ok) ElMessage.success(extT('ext.xeonskyZip.panel.compressOk'))
-        else ElMessage.error(extT('ext.xeonskyZip.panel.compressFail'))
+        if (r.ok) ElMessage.success(extT('ext.xeonskyExtm.zip.panel.compressOk'))
+        else ElMessage.error(extT('ext.xeonskyExtm.zip.panel.compressFail'))
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
     } finally {
@@ -120,18 +122,18 @@ async function tryCompress(): Promise<void> {
 /** 状态标签：可用 / 不可用。 */
 const availableTag = computed(() => (status.value?.available ? 'green' : status.value?.binaryPath ? 'orange' : 'red'))
 const availableText = computed(() => {
-    if (status.value?.available) return extT('ext.xeonskyZip.panel.stAvailable')
-    if (status.value?.binaryPath) return extT('ext.xeonskyZip.panel.stUnusable')
-    return extT('ext.xeonskyZip.panel.stMissing')
+    if (status.value?.available) return extT('ext.xeonskyExtm.zip.panel.stAvailable')
+    if (status.value?.binaryPath) return extT('ext.xeonskyExtm.zip.panel.stUnusable')
+    return extT('ext.xeonskyExtm.zip.panel.stMissing')
 })
 
 /** 来源文案。 */
 const sourceText = computed(() => {
     const s = status.value?.source
-    if (s === 'custom') return extT('ext.xeonskyZip.panel.srcCustom')
-    if (s === 'bundled') return extT('ext.xeonskyZip.panel.srcBundled')
-    if (s === 'system') return extT('ext.xeonskyZip.panel.srcSystem')
-    return extT('ext.xeonskyZip.panel.srcMissing')
+    if (s === 'custom') return extT('ext.xeonskyExtm.zip.panel.srcCustom')
+    if (s === 'bundled') return extT('ext.xeonskyExtm.zip.panel.srcBundled')
+    if (s === 'system') return extT('ext.xeonskyExtm.zip.panel.srcSystem')
+    return extT('ext.xeonskyExtm.zip.panel.srcMissing')
 })
 
 onMounted(() => void reload())
@@ -142,43 +144,43 @@ onMounted(() => void reload())
         <div class="dsh-brand">
             <div class="dsh-brand__icon"><FileZipOutlined style="font-size: 34px" /></div>
             <div class="dsh-brand__txt">
-                <div class="dsh-brand__name">{{ $t('ext.xeonskyZip.nav') }}</div>
-                <div class="dsh-brand__desc">{{ $t('ext.xeonskyZip.intro') }}</div>
+                <div class="dsh-brand__name">{{ $t('ext.xeonskyExtm.zip.nav') }}</div>
+                <div class="dsh-brand__desc">{{ $t('ext.xeonskyExtm.zip.intro') }}</div>
             </div>
         </div>
 
         <!-- 核心状态 -->
         <div class="zpanel__bar">
-            <div class="zpanel__head">{{ $t('ext.xeonskyZip.panel.coreTitle') }}</div>
+            <div class="zpanel__head">{{ $t('ext.xeonskyExtm.zip.panel.coreTitle') }}</div>
             <a-space :size="8">
                 <a-button @click="reload">
                     <template #icon><ReloadOutlined /></template>
-                    {{ $t('ext.xeonskyZip.panel.refresh') }}
+                    {{ $t('ext.xeonskyExtm.zip.panel.refresh') }}
                 </a-button>
             </a-space>
         </div>
 
         <a-descriptions bordered size="small" :column="1" class="zpanel__desc">
-            <a-descriptions-item :label="$t('ext.xeonskyZip.panel.binPath')">
+            <a-descriptions-item :label="$t('ext.xeonskyExtm.zip.panel.binPath')">
                 <span :class="['zpanel__path', !status?.binaryPath && 'zpanel__path--empty']">
-                    {{ status?.binaryPath || $t('ext.xeonskyZip.panel.notConfigured') }}
+                    {{ status?.binaryPath || $t('ext.xeonskyExtm.zip.panel.notConfigured') }}
                 </span>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('ext.xeonskyZip.panel.source')">
+            <a-descriptions-item :label="$t('ext.xeonskyExtm.zip.panel.source')">
                 <a-tag :color="availableTag">{{ availableText }}</a-tag>
                 <span class="zpanel__muted">{{ sourceText }}</span>
                 <span v-if="status?.version" class="zpanel__muted">· v{{ status.version }}</span>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('ext.xeonskyZip.panel.target')">
+            <a-descriptions-item :label="$t('ext.xeonskyExtm.zip.panel.target')">
                 <template v-if="status?.target">
                     <span>{{ status.target.label }}</span>
                 </template>
-                <span v-else class="zpanel__muted">{{ $t('ext.xeonskyZip.panel.targetUnsupported') }}</span>
+                <span v-else class="zpanel__muted">{{ $t('ext.xeonskyExtm.zip.panel.targetUnsupported') }}</span>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('ext.xeonskyZip.panel.bundledVersion')">
+            <a-descriptions-item :label="$t('ext.xeonskyExtm.zip.panel.bundledVersion')">
                 <span class="zpanel__path">{{ status?.bundledVersion }}</span>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('ext.xeonskyZip.panel.binDir')">
+            <a-descriptions-item :label="$t('ext.xeonskyExtm.zip.panel.binDir')">
                 <span class="zpanel__path">{{ status?.binDir }}</span>
                 <span v-if="status?.binPlatformDir" class="zpanel__muted">{{ status.binPlatformDir }}/{{ status.target?.binary }}</span>
             </a-descriptions-item>
@@ -188,26 +190,26 @@ onMounted(() => void reload())
         <div class="zpanel__row">
             <a-input
                 v-model:value="pathInput"
-                :placeholder="$t('ext.xeonskyZip.panel.pathPlaceholder')"
+                :placeholder="$t('ext.xeonskyExtm.zip.panel.pathPlaceholder')"
                 allow-clear
                 class="zpanel__grow"
             >
                 <template #prefix><FolderOpenOutlined /></template>
             </a-input>
-            <a-button @click="applyPath">{{ $t('ext.xeonskyZip.panel.apply') }}</a-button>
+            <a-button @click="applyPath">{{ $t('ext.xeonskyExtm.zip.panel.apply') }}</a-button>
         </div>
 
         <!-- 支持的格式 / 方法 / 功能 -->
         <div class="zpanel__grid">
             <div class="zpanel__card">
-                <div class="zpanel__cardTitle">{{ $t('ext.xeonskyZip.panel.formatsTitle') }}</div>
+                <div class="zpanel__cardTitle">{{ $t('ext.xeonskyExtm.zip.panel.formatsTitle') }}</div>
                 <div class="zpanel__list">
                     <div v-for="f in formats" :key="f.name" class="zpanel__item">
                         <code class="zpanel__fmt">{{ f.name }}</code>
                         <span class="zpanel__badges">
-                            <a-tag v-if="f.canCreate" color="green">{{ $t('ext.xeonskyZip.panel.canCreate') }}</a-tag>
-                            <a-tag v-if="f.canExtract">{{ $t('ext.xeonskyZip.panel.canExtract') }}</a-tag>
-                            <a-tag v-if="f.canUpdate" color="blue">{{ $t('ext.xeonskyZip.panel.canUpdate') }}</a-tag>
+                            <a-tag v-if="f.canCreate" color="green">{{ $t('ext.xeonskyExtm.zip.panel.canCreate') }}</a-tag>
+                            <a-tag v-if="f.canExtract">{{ $t('ext.xeonskyExtm.zip.panel.canExtract') }}</a-tag>
+                            <a-tag v-if="f.canUpdate" color="blue">{{ $t('ext.xeonskyExtm.zip.panel.canUpdate') }}</a-tag>
                         </span>
                         <span class="zpanel__note" :title="f.note">{{ f.note }}</span>
                     </div>
@@ -215,7 +217,7 @@ onMounted(() => void reload())
             </div>
 
             <div class="zpanel__card">
-                <div class="zpanel__cardTitle">{{ $t('ext.xeonskyZip.panel.methodsTitle') }}</div>
+                <div class="zpanel__cardTitle">{{ $t('ext.xeonskyExtm.zip.panel.methodsTitle') }}</div>
                 <div class="zpanel__list">
                     <div v-for="m in methods" :key="m.name" class="zpanel__item">
                         <code class="zpanel__fmt zpanel__fmt--wide">{{ m.name }}</code>
@@ -225,7 +227,7 @@ onMounted(() => void reload())
             </div>
 
             <div class="zpanel__card zpanel__card--full">
-                <div class="zpanel__cardTitle">{{ $t('ext.xeonskyZip.panel.featuresTitle') }}</div>
+                <div class="zpanel__cardTitle">{{ $t('ext.xeonskyExtm.zip.panel.featuresTitle') }}</div>
                 <div class="zpanel__list">
                     <div v-for="ft in FEATURES" :key="ft.name" class="zpanel__item">
                         <span class="zpanel__feat">{{ ft.name }}</span>
@@ -238,22 +240,22 @@ onMounted(() => void reload())
 
         <!-- 试用 -->
         <div class="zpanel__card zpanel__card--full">
-            <div class="zpanel__cardTitle">{{ $t('ext.xeonskyZip.panel.trialTitle') }}</div>
+            <div class="zpanel__cardTitle">{{ $t('ext.xeonskyExtm.zip.panel.trialTitle') }}</div>
             <div class="zpanel__row">
-                <a-input v-model:value="trialArchive" :placeholder="$t('ext.xeonskyZip.panel.archivePlaceholder')" class="zpanel__grow" />
-                <a-input v-model:value="trialDest" :placeholder="$t('ext.xeonskyZip.panel.destPlaceholder')" class="zpanel__grow" />
-                <a-input v-model:value="trialPassword" :placeholder="$t('ext.xeonskyZip.panel.passwordPlaceholder')" class="zpanel__pwd" />
+                <a-input v-model:value="trialArchive" :placeholder="$t('ext.xeonskyExtm.zip.panel.archivePlaceholder')" class="zpanel__grow" />
+                <a-input v-model:value="trialDest" :placeholder="$t('ext.xeonskyExtm.zip.panel.destPlaceholder')" class="zpanel__grow" />
+                <a-input v-model:value="trialPassword" :placeholder="$t('ext.xeonskyExtm.zip.panel.passwordPlaceholder')" class="zpanel__pwd" />
                 <a-button type="primary" :disabled="!trialArchive.trim() || !trialDest.trim()" @click="tryExtract">
-                    {{ $t('ext.xeonskyZip.panel.tryExtract') }}
+                    {{ $t('ext.xeonskyExtm.zip.panel.tryExtract') }}
                 </a-button>
             </div>
             <div class="zpanel__row">
-                <a-input v-model:value="trialInputs" type="textarea" :rows="2" :placeholder="$t('ext.xeonskyZip.panel.inputsPlaceholder')" class="zpanel__grow" />
-                <a-input v-model:value="trialOutArchive" :placeholder="$t('ext.xeonskyZip.panel.outArchivePlaceholder')" class="zpanel__grow" />
+                <a-input v-model:value="trialInputs" type="textarea" :rows="2" :placeholder="$t('ext.xeonskyExtm.zip.panel.inputsPlaceholder')" class="zpanel__grow" />
+                <a-input v-model:value="trialOutArchive" :placeholder="$t('ext.xeonskyExtm.zip.panel.outArchivePlaceholder')" class="zpanel__grow" />
                 <a-select v-model:value="trialFormat" class="zpanel__pwd" :options="formats.map((f) => ({ value: f.name, label: f.name, disabled: !f.canCreate }))" />
-                <a-input v-model:value="trialPasswordNew" :placeholder="$t('ext.xeonskyZip.panel.passwordPlaceholder')" class="zpanel__pwd" />
+                <a-input v-model:value="trialPasswordNew" :placeholder="$t('ext.xeonskyExtm.zip.panel.passwordPlaceholder')" class="zpanel__pwd" />
                 <a-button :disabled="!trialOutArchive.trim() || !trialInputs.trim()" @click="tryCompress">
-                    {{ $t('ext.xeonskyZip.panel.tryCompress') }}
+                    {{ $t('ext.xeonskyExtm.zip.panel.tryCompress') }}
                 </a-button>
             </div>
             <pre v-if="trialOutput" class="zpanel__out">{{ trialOutput }}</pre>

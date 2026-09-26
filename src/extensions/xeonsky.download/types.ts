@@ -1,7 +1,7 @@
 /**
  * 扩展 `xeonsky.download` 的能力契约与任务模型。
  *
- * 放在扩展自己的目录里（而不是 `src/shared/`）的原因与 `xeonsky.zip/types.ts` 相同：
+ * 放在扩展自己的目录里（而不是 `src/shared/`）的原因与 `xeonsky.extm/sevenzip/types.ts` 相同：
  * 这些形状只服务本扩展，不是内核契约。内核的 `src/shared/api.ts` 是**内置端点**的
  * 唯一事实来源，而扩展对外提供的能力走 `ext:<id>` 命名空间，形状由扩展自己持有。
  *

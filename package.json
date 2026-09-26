@@ -96,7 +96,7 @@
             "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
         ],
         "asarUnpack": [
-            "src/extensions/xeonsky.zip/bin/**"
+            "src/extensions/xeonsky.extm/sevenzip/bin/**"
         ],
         "publish": {
             "provider": "github",

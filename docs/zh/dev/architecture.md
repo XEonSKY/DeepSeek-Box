@@ -32,13 +32,13 @@ Electron 44 · electron-vite 6 · Vite 8（rolldown 内核）· Vue 3 · TypeScr
   `modules/extensions.ts` 是内核与扩展层之间唯一的桥（`GET /extensions` 等管理端点）；
 - **内置 / 系统扩展的业务代码**在顶层 `src/extensions/<id>/`，一扩展一目录（`main.ts` 主进程入口 +
   `manifest.ts` 清单 + 可选 `*.vue` 渲染层视图）。现有 `xeonsky.download`（多线程下载 / 断点续传 / 限速）、
-  `xeonsky.zip`（内置 7-Zip 核心）、`xeonsky.extm`（扩展管理页 + 压缩包形态的外部扩展包管理），
+  `xeonsky.extm`（扩展管理页 + 扩展包管理 + 内置 7-Zip 归档核心）、
   以及 `system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui` 五个系统能力扩展；
 - **扩展只能经 API 面触达内核**：主进程侧只用 `ExtContext`（`main/extensions/loader/ctx.ts`），渲染层侧只用
   `src/extensions/renderer-api.ts`，不许 import 外壳内部（`@/lib/*`、`@/components/*`、`@/shell/*`）；
   需要新能力先扩 API 面；
 - 扩展端点走固定前缀 `/ext/...`（`kernel/extroute.ts` 登记进同一条 Router）；扩展之间互调走能力名
-  `ext:<extId>`（如 `ext:xeonsky.zip`）。
+  `ext:<extId>`（如 `ext:xeonsky.download`）。
 
 ## 启动流程
 

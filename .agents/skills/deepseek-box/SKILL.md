@@ -42,7 +42,7 @@ metadata:
 | `src/main/app/` | 应用自身的实现（设置、迁移、模型、窗口、更新、图标）；`ipc.ts` 已瘦成**装配器** |
 | `src/main/dsh/` | DeepSeek Harness 与运行环境（安装、下载、Node/npm、版本目录） |
 | `src/main/extensions/` | **扩展框架**：`loader/`（发现 / 授权 / 激活 / 卸载 / 重载）、`system/` 与 `builtin/`（系统与内置扩展登记表）、`preready.ts`（ready 前预读 manifest）；`modules/extensions.ts` 是内核与扩展层唯一桥 |
-| `src/extensions/` | **内置 / 系统扩展业务代码**，一扩展一目录（`main.ts` + `manifest.ts` + 可选 `*.vue`）：现有 `xeonsky.download`（下载）/ `xeonsky.zip`（7-Zip）/ `xeonsky.extm`（扩展包管理器）/ `xeonsky.extui`（扩展管理界面）/ `xeonsky.browser`（内嵌浏览器的 UA / 代理 / 权限策略）；`renderer-api.ts` 是渲染层扩展 API 面 |
+| `src/extensions/` | **内置 / 系统扩展业务代码**，一扩展一目录（`main.ts` + `manifest.ts` + 可选 `*.vue`）：现有 `xeonsky.download`（下载）/ `xeonsky.extm`（扩展管理页 + 扩展包管理 + 内置 7-Zip 核心，见其 `sevenzip/` 子目录）/ `xeonsky.browser`（内嵌浏览器的 UA / 代理 / 权限策略）；`renderer-api.ts` 是渲染层扩展 API 面 |
 | `src/preload/` | 唯一 `contextBridge` 出口：`window.api`（REST 客户端 + 本地常量 + 事件订阅） |
 | `src/renderer/src/` | Vue 3 界面：标签页外壳、设置页、安装向导、状态栏、终端 |
 | `src/renderer/src/lib/antdv.ts` | antdv-next 运行时基座：`AntdvRoot`（ConfigProvider + App 上下文） |
@@ -104,7 +104,7 @@ metadata:
 | 改 dsh 的偏好配置（主题 / 语言 / 供应商） | `main/dsh/cordisPatch.ts`、`dshHome.ts` | `settings.ts`（语言 / 主题）、`models.ts`（供应商） | references/main-process.md |
 | 改窗口 / 标签 / 托盘 | `main/app/{ui,windowreg}.ts` + `renderer/src/shell/*` | `modules/shell.ts` 路由与事件 | references/architecture.md |
 | 改扩展加载 / 卸载 / 重载 | `main/extensions/loader/index.ts`（`startLoader` / `stopLoader` / `reloadExt` / `reloadAllLoader`） | `modules/extensions.ts` 路由 + 系统能力 `system.extmanage` | references/architecture.md |
-| 改扩展管理界面 | `src/extensions/xeonsky.extui/`（`ExtensionsPanel.vue` + `locales.ts`） | 端点走 `modules/extensions.ts`；文案键 `ext.xeonskyExtui.*` | references/renderer.md |
+| 改扩展管理界面 | `src/extensions/xeonsky.extm/`（`ExtensionsPanel.vue` + `locales.ts`）；归档页在同目录 `sevenzip/ZipPanel.vue` | 端点走 `modules/extensions.ts`（基础管理）与 extm 自己的 IPC（包 / 归档）；文案键 `ext.xeonskyExtm.*` | references/renderer.md |
 | 新增一个主进程模块 | `main/kernel/module.ts`（契约） | `main/modules/<name>.ts` + `allModules()` | references/main-process.md |
 | 改文档站 | `docs/zh/...` + `docs/en/...` 成对 | `.vitepress/config.mts` nav/sidebar | references/conventions.md |
 | 新增 / 迁移 UI 组件 | `<a-*>` 组件（antdv-next） | 迁移同文件的 `el-*`；查 `antdv-next` 技能 | references/renderer.md |

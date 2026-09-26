@@ -1,5 +1,5 @@
 /**
- * 扩展 `xeonsky.zip` 的**能力契约**：主进程实现与渲染层界面共用的形状。
+ * `xeonsky.extm` 内部 7-Zip 模块的**能力契约**：主进程实现与渲染层界面共用的形状。
  *
  * 放在扩展自己的目录里（而不是 `src/shared/`）的原因：这些类型只服务于本扩展，
  * 不是内核契约。内核的 `src/shared/api.ts` 是**内置端点**的唯一事实来源，
@@ -44,7 +44,7 @@ export interface SevenZipStatus {
     supported: boolean
     /** 当前平台对应的内置目标（不支持时为 null）。 */
     target: SevenZipTarget | null
-    /** 内置二进制目录（`<应用>/src/extensions/xeonsky.zip/bin`）。 */
+    /** 内置二进制目录（`<应用>/src/extensions/xeonsky.extm/sevenzip/bin`）。 */
     binDir: string
     /** 内置二进制所在平台子目录（如 `win32-x64`；不支持时为空串）。 */
     binPlatformDir: string

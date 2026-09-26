@@ -1,6 +1,4 @@
 import type { StaticExt } from '../loader/sources'
-import * as xeonskyZip from '@ext/xeonsky.zip/main'
-import { manifest as xeonskyZipManifest } from '@ext/xeonsky.zip/manifest'
 import * as xeonskyExtm from '@ext/xeonsky.extm/main'
 import { manifest as xeonskyExtmManifest } from '@ext/xeonsky.extm/manifest'
 import * as xeonskyDownload from '@ext/xeonsky.download/main'
@@ -29,23 +27,14 @@ import { manifest as xeonskyBrowserManifest } from '@ext/xeonsky.browser/manifes
  */
 export const builtinExtensions: StaticExt[] = [
     {
-        // 扩展管理：设置面板「扩展」+ 扩展包能力（对外提供 ext:xeonsky.extm）。
-        // 声明硬依赖 xeonsky.zip？不 —— 7-Zip 是**软依赖**：它被停用/失败时
-        // 本扩展照常激活，只是 status 自报不可用、extract 返回 disabled，
-        // 加载器据此禁用压缩包扩展加载（见 xeonsky.extm/manifest.ts 的说明）。
+        // 扩展管理：设置面板（「扩展」页 + 归档页）+ 扩展包能力。
+        // 它是**自足**的：7-Zip 归档核心已并入为内部模块（`sevenzip/`），
+        // 不再有跨扩展的软依赖。对外仍提供 ext:xeonsky.extm（status / extract /
+        // listPackages），供加载器第二阶段与其它扩展协作。
         kind: 'builtin',
         sourceDir: 'src/extensions/xeonsky.extm',
         manifest: xeonskyExtmManifest,
         module: xeonskyExtm
-    },
-    {
-        // 归档（7-Zip）：申请 fs / net / proc 三项系统能力，对外提供 ext:xeonsky.zip。
-        // 依赖系统扩展全部就位（它在排序中排在内置之前，见 loader/sources.ts 的 staticExts），
-        // 所以这里的 capabilities 在激活时必然已提供。
-        kind: 'builtin',
-        sourceDir: 'src/extensions/xeonsky.zip',
-        manifest: xeonskyZipManifest,
-        module: xeonskyZip
     },
     {
         // 下载：申请 fs / net 两项系统能力，对外提供 ext:xeonsky.download。

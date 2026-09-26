@@ -384,12 +384,13 @@ function recordDrops(drops: Array<{ id: string; dir: string; kind: ExtKind; reas
 /**
  * 包扩展解压能力的**约定能力名**。
  *
- * 由内置扩展 `xeonsky.extm`（扩展包管理器）提供（它再经 `ext:xeonsky.zip` 的
- * 7-Zip 核心解压）。加载器不 import 具体扩展（分层约束），只按这个名字查能力槽。
+ * 由内置扩展 `xeonsky.extm`（扩展管理）提供 —— 本扩展内含 7-Zip 归档核心
+ * （`sevenzip/`，原独立扩展 `xeonsky.zip`），解压不再跨扩展转发。
+ * 加载器不 import 具体扩展（分层约束），只按这个名字查能力槽。
  *
- * **兜底策略**：`xeonsky.extm` 声明硬依赖 `xeonsky.zip` —— 7-Zip 扩展被用户**停用**、
- * 加载失败或依赖链断裂时，extm 本身就不会激活，这里查能力槽必然为空，于是全部
- * 压缩包记为 skipped、**不做任何读取**（不触碰包文件内容，只登记原因）。
+ * **兜底策略**：`xeonsky.extm` 被用户**停用**或激活失败时它本身就不在能力槽里，
+ * 这里必然查不到，于是全部压缩包记为 skipped、**不做任何读取**
+ * （不触碰包文件内容，只登记原因）。
  */
 const PKGS_CAPABILITY = 'ext:xeonsky.extm'
 
@@ -429,8 +430,8 @@ function putPkgSkipped(pkg: { stem: string; file: string }, message: string, sta
 /**
  * 加载压缩包形态的外部扩展。**必须在全部普通扩展加载结束之后调用**：
  *
- *  - 解压要经内置扩展 `xeonsky.pkgs`（它声明硬依赖 `xeonsky.zip`，拓扑序保证
- *    7-Zip 先就位）—— 所以这里的时序是「7-Zip 加载完、普通扩展加载完」才轮到包扩展；
+ *  - 解压要经内置扩展 `xeonsky.extm`（它内含 7-Zip 归档核心）—— 所以这里的
+ *    时序是「普通扩展加载完」才轮到包扩展；
  *  - 包扩展的 id / 依赖冲突要拿第一轮的结果来判。
  *
  * 冲突规则（用户约定：**包名冲突则不加载**）：
@@ -463,8 +464,8 @@ async function loadPkgExtensions(available: Set<string>): Promise<boolean> {
         }
         return false
     }
-    // **7-Zip 不可用 → 压缩包扩展加载整体禁用**（用户约定）：extm 的 status 实时探测
-    // ext:xeonsky.zip（被停用 / 加载失败都算不可用）。此时只登记原因，不读取任何包文件。
+    // **7-Zip 核心不可用 → 压缩包扩展加载整体禁用**（用户约定）：extm 的 status
+    // 实时探测它内置的 7-Zip 二进制能否跑出版本。此时只登记原因，不读取任何包文件。
     let zipOk = true
     try {
         zipOk = extm.status().zipAvailable
@@ -639,8 +640,8 @@ export async function startLoader(): Promise<ExtensionsInfo> {
     recordDrops(drops)
 
     // 第二阶段：压缩包形态的外部扩展（*.zip / *.xeonsky-ext）。
-    // 必须在全部普通扩展加载结束之后 —— 解压经内置扩展 xeonsky.extm（它依赖
-    // xeonsky.zip 的 7-Zip 核心），且包扩展的 id / 依赖冲突要拿第一轮结果来判。
+    // 必须在全部普通扩展加载结束之后 —— 解压经内置扩展 xeonsky.extm（它内含
+    // 7-Zip 归档核心），且包扩展的 id / 依赖冲突要拿第一轮结果来判。
     // 安全模式下与其它内置 / 外部扩展一样不加载。
     if (!state.safeMode) {
         const pkgFailure = await loadPkgExtensions(available)
@@ -697,7 +698,7 @@ export async function stopLoader(): Promise<void> {
 //  2. 重载必须在**没有别的扩展持有它的能力**时才有意义。硬依赖它的扩展此刻拿着的
 //     是旧动作表（能力槽按名字查，撤销后立即失效），所以重载一个「被依赖者」时，
 //     依赖方需要一起重载 —— 界面侧用「全部重载」覆盖这种情形，单体重载则用于
-//     无依赖的叶子扩展（如 xeonsky.zip / xeonsky.browser）。
+//     无依赖的叶子扩展（如 xeonsky.extm / xeonsky.browser）。
 
 /** 卸载一个已装载的扩展（不改变 state.entries —— 由调用方随后重填）。 */
 async function unloadOne(item: LoadedExt): Promise<void> {

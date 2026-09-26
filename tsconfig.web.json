@@ -29,5 +29,5 @@
         "src/extensions/*.ts",
         "src/extensions/*/**/*.ts"
     ],
-    "exclude": ["src/extensions/**/main.ts"]
+    "exclude": ["src/extensions/**/main.ts", "src/extensions/**/sevenzip/core.ts", "src/extensions/**/sevenzip/archive.ts"]
 }

@@ -1,5 +1,5 @@
 /**
- * 扩展 `xeonsky.zip` 的**纯逻辑**：平台判定、发行包选择、命令行组装、输出解析。
+ * `xeonsky.extm` 的**内部 7-Zip 模块 · 纯逻辑**：平台判定、发行包选择、命令行组装、输出解析。
  *
  * 为什么单独成文件：本仓库没有单元测试，**纯逻辑是唯一能被 typecheck 有效覆盖的形态**；
  * 且这段逻辑是「7-Zip 到底怎么调」的单一事实来源，出错的代价很高
@@ -21,7 +21,7 @@ import { ARCHIVE_FORMATS, COMPRESSION_METHODS, type ArchiveEntry, type ArchiveLi
 /**
  * 内置的 7-Zip 命令行核心（7-Zip 26.03，LGPL）。
  *
- * 二进制**随扩展内置**（`src/extensions/xeonsky.zip/bin/<平台>/`），不再运行时下载：
+ * 二进制**随扩展内置**（`src/extensions/xeonsky.extm/sevenzip/bin/<平台>/`），不再运行时下载：
  *  - **Windows**：`7z.exe` + `7z.dll`（**完整版**，同目录缺一不可），x64 与 arm64 各一套原生版；
  *  - **Linux**：官方 `linux-x64` / `linux-arm64` 包里的 `7zz`（完整版命令行二进制）；
  *  - **macOS**：官方 `mac` 包里的 `7zz`（通用二进制，x64 与 arm64 共用一份）。
