@@ -28,14 +28,18 @@ Each root directory's `.active` records the currently active version. The core A
 Files that were occupied during the move (typically a running `node.exe`) may not have been migrated. An incomplete directory is treated as nonexistent, and the read side falls back to the old flat layout; `moveFlatInto` also refuses to write `.active` when the key files are not in place.
 :::
 
-## Downloader (multi-threaded)
+## Downloading: extension capability with a kernel fallback
 
-`main/dsh/downloader.ts`'s `downloadFile`:
+The download capability lives in the built-in extension **`xeonsky.download`** (`src/extensions/xeonsky.download/`): segmented concurrency, cross-session resume, token-bucket rate limiting, retries and size validation, with the task queue persisted as `tasks.json` in the extension data directory. The network stack stays in the kernel — the engine only issues requests through the injected `OpenStream` (the `stream` action of `system.net`), so **Settings → Network → Proxy** still applies.
+
+Kernel callers (the Node distribution, bundled npm / pnpm) do not import the extension directly; they go through the **facade** `main/dsh/download.ts`, which looks up the capability slot `ext:xeonsky.download` by convention name and only falls back to the `downloadFile` of `main/dsh/downloader.ts` when it is missing (extension disabled / safe mode):
 
 - Concurrent segmented downloads over HTTP Range (default 4, configurable in settings, max 16); it degrades to a single stream below 1 MB or when the server does not support Range;
 - Retries and temp-file cleanup; temp files land in `temp/download` under the working directory and are moved to the target on completion (copying as a fallback across drives);
 - **Deduplication for the same target file**: `inFlightDownloads` merges by the lower-cased final path; a later call subscribes to the same task, and progress is broadcast to all subscribers; `isFileDownloading()` is exposed;
 - Supports cancellation via `signal`.
+
+The authoritative record for resume state is the `.part.json` sidecar next to the `.part` file (total / etag / lastModified / per-segment offsets); any change re-downloads the whole file, avoiding a corrupt half-old-half-new result.
 
 ## Cancelling an install
 

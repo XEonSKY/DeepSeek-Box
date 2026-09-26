@@ -2,7 +2,7 @@
 
 ## Tech stack
 
-Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus · Pinia · vue-i18n · @xterm/xterm.
+Electron 44 · electron-vite 6 · Vite 8 (rolldown core) · Vue 3 · TypeScript · Element Plus · Pinia · vue-i18n · @xterm/xterm.
 
 ## The three processes
 
@@ -18,7 +18,7 @@ Shared code (types, i18n, version utilities) lives in `src/shared/` and is avail
 
 Inside the main process, this is a **small kernel plus pluggable modules**:
 
-- `src/main/kernel/` — the **stable mechanism layer**, which knows nothing about business concepts: `runtime` (runtime primitives), `router` (the only `ipcMain` sink), `module` (`defineModule` / `ModuleRegistry`), `operations` (progress registry + cancellation tokens), `treeops` (the single entry point for whole-directory deletion), `services` (service slot).
+- `src/main/kernel/` — the **stable mechanism layer**, which knows nothing about business concepts: `runtime` (runtime primitives), `router` (the only `ipcMain` sink), `module` (`defineModule` / `ModuleRegistry`), `operations` (progress registry + cancellation tokens), `treeops` (the single entry point for whole-directory deletion), `services` (service slot), `extroute` (the mount point for extension endpoints).
 - `src/main/modules/` — the **feature-policy layer**: one file per feature, each declaring its own IPC routes with `defineModule` (endpoints are no longer registered centrally).
 - `src/main/app/`, `src/main/dsh/` — concrete implementations, called by the modules.
 
@@ -26,6 +26,26 @@ Inside the main process, this is a **small kernel plus pluggable modules**:
 cross-module actions go through the service slot in `kernel/services.ts` (a provider registers a capability in
 its `onReady`, a consumer looks it up by name), so static cycles like
 `modules/settings → dsh/dsh → app/settings` cannot form. `app/ipc.ts` is just the **assembler**.
+
+## The extension layer
+
+Next to the main process there is an **extension system**:
+
+- The **framework** lives in `src/main/extensions/` (the loader `loader/`, plus the `system/` and `builtin/`
+  registries); `modules/extensions.ts` is the only bridge between the kernel and extensions
+  (the `GET /extensions` management endpoints);
+- The **business code of built-in / system extensions** lives one directory per extension under the top-level
+  `src/extensions/<id>/` (`main.ts` main-process entry + `manifest.ts` + optional `*.vue` renderer views).
+  Present today: `xeonsky.download` (multi-threaded download / resume / rate limiting), `xeonsky.zip`
+  (a bundled 7-Zip core), `xeonsky.extm` (package manager for archive-form external extensions),
+  `xeonsky.extui`, plus the five system-capability extensions `system.fs` / `system.net` / `system.proc` /
+  `system.app` / `system.ui`;
+- **Extensions can only reach the kernel through the API surface**: the main-process side uses `ExtContext`
+  (`main/extensions/loader/ctx.ts`) only, the renderer side uses `src/extensions/renderer-api.ts` only —
+  importing shell internals (`@/lib/*`, `@/components/*`, `@/shell/*`) is not allowed; extend the API surface
+  first when a new capability is needed;
+- Extension endpoints use the fixed `/ext/...` prefix (`kernel/extroute.ts`, registered into the same Router);
+  extensions call each other via capability names like `ext:xeonsky.zip`.
 
 ## Startup flow
 
@@ -56,12 +76,15 @@ Main-process entry `src/main/index.ts`:
 ## Data and configuration
 
 - **App settings**: `settings.json` under the config directory (not Electron's userData);
-- **dsh's own settings**: `~/.dsh/settings.yaml`; the app syncs theme / language there;
+- **dsh's own preferences**: stored in dsh's **Cordis patch layers** (`cordis.patch.yml`) — a profile layer
+  (`$DSH_HOME/profiles/<profile>/cordis.patch.yml`, where Box writes theme / language for the `web` profile)
+  and a home layer (`$DSH_HOME/cordis.patch.yml`, higher priority, for machine-level overrides); the old
+  `~/.dsh/settings.yaml` is imported once by dsh and renamed — Box no longer reads or writes it;
 - **DeepSeek Harness / Node / npm**: stored per version under the config directory, see [DeepSeek Harness & environment install pipeline](/en/dev/installs).
 
 ## Settings and state propagation
 
-- The single source of truth for app settings is `settings.json` in the config directory; `loadSettings()` performs a **one-off migration** on read, gated by `settingsVersion` (currently 2) — only genuinely old configs get keys renamed / defaults upgraded, so values the user typed later are never rewritten. **Keep the `legacy` check** when touching that normalization logic.
+- The single source of truth for app settings is `settings.json` in the config directory; `loadSettings()` performs a **one-off migration** on read, gated by `settingsVersion` (currently 3) — only genuinely old configs get keys renamed / defaults upgraded, so values the user typed later are never rewritten. **Keep the `legacy` check** when touching that normalization logic.
 - Saving from the renderer goes through `PUT /settings`: after writing to disk the main process **broadcasts `settings:changed` to every window**; the config-file watcher covers **external edits** only and deliberately stays silent about the app's own writes.
 - So **every component whose state derives from settings must subscribe to `settings:changed`** — missing that subscription shows up as “the change only takes effect after a restart”. The window that initiated the save ignores the echo itself (the settings store's `lastSaveAt`).
 - `PUT /settings` also performs a few idempotent extras: sync the dsh theme, write the launch-at-login entry, refresh the embedded pages' UA / proxy, and apply the app icon.

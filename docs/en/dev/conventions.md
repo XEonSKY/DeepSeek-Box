@@ -16,9 +16,9 @@ Before changing code or documentation, please follow these conventions.
 
 ## Files and directories
 
-- All agent-generated caches / temporary / intermediate files (logs, reports, drafts, script output) go to `.agents/temp/` and are deleted once used;
+- All agent-generated caches / temporary / intermediate files (logs, reports, drafts, script output) go to `.agents/temp/`; they may be kept across tasks (saving repeated downloads / clones) and cleaned up when needed;
 - Never scatter them across the workspace root, `docs/`, or anywhere else;
-- `.agents/` (including `.agents/temp/`) is gitignored and not under version control.
+- `.gitignore` only excludes `.agents/temp/`; **`.agents/skills/**` is under version control** (team-shared agent skills).
 
 ## Git and remotes
 
@@ -35,8 +35,8 @@ Before changing code or documentation, please follow these conventions.
 ## i18n strings
 
 - The single source of truth for UI strings is `src/shared/locales/{zh,en}/index.ts`; the two are **key-for-key aligned** (same names, order and `{placeholders}`);
-- `zh/hant.ts` is a **full Traditional Chinese override**; `zh/{anime,wenyan}.ts` and `en/{pirate,shakespeare}.ts` are **diff-only overlays** deep-merged onto the base catalog by `shared/locales/ext.ts`;
-- When adding a key, add it to **zh / en / hant together**, otherwise Traditional Chinese users see Simplified text or the raw key;
+- `zh/hant.ts` — like `zh/{anime,wenyan}.ts` and `en/{pirate,shakespeare}.ts` — is a **diff-only overlay** deep-merged onto the base catalog by `shared/locales/ext.ts`;
+- When adding a key, only **zh / en** need updating (hant needs nothing; uncovered keys fall back to the Simplified base); when **deleting** a key, remove it from **zh / en / hant together** — hant must stay a subset of zh, deleting only from zh leaves orphan keys;
 - Strings are **part of the program** (`src/shared/locales/**` does not count as documentation) and may change together with the feature.
 
 ## Logging
@@ -74,5 +74,4 @@ Runtime behaviour (window, tray, downloads, migrations, proxy, self-update, UI) 
 ## Known issues and TODOs
 
 - `docs/public/home-page.png` is still an old-brand screenshot and is still referenced by the docs home page; it needs re-shooting;
-- `Settings.funLocale` is a legacy field name; renaming it requires a persistence migration, so it stays for now;
-- In `src/renderer/src/components/TitleBar.vue` the `.icon-btn` comment references an `AGENT.md` that does not exist in the repository; it should be cleaned up.
+- `Settings.funLocale` is a legacy field name; renaming it requires a persistence migration, so it stays for now.

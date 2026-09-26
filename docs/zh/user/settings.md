@@ -108,5 +108,5 @@
 | **程序版本 · dsh 版本** | 形如 `v0.1.5-rc-1 · dsh 0.1.5-rc.2`。点击弹出浮层检测更新；检测到新版本时**只在版本项上显示小红点**（静默提示，不弹通知），浮层里可查看程序与 dsh 两条版本线的状态。 |
 
 ::: info
-主题与语言的基础来源仍是 dsh 的 `~/.dsh/settings.yaml`；应用自身设置存在**配置目录**的 `settings.json`。
+主题与语言会同步写入 dsh 的 Cordis patch 层（`$DSH_HOME/profiles/web/cordis.patch.yml`）；应用自身设置存在**配置目录**的 `settings.json`。
 :::

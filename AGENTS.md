@@ -4,7 +4,7 @@
 
 ## 项目
 
-DeepSeek Box —— DeepSeek Harness 的 Electron 桌面外壳（Electron 44 + Vue 3 + TypeScript + Element Plus）。
+DeepSeek Box —— DeepSeek Harness 的 Electron 桌面外壳（Electron 44 + electron-vite 6 + Vite 8 + Vue 3 + TypeScript + Element Plus）。
 
 ## 质量门禁
 
@@ -35,13 +35,13 @@ DeepSeek Box —— DeepSeek Harness 的 Electron 桌面外壳（Electron 44 + V
 ## 关键红线
 
 - IPC 契约唯一来源是 `src/shared/api.ts`；新增端点写进对应的 `src/main/modules/<功能>.ts`（新功能挂进 `modules/index.ts`），preload 不改。
-- 主进程 HTTP 一律走 `httpFetch(scope, ...)`；推送走 `runtime.ts` 的发送函数。
+- 主进程 HTTP 一律走 `httpFetch(scope, ...)`；推送走 `runtime.ts` 的发送函数。扩展只能经 API 面触达内核（主进程 `ExtContext`、渲染层 `src/extensions/renderer-api.ts`），扩展内禁止裸 `fetch`（走 `system.net`）。
 - 密钥不出主进程；设置结构变更必须升 `settingsVersion` 且向后兼容。
 - 新增文案 zh / en 两处对齐；hant 是差异覆盖目录，**无需同步补充**（新增键不必补繁体）；用户可见文案必须 i18n。
 - UI 组件优先 `antdv-next`（`<a-*>`），禁止新增 `el-*`；按需引入由构建器自动注入，不要手动 import 组件或全量注册。
 - 缩进 4 个空格，注释用简要中文。
 - agent 缓存 / 临时文件一律放 `.agents/temp/`；**临时目录不必每次清理**，允许跨任务保留复用（避免重复下载 / 克隆），需要时再手动清。
-- `.agents/temp/deepseek-harness/` 常备一份 `https://github.com/deepseek-ai/deepseek-harness.git` 的克隆（查上游 dsh 实现 / 契约用），**不要删除**；需要最新代码时 `git -C .agents/temp/deepseek-harness pull`，仅目录缺失才重新 clone。
+- `.agents/temp/deepseek-harness/` 常备一份 `https://github.com/deepseek-ai/deepseek-harness.git` 的克隆（查上游 dsh 实现 / 契约用），**不要主动删除**（按用户指令清理工作区时允许一并清理）；需要最新代码时 `git -C .agents/temp/deepseek-harness pull`，仅目录缺失才重新 clone。
 - 改动推送 `dev`，发行才推 `main`；推送远程前必须征得确认。
 - 一个提交只做一件事；提交信息用 Conventional Commits。
 - agent 只做 typecheck + lint；运行时行为由用户验证。

@@ -20,7 +20,7 @@
 
 - **所有 agent 产生的缓存 / 临时 / 中间文件（日志、报告、草稿、脚本产物）统一放 `.agents/temp/`**；**不必每次用完即删** —— 临时目录允许跨任务保留复用（省掉重复下载 / 克隆的开销），需要时再手动清理。
 - 不要散落到工作区根、`docs/` 或其它目录。
-- **常备上游参考仓库**：`.agents/temp/deepseek-harness/` 保留一份 `https://github.com/deepseek-ai/deepseek-harness.git` 的克隆（查上游 dsh 实现 / 契约用），**不要删除**；需要最新代码时 `git -C .agents/temp/deepseek-harness pull`，仅目录缺失才重新 clone。
+- **常备上游参考仓库**：`.agents/temp/deepseek-harness/` 保留一份 `https://github.com/deepseek-ai/deepseek-harness.git` 的克隆（查上游 dsh 实现 / 契约用），**不要主动删除**（按用户指令清理工作区时允许一并清理）；需要最新代码时 `git -C .agents/temp/deepseek-harness pull`，仅目录缺失才重新 clone。
   - 本机 `git clone` 直连 GitHub 时 schannel 会报 `SEC_E_NO_CREDENTIALS`，改用 openssl 后端：`git -c http.sslBackend=openssl clone ...`（该克隆已在仓库级 config 里固定 `http.sslBackend=openssl`，后续 `pull` 直接可用）。
 - `.agents/skills/**` **纳入版本管理**（团队共享）；`.agents/temp/` 已 gitignore，只保留 `.gitkeep` 占位。
 
@@ -141,4 +141,3 @@
 
 - `docs/public/home-page.png` 仍是旧品牌截图，文档首页仍在引用，待重截。
 - `Settings.funLocale` 是历史字段名，改名需伴随一次持久化迁移，故暂时保留。
-- `src/renderer/src/components/TitleBar.vue` 里 `.icon-btn` 的注释引用了一个仓库中并不存在的 `AGENT.md`，待清理。

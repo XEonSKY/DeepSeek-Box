@@ -4,7 +4,7 @@
 
 ## First visit: consent comes first
 
-On the first visit the page shows a consent card explaining that it will read `settings.yaml` and `.credentials.yaml` under the dsh configuration directory (`$DSH_HOME`, or `~/.dsh` when unset) and use the saved keys to query the provider endpoints for the model catalogue and balances.
+On the first visit the page shows a consent card explaining that it will read `cordis.patch.yml` (provider config) and `.credentials.yaml` (API keys) under the dsh configuration directory (`$DSH_HOME`, or `~/.dsh` when unset) and use the saved keys to query the provider endpoints for the model catalogue and balances.
 
 - Clicking “Agree and read” is what starts reading and network access; the consent is stored locally (as `modelsCredConsent` in `settings.json` under the configuration directory) and is not asked again;
 - Clicking “Not now” collapses the card for this visit; the page then shows “Not authorized yet” and you can authorize at any time;

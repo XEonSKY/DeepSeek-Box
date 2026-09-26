@@ -14,6 +14,7 @@
 | `operations.ts` | 「进行中的操作」注册表 + 取消令牌（**纯逻辑**） | `beginOperation` / `pushProgress` / `operationsSnapshot` / `trackedOperation` / `beginCancelable` / `cancelActive` |
 | `treeops.ts` | 整目录删除唯一出口 | 转发 `dsh/fsutil` 的 `removeTree` / `removeQuietly` / `removeQuietlySync` / `readPkgVersion` |
 | `services.ts` | 服务槽（打断模块间静态环） | `provideService` / `useService` / `hasService` / `SERVICE` |
+| `extroute.ts` | 扩展端点挂载点（固定 `/ext` 前缀） | `bindExtRouter` / `registerExtRoute`：扩展端点仍进同一条 Router，但无法伪装成内置端点 |
 | `logger.ts` | 全进程唯一日志入口（pino + pino-roll） | `initLogger` / `logger(tag)` / `writeRemoteLog` / `closeLogger`；目录由 `index.ts` 注入，kernel 不认业务目录 |
 
 ## modules/（功能策略）
@@ -31,6 +32,7 @@
 | `tabdrag.ts` | `/tab-drag*`（跨窗口拖标签） |
 | `appupdate.ts` | `/app/meta`、`/app/update/*`、`/app/relaunch`、`/app/quit` |
 | `configdir.ts` | `/config-dir*`、`/models/*`、`/icons*` |
+| `extensions.ts` | `GET /extensions`、`PUT /extensions/:id/enabled`、`POST /extensions/:id/forgive`、`POST /extensions/:id/exit-safe-mode` | 扩展管理：内核与扩展层唯一桥，装配期把路由 / 广播落点交给加载器 |
 
 `index.ts` 汇总 `allModules()`；`app/ipc.ts` 是装配器（建 `Router` + `new ModuleRegistry(allModules())` + `mountRoutes`）。
 
@@ -47,6 +49,11 @@
 | `appupdate.ts` | 应用自更新 | 解析 GitHub Releases、后台下载、事件广播；启动守卫为 async |
 | `appslots.ts` | A/B 版本槽 | 归档旧版、生成回退脚本、启动健康守卫（文件操作全 async） |
 | `webview.ts` | 渲染参数与内嵌策略 | 硬件加速、webview UserAgent、代理、`installWebviewPermissionPolicy()` |
+| `webviewPermissionPolicy.ts` | 内嵌页面权限判定（纯逻辑） | `decidePermission` / `isTrustedRequestingUrl`；失败即拒绝，放宽名单前先读模块头注释 |
+| `autolaunch.ts` | 开机自启（「启动增强」） | Windows / macOS 走 `app.setLoginItemSettings`，Linux 写 `~/.config/autostart` 的 .desktop |
+| `confirmDialog.ts` | 独立确认子窗口 | 替代内嵌弹层，OS 管理焦点与模态；外观由渲染层 `ConfirmWindow.vue` 负责 |
+| `rollbackscript.ts` | 回退脚本纯文本构造（纯逻辑） | 不 import electron；规避 `tasklist | findstr` 判存活等三个坑 |
+| `const.ts` | 品牌常量 | `APP_TITLE` 等的收敛处 |
 | `windowreg.ts` | 窗口登记 | 核心 / 副窗口角色与接管 |
 | `contextmenu.ts` | 右键菜单 | 剪切 / 复制 / 粘贴 / 全选 |
 | `appicon.ts` | 应用程序图标 | `appLogoPath` / 读写图标 |
@@ -61,11 +68,24 @@
 | `nodeenv.ts` | Node 下载部署 | `deployLocalNode` / `listNodeVersions` / `nodeStatus` / 版本管理 |
 | `npmRunner.ts` | npm 探测 / 执行 / 缓存 | `ensureBundledNpmReady` / `runNpm` / `listNpmVersions` / `npmCacheEnv` |
 | `pnpmRunner.ts` | pnpm 获取 / 运行（系统自带 / 内置两种来源） | `pnpmStatus` / `updatePnpm` / `systemPnpmPath` / `pnpmShimEnv`；入口解析见 `pnpmEntry.ts` |
-| `downloader.ts` | 多线程下载器 | `downloadFile`（HTTP Range 分段、去重、取消） |
+| `download.ts` | **内核下载门面** | 内核所有「下一个文件到磁盘」从这里走：按约定名查能力槽 `ext:xeonsky.download`，查不到才回落 `downloader.ts` |
+| `downloader.ts` | 下载兜底实现 | `downloadFile`（HTTP Range 分段、去重、取消）；扩展停用 / 安全模式时才走到 |
+| `child.ts` | 子进程共同流程（纯编排） | spawn → 登记 → 收日志 → 可取消 → 只 settle 一次 |
+| `logbus.ts` | 日志环形缓冲 + 子进程登记表 | 不依赖 dsh 服务状态，被整条 dsh 链路共用 |
+| `plugins.ts` / `pluginManifest.ts` | dsh 插件（profile 组合包）管理 | 读取 / 启停 `dsh.profile.bundles`，经 `dsh plugin --profile` 安装 / 卸载；清单解析为纯逻辑 |
+| `ptcNode.ts` / `ptcNodeSync.ts` | 给 dsh PTC worker 指定真正的 node | 把 `nodeExecutable` 写进 home 级 patch 层，修复 electron.exe 冒充 Node 被 worker 清环境后崩溃 |
 | `installs.ts` | 版本化目录 | `installRoot` / `versionDir` / `activeVersion` / `setActiveVersion` / `resolveActive` / `isVersionComplete` / `listInstalled` / `removeVersion` / `migrateLegacyInstalls`；`InstallKind` 取 `node` / `npm` / `pnpm` / `dsh` |
 | `tools.ts` | 路径解析 | `localNodeExecPath` / `nodeRuntimeFor` / `resolveDshModule` / `findSystemNode` |
 | `semver.ts` | 版本工具 | `sortVersionsDesc` / `filterByPrerelease` / `compareVersions` / `pickLatest` |
 | `net.ts` | 代理 | 代理相关辅助 |
+
+## extensions/ 与扩展层
+
+扩展框架与登记表在 `src/main/extensions/`（`loader/` / `system/` / `builtin/`），内置与系统扩展的业务代码
+在顶层 `src/extensions/<id>/`（一扩展一目录：`main.ts` + `manifest.ts` + 可选 `*.vue`）。现有
+`xeonsky.download`（下载）/ `xeonsky.zip`（7-Zip）/ `xeonsky.extm`（扩展包管理器）/ `xeonsky.extui`，
+以及 `system.*` 五个系统能力扩展。扩展只能经 `ExtContext`（主进程）与 `src/extensions/renderer-api.ts`
+（渲染层）触达内核，端点固定走 `/ext/...` 前缀（`kernel/extroute.ts`）。
 
 ::: tip
 逐模块细节见对应开发文档：安装链路见[DeepSeek Harness 与环境安装链路](/zh/dev/installs)，配置目录见[配置目录](/zh/dev/config-dir)，更新见[应用自更新](/zh/dev/app-update)。

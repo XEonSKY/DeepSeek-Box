@@ -4,7 +4,7 @@ import { mergePatchEntryConfig } from './cordisPatch'
 /**
  * 给 dsh 的 PTC（run_code）worker 指定一个**真正的 node 可执行文件**。
  *
- * 背景（详见 docs/zh/dev/run-code-worker-exit-diagnosis.md）：
+ * 背景：
  * 早期 Box 用 electron.exe 冒充 Node 跑 dsh，靠环境变量 `ELECTRON_RUN_AS_NODE=1`
  * 才进 Node 模式；而 dsh 的 PTC worker 启动时**会清空几乎全部环境变量**
  * （只留 PATH / PATHEXT / SYSTEMROOT / WINDIR / TEMP / TMP 六项），

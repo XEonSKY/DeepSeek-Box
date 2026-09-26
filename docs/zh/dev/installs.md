@@ -28,14 +28,18 @@ Node、npm 与 DeepSeek Harness 都按版本分开存放，多版本并存：
 搬迁时被占用的文件（典型是正在运行的 `node.exe`）可能没搬进来。残缺目录一律当作不存在，读取侧会回退到平铺旧布局；`moveFlatInto` 也会在关键文件未落位时拒绝写 `.active`。
 :::
 
-## 下载器（多线程）
+## 下载：扩展能力 + 内核兜底
 
-`main/dsh/downloader.ts` 的 `downloadFile`：
+下载能力在内置扩展 **`xeonsky.download`**（`src/extensions/xeonsky.download/`）：分段并发、跨会话断点续传、令牌桶限速、重试与大小校验，任务队列持久化在扩展数据目录的 `tasks.json`。网络栈仍在内核 —— 引擎只经注入的 `OpenStream`（= `system.net` 的 `stream` 动作）发请求，「设置 → 网络 → 代理」照常生效。
+
+内核调用方（Node 发行包、内置 npm / pnpm）不直接 import 扩展，而是走**门面** `main/dsh/download.ts`：按约定名查能力槽 `ext:xeonsky.download`，查不到（扩展被停用 / 安全模式）才回落到 `main/dsh/downloader.ts` 的 `downloadFile`：
 
 - 用 HTTP Range 分段并发下载（默认 4，可在设置里调，最多 16）；小于 1MB 或服务端不支持 Range 时退化为单流；
 - 带重试、临时文件清理；临时文件落在工作目录的 `temp/download`，完成后再搬到目标（跨盘用拷贝兜底）；
 - **同一目标文件去重**：`inFlightDownloads` 按小写化后的最终路径合并，后到的调用订阅同一任务，进度广播给全部订阅者；对外提供 `isFileDownloading()`；
 - 支持 `signal` 取消。
+
+断点续传的权威记录是 `.part` 旁的 `.part.json` 侧车（total / etag / lastModified / 各段偏移），任一变化即整份重下，避免拼出「前半旧后半新」的脏文件。
 
 ## 取消安装
 

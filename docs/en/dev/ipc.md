@@ -105,6 +105,7 @@ Event names are still `domain:action` (`settings:changed`, `configdir:migration`
 | `appupdate.ts` | `GET /app/meta`, `/app/update/state`, `/slots`, `POST /app/update/check`, `/rollback`, `/restart`, `/app/relaunch`, `/app/quit` | Check / trigger / version slots / rollback / restart-quit |
 | `shell.ts` | `GET /shell/meta`, `POST /shell/open-url`, `/focus-core`, `/move-tab`, `PUT /shell/title`, `/windows/*`, `/dialog/*` | Multi-window and tab transfer, window controls, dialogs |
 | `tabdrag.ts` | `POST` / `PATCH` / `DELETE /tab-drag`, `POST /tab-drag/drop` | Driven by the source window; screen coordinates pick the drop target |
+| `extensions.ts` | `GET /extensions`, `PUT /extensions/:id/enabled`, `POST /extensions/:id/forgive`, `POST /extensions/:id/exit-safe-mode` | Extension management: list / toggle / safe mode; extension endpoints always use the `/ext/...` prefix (`kernel/extroute.ts`) |
 
 ::: tip
 The full list is governed by `ApiRoutes` in `src/shared/api.ts`; the module contract is

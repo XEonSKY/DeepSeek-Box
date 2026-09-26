@@ -37,10 +37,12 @@ metadata:
 | 目录 | 职责 |
 |---|---|
 | `src/main/` | 主进程：窗口 / 托盘 / 设置 / dsh 启停 / 下载安装 / 自更新 / IPC 路由 |
-| `src/main/kernel/` | **微内核（机制）**：`runtime`（运行态原语）、`router`（唯一 ipcMain 落点）、`module`（defineModule / ModuleRegistry）、`operations`（进度注册表 + 取消令牌）、`treeops`（整目录删除唯一出口）、`services`（服务槽） |
-| `src/main/modules/` | **功能模块（策略）**：`settings` / `dsh` / `env` / `shell` / `tabdrag` / `appupdate` / `configdir`，各自 `defineModule` 声明路由；`index.ts` 汇总 `allModules()` |
+| `src/main/kernel/` | **微内核（机制）**：`runtime`（运行态原语）、`router`（唯一 ipcMain 落点）、`module`（defineModule / ModuleRegistry）、`operations`（进度注册表 + 取消令牌）、`treeops`（整目录删除唯一出口）、`services`（服务槽）、`extroute`（扩展端点挂载点） |
+| `src/main/modules/` | **功能模块（策略）**：`settings` / `dsh` / `env` / `shell` / `tabdrag` / `appupdate` / `configdir` / `extensions`，各自 `defineModule` 声明路由；`index.ts` 汇总 `allModules()` |
 | `src/main/app/` | 应用自身的实现（设置、迁移、模型、窗口、更新、图标）；`ipc.ts` 已瘦成**装配器** |
 | `src/main/dsh/` | DeepSeek Harness 与运行环境（安装、下载、Node/npm、版本目录） |
+| `src/main/extensions/` | **扩展框架**：`loader/`（发现 / 授权 / 激活 / 卸载）、`system/` 与 `builtin/`（系统与内置扩展登记表）；`extensions.ts` 模块是内核与扩展层唯一桥 |
+| `src/extensions/` | **内置 / 系统扩展业务代码**，一扩展一目录（`main.ts` + `manifest.ts` + 可选 `*.vue`）：现有 `xeonsky.download`（下载）/ `xeonsky.zip`（7-Zip）/ `xeonsky.extm`（扩展包管理器）/ `xeonsky.extui`；`renderer-api.ts` 是渲染层扩展 API 面 |
 | `src/preload/` | 唯一 `contextBridge` 出口：`window.api`（REST 客户端 + 本地常量 + 事件订阅） |
 | `src/renderer/src/` | Vue 3 界面：标签页外壳、设置页、安装向导、状态栏、终端 |
 | `src/renderer/src/lib/antdv.ts` | antdv-next 运行时基座：`AntdvRoot`（ConfigProvider + App 上下文） |
@@ -55,7 +57,8 @@ metadata:
 1. **契约唯一事实来源是 `src/shared/api.ts`**：`ApiRoutes`（请求）与 `AppEvents`（推送）。新增端点必须**两处同步**：先在 `src/shared/api.ts` 登记 `ApiRoutes`，再到**对应功能模块** `src/main/modules/<功能>.ts` 里用 `defineModule` 声明处理函数（新功能就新建模块文件并挂进 `modules/index.ts` 的 `allModules()`）；`preload` 不改。模块声明的路径 / 方法 / 返回值与 `ApiRoutes` 对不上会**编译期报错**。
 2. **IPC 通道收口**：全项目只有 `src/main/kernel/router.ts` 直接碰 `ipcMain`；只有 `src/preload/index.ts` 直接碰 `ipcRenderer`。
 2b. **微内核分层不可越界**：`modules → kernel`、`modules → app/dsh` 单向依赖；**模块之间不 import**，跨模块动作走 `kernel/services.ts` 的服务槽（`provideService` / `useService`）。（`app/ipc.ts` 只是装配器，不再登记端点。）
-3. **主进程禁止裸 `fetch`**：所有 HTTP 走 `httpFetch(scope, url, init)`（`src/main/dsh/http.ts`），`scope` 决定是否走代理。
+3. **主进程禁止裸 `fetch`**：所有 HTTP 走 `httpFetch(scope, url, init)`（`src/main/dsh/http.ts`），`scope` 决定是否走代理。**扩展内同样禁止 `fetch`**：网络请求走 `system.net` 的 `fetch` / `stream` 动作（代理由内核 session 决定，扩展里写 fetch 会绕开代理）；「下一个文件到磁盘」用内置扩展 `ext:xeonsky.download`。
+3b. **扩展只能经 API 面触达内核**（两个方向都成立）：主进程侧只用 `ExtContext`（`main/extensions/loader/ctx.ts`），渲染层侧只用 `src/extensions/renderer-api.ts`（`extApi` / `extT` / `extErrorMessage`），**不 import 外壳内部**（`@/lib/*`、`@/components/*`、`@/shell/*`）；需要新能力**先扩 API 面**。
 4. **主进程推送不能直接 `webContents.send`**：用 `runtime.ts` 的 `broadcast` / `sendToWindow` / `sendToWcId` / `sendCore`，否则绕过 `ipc:event` 信封，渲染层收不到。
 5. **密钥不出主进程**：模型 / 余额相关的凭据读取只留在主进程，渲染层拿不到明文。
 6. **设置派生状态必须订阅 `settings:changed`**：否则表现为「改完要重启才生效」；发起保存的窗口忽略回放（靠 store 的 `lastSaveAt`）。
@@ -73,14 +76,14 @@ metadata:
 18. **版本号规范：正式版 `X.Y.Z`，预发布 `X.Y.Z-{alpha|beta|rc}.N`**：主次修订三段正常递增，**预发布通道限定为 alpha / beta / rc**，通道内序号从 `.0` 起递增（`0.1.6-alpha.2` → `0.1.6-alpha.3`）；遵守 semver 字典序，故 `alpha < beta < rc` 升级链天然正确，且同段预发布低于正式版（`0.1.6-beta.2` < `0.1.6`，正式版才能覆盖 beta 用户）。**是否预发布只看版本号是否含 `-`**：CI 的 `build-release.yml` 据此选 `publish.releaseType`，应用内 `isPrerelease()` 必须同一判据。改版本要**同时改四处**：`package.json`、`package-lock.json` 顶层与 `packages[""]`、技能 `metadata.version`；一律不带 `v` 前缀（`v` 只在 Git tag 上）。四处必须**手动**同时改齐 —— 不存在自动改版本号的 hook，改完直接推送即可。
 19. **提交信息用 Conventional Commits**：`feat:` / `fix:` / `docs:` / `refactor:` / `chore:` 等。
 20. **无单测：靠 typecheck + 人工验证**：本仓库已移除 `tests/`、`scripts/`、`vitest` 依赖与 `.githooks/`。改 `src/shared/**` 与 `src/main/**` 的纯逻辑（版本比较、路径与文件助手、设置归一化、i18n、快捷键、错误信息）后，**必须人工验证或写一次性探针脚本**（放 `.agents/temp/`），不要再期望有 `*.test.ts` 兜底，也不要新建测试目录。
-22. **`.agents` 入库策略**：`.agents/skills/**` 纳入版本管理；`.agents/temp/` 忽略（仅保留 `.gitkeep`）。
-23. **文档同步节奏**：开发期只维护技能；`docs/` 中英在**发布时**统一更新，并同时整理技能。
-24. **UI 组件优先 antdv-next**：新功能一律用 `antdv-next`（`<a-*>` 前缀），**禁止新增 `el-*` 组件**；样式与主题优先走 antdv 的 token。
-25. **antdv-next 按需引入**：组件与样式由 `electron.vite.config.ts` 的 `AntdvNextResolver` 自动注入，模板里直接写 `<a-button>` 即可，**不要手动 `import { Button }`，也不要全量 `app.use(Antdv)`**；需要上下文（`message` / `Modal` / `notification`）时从 `antdv-next` 显式导入，根容器由 `lib/antdv.ts` 的 `AntdvRoot` 提供。
-26. **Element Plus 迁移进行中**：改动触及某个文件时，顺手把该文件内的 `el-*` 换成 antdv 等价组件（语义对齐、不改变观感行为）；剩余存量逐步清理，全部替换后再卸载 `element-plus` 并移除 `element-plus` 样式。
-27. **图标用 `@antdv-next/icons`**：`@ant-design/icons-vue` 与 antdv-next 不适配，不要引入。
-28. **命令尽量堆叠**：能用一次调用跑完的多条命令，就不要拆成多次 —— 用 `;` / `&&` 串联，或写成一段脚本一次跑完；互不依赖的只读命令也尽量合并。串联时用 `&&`（或显式检查 `$LASTEXITCODE`），**不要用 `;` 把前面的失败掩盖掉**。
-29. **常备上游参考仓库**：`.agents/temp/deepseek-harness/` 保留一份 `https://github.com/deepseek-ai/deepseek-harness.git` 的克隆，供查上游 dsh 实现 / 契约时直接阅读；**不要删除**，需要最新代码时 `git -C .agents/temp/deepseek-harness pull`（必要时 `--depth 1` 补浅），只有目录缺失才重新 clone。它与铁律 11 的「不必每次清理」配套：临时目录可长期保留复用。
+21. **`.agents` 入库策略**：`.agents/skills/**` 纳入版本管理；`.agents/temp/` 忽略（仅保留 `.gitkeep`）。
+22. **文档同步节奏**：开发期只维护技能；`docs/` 中英在**发布时**统一更新，并同时整理技能。
+23. **UI 组件优先 antdv-next**：新功能一律用 `antdv-next`（`<a-*>` 前缀），**禁止新增 `el-*` 组件**；样式与主题优先走 antdv 的 token。
+24. **antdv-next 按需引入**：组件与样式由 `electron.vite.config.ts` 的 `AntdvNextResolver` 自动注入，模板里直接写 `<a-button>` 即可，**不要手动 `import { Button }`，也不要全量 `app.use(Antdv)`**；需要上下文（`message` / `Modal` / `notification`）时从 `antdv-next` 显式导入，根容器由 `lib/antdv.ts` 的 `AntdvRoot` 提供。
+25. **Element Plus 迁移进行中**：改动触及某个文件时，顺手把该文件内的 `el-*` 换成 antdv 等价组件（语义对齐、不改变观感行为）；剩余存量逐步清理，全部替换后再卸载 `element-plus` 并移除 `element-plus` 样式。
+26. **图标用 `@antdv-next/icons`**：`@ant-design/icons-vue` 与 antdv-next 不适配，不要引入。
+27. **命令尽量堆叠**：能用一次调用跑完的多条命令，就不要拆成多次 —— 用 `;` / `&&` 串联，或写成一段脚本一次跑完；互不依赖的只读命令也尽量合并。串联时用 `&&`（或显式检查 `$LASTEXITCODE`），**不要用 `;` 把前面的失败掩盖掉**。
+28. **常备上游参考仓库**：`.agents/temp/deepseek-harness/` 保留一份 `https://github.com/deepseek-ai/deepseek-harness.git` 的克隆，供查上游 dsh 实现 / 契约时直接阅读；**不要主动删除**（按用户指令清理工作区时允许一并清理），需要最新代码时 `git -C .agents/temp/deepseek-harness pull`（必要时 `--depth 1` 补浅），只有目录缺失才重新 clone。它与铁律 11 的「不必每次清理」配套：临时目录可长期保留复用。
 
 ## 任务路由表
 
@@ -92,7 +95,7 @@ metadata:
 | 新增界面文案 | `locales/zh/index.ts`、`en/index.ts` | hant 可选（差异覆盖，不必补） | references/conventions.md |
 | 新增设置面板 | `renderer/src/views/settings/*.vue` | `SettingsView.vue` 注册 + 文案 | references/renderer.md |
 | 改 dsh / Node / npm 安装 | `main/dsh/{manage,nodeenv,npmRunner}.ts` | `dsh/installs.ts` 版本目录 | references/main-process.md |
-| 改下载 / 取消 / 解压 | `main/dsh/downloader.ts`、`kernel/operations.ts` | 进度事件 `phase` | references/main-process.md |
+| 改下载 / 取消 / 解压 | `main/dsh/download.ts`（门面；实现在 `src/extensions/xeonsky.download/`，兜底 `downloader.ts`）、`kernel/operations.ts` | 进度事件 `phase` | references/main-process.md |
 | 改配置目录与迁移 | `main/app/settings.ts`、`configmigrate.ts` | `main/index.ts` 启动顺序 | references/architecture.md |
 | 改 dsh 的偏好配置（主题 / 语言 / 供应商） | `main/dsh/cordisPatch.ts`、`dshHome.ts` | `settings.ts`（语言 / 主题）、`models.ts`（供应商） | references/main-process.md |
 | 改窗口 / 标签 / 托盘 | `main/app/{ui,windowreg}.ts` + `renderer/src/shell/*` | `modules/shell.ts` 路由与事件 | references/architecture.md |

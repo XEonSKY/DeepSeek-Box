@@ -108,5 +108,5 @@ The window's bottom status bar is read-only; on the right it shows, in order:
 | **App version · dsh version** | Shaped like `v0.1.5-rc-1 · dsh 0.1.5-rc.2`. Clicking opens a popover that checks for updates; when a newer version is found it **only shows a small red dot on the version item** (a silent notice, no toast), and the popover shows the status of both the app and dsh version lines. |
 
 ::: info
-The base source of theme and language is still dsh's `~/.dsh/settings.yaml`; the app's own settings are stored in `settings.json` in the **configuration directory**.
+Theme and language are synced into dsh's Cordis patch layer (`$DSH_HOME/profiles/web/cordis.patch.yml`); the app's own settings are stored in `settings.json` in the **configuration directory**.
 :::

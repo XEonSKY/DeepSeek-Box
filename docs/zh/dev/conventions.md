@@ -16,9 +16,9 @@
 
 ## 文件与目录
 
-- 所有 agent 产生的缓存 / 临时 / 中间文件（日志、报告、草稿、脚本产物）统一放 `.agents/temp/`，用完即删；
+- 所有 agent 产生的缓存 / 临时 / 中间文件（日志、报告、草稿、脚本产物）统一放 `.agents/temp/`，允许跨任务保留复用（省掉重复下载 / 克隆），需要时再清理；
 - 不要散落到工作区根、`docs/` 或其它目录；
-- `.agents/`（含 `.agents/temp/`）已被 gitignore，不参与版本管理。
+- gitignore 只忽略 `.agents/temp/`；**`.agents/skills/**` 纳入版本管理**（团队共享的 agent 技能）。
 
 ## Git 与远程
 
@@ -35,8 +35,8 @@
 ## i18n 文案
 
 - 界面文案的单一来源是 `src/shared/locales/{zh,en}/index.ts`，中英**逐键对齐**（键名、顺序、`{占位符}` 都一致）；
-- `zh/hant.ts` 是**全量繁体覆盖**；`zh/{anime,wenyan}.ts`、`en/{pirate,shakespeare}.ts` 是**只写差异的覆盖层**，由 `shared/locales/ext.ts` 深合并到基础文案之上；
-- 新增键时 **zh / en / hant 三处一起加**，否则繁体用户会看到简体或原始 key；
+- `zh/hant.ts` 与 `zh/{anime,wenyan}.ts`、`en/{pirate,shakespeare}.ts` 一样是**只写差异的覆盖层**，由 `shared/locales/ext.ts` 深合并到基础文案之上；
+- 新增键时只需改 **zh / en 两处**（hant 无需补充，未覆盖的键自动回落到简体基座）；**删除键时 zh / en / hant 三处都要删** —— hant 必须是 zh 的子集，只删 zh 会留下孤儿键；
 - 文案是**程序的一部分**（`src/shared/locales/**` 不算文档），可随功能一起改。
 
 ## 日志
@@ -74,5 +74,4 @@ npm run check        # = npm run typecheck && npm run lint
 ## 已知问题与待办
 
 - `docs/public/home-page.png` 仍是旧品牌截图，文档首页仍在引用，待重截；
-- `Settings.funLocale` 是历史字段名，改名需要伴随一次持久化迁移，故暂时保留；
-- `src/renderer/src/components/TitleBar.vue` 里 `.icon-btn` 的注释引用了一个仓库中并不存在的 `AGENT.md`，待清理。
+- `Settings.funLocale` 是历史字段名，改名需要伴随一次持久化迁移，故暂时保留。

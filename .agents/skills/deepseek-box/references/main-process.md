@@ -13,9 +13,10 @@ kernel/     ← 稳定的「机制」：不认识任何业务名词，只认识�
   operations.ts   进度注册表 + 取消令牌 + trackedOperation（纯逻辑，emit 由外部注入）
   treeops.ts      整目录删除的唯一出口（转发 dsh/fsutil 的 removeTree/removeQuietly*）
   services.ts     服务槽：provideService / useService（模块间解耦，见下）
+  extroute.ts     扩展端点挂载点（固定 `/ext` 前缀；内核为扩展开的受控口子，仍走同一个 Router）
   logger.ts       全进程唯一日志入口（pino + pino-roll；目录由启动方注入，kernel 不认业务目录）
 modules/    ← 可插拔的「策略」：每个功能一个文件，自己声明路由
-  settings.ts  dsh.ts  env.ts  shell.ts  tabdrag.ts  appupdate.ts  configdir.ts
+  settings.ts  dsh.ts  env.ts  shell.ts  tabdrag.ts  appupdate.ts  configdir.ts  extensions.ts
   index.ts        allModules()：模块清单
 app/ipc.ts  ← 装配器：建 Router → new ModuleRegistry(allModules()) → mountRoutes
 app/… dsh/… ← 具体实现，被 modules 调用（modules 不互相 import）
@@ -88,6 +89,10 @@ export default defineModule({
 | `bootguard.ts` | 启动守卫判定（**纯逻辑**） | `decideBootGuard`：无记录 / 记录过期 / 计数 / 触发回退 / 放弃回退，五选一 |
 | `webview.ts` | 渲染参数与内嵌页面策略 | 硬件加速、webview UserAgent、代理，以及 `installWebviewPermissionPolicy()`（与 UA 同理，权限处理器**必须在建窗前**装到 `defaultSession`，晚一步先建出来的 webview 就是「未装处理器 = 默认放行一切」） |
 | `webviewPermissionPolicy.ts` | 内嵌页面权限判定（**纯逻辑**） | `decidePermission` / `isTrustedRequestingUrl`（回环地址与 `file:` / `app:` 算可信）/ `PermissionMemory`（会话级「记住选择」，**不落盘**）/ `checkPermission`。判定是**失败即拒绝**：未列入名单的权限（含将来新出现的）一律拒；往名单里加权限等于把一个能力交给任意网页，改之前先读模块头注释 |
+| `autolaunch.ts` | 开机自启（「启动增强」） | Windows / macOS 走 `app.setLoginItemSettings`，Linux 写 `~/.config/autostart` 的 .desktop |
+| `confirmDialog.ts` | 独立确认子窗口 | 替代内嵌 `ElMessageBox.confirm`：OS 管理焦点与模态，不遮挡页面；外观由渲染层 `ConfirmWindow.vue` 负责 |
+| `rollbackscript.ts` | 回退脚本纯文本构造（**纯逻辑**） | 老实现内联在 appslots.ts 的三个坑逐条规避（不靠 `tasklist | findstr` errorlevel 判存活等） |
+| `const.ts` | 品牌常量 | `APP_TITLE` 等收敛处（此前 `ui.ts` 与 `ipc.ts` 各一份字面量） |
 | `windowreg.ts` | 窗口登记 | 核心 / 副窗口角色与接管 |
 | `contextmenu.ts` | 右键菜单 | 剪切 / 复制 / 粘贴 / 全选 |
 | `appicon.ts` | 应用程序图标 | `appLogoPath` / 读写图标 |
@@ -107,7 +112,13 @@ export default defineModule({
 | `nodeenv.ts` | Node 下载部署 | `deployLocalNode` / `listNodeVersions` / `nodeStatus` |
 | `npmRunner.ts` | npm 探测 / 执行 / 缓存 | `ensureBundledNpmReady` / `runNpm` / `npmCacheEnv`（`hasSystemNpm` 导出给 pnpm 的 system 来源复用） |
 | `pnpmRunner.ts` | pnpm 获取 / 运行（**两种来源**：系统自带 / 内置） | `pnpmStatus`（system + bundled）/ `updatePnpm({source})`（system 走 `npm i -g pnpm`，bundled 走 tarball）/ `systemPnpmPath` / `pnpmShimEnv`（内置的 PATH 垫片）；入口解析见 `pnpmEntry.ts` |
-| `downloader.ts` | 多线程下载 | `downloadFile`（HTTP Range 分段、去重、取消） |
+| `download.ts` | **内核下载门面**（内核所有「下一个文件到磁盘」从这里走） | 按约定名查能力槽 `ext:xeonsky.download`，查不到才回落 `downloader.ts`（扩展停用 / 安全模式时核心功能不失效） |
+| `downloader.ts` | 下载**兜底**实现 | `downloadFile`（HTTP Range 分段、去重、取消）；扩展不可用时才走到 |
+| `child.ts` | 子进程共同流程（**纯编排**） | spawn → 登记 → 收日志 → 可取消 → 只 settle 一次（原在 npm / 解压三处各写一遍） |
+| `logbus.ts` | 日志环形缓冲 + 子进程登记表 | 不依赖 dsh 服务状态，被整条 dsh 链路共用 |
+| `plugins.ts` | dsh 插件（profile 组合包）管理 | 读取 / 启停 `dsh.profile.bundles`，经 `dsh plugin --profile` 安装 / 卸载 |
+| `pluginManifest.ts` | 插件清单**纯逻辑** | 不碰 fs、不 import electron；文件读写与 pnpm 调用分别在 plugins.ts / pnpmRunner.ts |
+| `ptcNode.ts` / `ptcNodeSync.ts` | 给 dsh PTC（run_code）worker 指定真正的 node | 把 `nodeExecutable` 写进 **home 级** patch 层（home 层压过 profile 层）；修复 electron.exe 冒充 Node 被 dsh worker 清环境后崩溃的问题 |
 | `installs.ts` | 版本化目录 | 见下 |
 | `pnpmEntry.ts` | 内置 pnpm 入口解析（**纯逻辑**） | `pnpmEntryRel` / `pnpmEntryIn` / `isPnpmPackageReady`。⚠️ 入口名随 pnpm 大版本变（12+ = `package/bin/pnpm.mjs`，≤ 11 = `package/bin/pnpm.cjs`），**不要写死文件名**；manifest 的 `bin.pnpm` 在 12 指向根级 sh 脚本，node 跑不了 |
 | `tools.ts` | 路径解析 | `localNodeExecPath` / `nodeRuntimeFor` / `resolveDshModule` / `findSystemNode` |
@@ -150,7 +161,8 @@ export default defineModule({
 
 ## 下载 / 取消 / 解压 / npm 缓存
 
-- `downloadFile` 用 HTTP Range 并发（默认 4，设置可调最多 16）；小于 1MB 或服务端不支持 Range 时退化单流；带重试与临时文件清理；完成后再搬到目标。
+- **两层结构**：能力在内置扩展 `xeonsky.download`（`src/extensions/xeonsky.download/`：分段、跨会话断点续传、令牌桶限速、重试、大小校验、`tasks.json` 队列持久化）；内核调用方（Node 发行包、内置 npm / pnpm）走门面 `dsh/download.ts`，按约定名查能力槽，查不到才回落 `downloader.ts`。网络栈仍在内核——扩展引擎只经注入的 `OpenStream`（= `net.stream`）发请求，「设置 → 网络 → 代理」照常生效；断点续传靠 `.part` 旁的 `.part.json` 侧车。
+- 兜底 `downloader.ts` 的 `downloadFile`：HTTP Range 并发（默认 4，设置可调最多 16）；小于 1MB 或服务端不支持 Range 时退化单流；带重试与临时文件清理；完成后再搬到目标。
 - **同一目标去重**：`inFlightDownloads` 按小写化最终路径合并，后到者订阅同一任务；`isFileDownloading()` 查询；支持 `signal` 取消。
 - 取消是单活动令牌（`kernel/operations.ts` 的 `beginCancelable` / `cancelActive` / `CANCELED_MESSAGE`，
   原 `dsh/cancel.ts` 已并入），下载与解压都挂上去；路由 `POST /installs/cancel`；取消后返回
@@ -168,7 +180,7 @@ export default defineModule({
 
 ## 在无 electron 环境下验证主进程模块（探针套路）
 
-单测只覆盖纯函数；想验证**副作用行为**（读不读文件、走不走网络）时，用临时探针跑真实实现：
+本仓库**已无单测**；想验证**副作用行为**（读不读文件、走不走网络）等纯逻辑之外的行为时，用临时探针跑真实实现：
 
 1. 把被验证模块及其依赖链复制到 `.agents/temp/`，批量改写导入：
    - `@shared/*` → 绝对 `file:///D:/Workspace/client/dsbox/src/shared/x.ts`；

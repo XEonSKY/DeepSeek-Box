@@ -21,7 +21,8 @@ const log = logger('[Manager]')
  * 机器级事实，跟用户在哪个 profile 里工作无关；而且 home 层优先级更高，能压过
  * 任何 profile 层里被带过来的旧路径。
  *
- * 诊断背景见 docs/zh/dev/run-code-worker-exit-diagnosis.md。
+ * 诊断背景见 ptcNode.ts 头注释：dsh 的 PTC worker 启动时会清空几乎全部环境变量，
+ * electron.exe 冒充 Node 的方案因此崩溃；现在 dsh 一律由真 node 启动。
  */
 
 /** 一个真正存在的文件才算可用候选。 */

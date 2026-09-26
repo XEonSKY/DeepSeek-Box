@@ -2,7 +2,7 @@
 
 ## 技术栈
 
-Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus · Pinia · vue-i18n · @xterm/xterm。
+Electron 44 · electron-vite 6 · Vite 8（rolldown 内核）· Vue 3 · TypeScript · Element Plus · Pinia · vue-i18n · @xterm/xterm。
 
 ## 三个进程
 
@@ -18,11 +18,27 @@ Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus 
 
 主进程内部是**小内核 + 可插拔模块**：
 
-- `src/main/kernel/` —— **稳定的机制层**，不认识业务名词：`runtime`（运行态原语）、`router`（唯一 `ipcMain` 落点）、`module`（`defineModule` / `ModuleRegistry`）、`operations`（进度注册表 + 取消令牌）、`treeops`（整目录删除唯一出口）、`services`（服务槽）。
+- `src/main/kernel/` —— **稳定的机制层**，不认识业务名词：`runtime`（运行态原语）、`router`（唯一 `ipcMain` 落点）、`module`（`defineModule` / `ModuleRegistry`）、`operations`（进度注册表 + 取消令牌）、`treeops`（整目录删除唯一出口）、`services`（服务槽）、`extroute`（扩展端点挂载点）。
 - `src/main/modules/` —— **功能策略层**，一个功能一个文件，用 `defineModule` 声明自己的 IPC 路由（端点不再集中登记）。
 - `src/main/app/`、`src/main/dsh/` —— 具体实现，被模块调用。
 
 **依赖方向恒为** `modules → kernel`、`modules → app/dsh`；**模块之间不 import**，跨模块动作走 `kernel/services.ts` 的服务槽（提供方在 `onReady` 注册能力，消费方按名字取用）——这样 `modules/settings → dsh/dsh → app/settings` 之类的静态环不可能形成。`app/ipc.ts` 只是**装配器**。
+
+## 扩展层
+
+主进程之外还有一层**扩展系统**：
+
+- **框架**在 `src/main/extensions/`（加载器 `loader/`、系统与内置扩展登记表 `system/` / `builtin/`）；
+  `modules/extensions.ts` 是内核与扩展层之间唯一的桥（`GET /extensions` 等管理端点）；
+- **内置 / 系统扩展的业务代码**在顶层 `src/extensions/<id>/`，一扩展一目录（`main.ts` 主进程入口 +
+  `manifest.ts` 清单 + 可选 `*.vue` 渲染层视图）。现有 `xeonsky.download`（多线程下载 / 断点续传 / 限速）、
+  `xeonsky.zip`（内置 7-Zip 核心）、`xeonsky.extm`（压缩包形态的外部扩展包管理器）、`xeonsky.extui`，
+  以及 `system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui` 五个系统能力扩展；
+- **扩展只能经 API 面触达内核**：主进程侧只用 `ExtContext`（`main/extensions/loader/ctx.ts`），渲染层侧只用
+  `src/extensions/renderer-api.ts`，不许 import 外壳内部（`@/lib/*`、`@/components/*`、`@/shell/*`）；
+  需要新能力先扩 API 面；
+- 扩展端点走固定前缀 `/ext/...`（`kernel/extroute.ts` 登记进同一条 Router）；扩展之间互调走能力名
+  `ext:<extId>`（如 `ext:xeonsky.zip`）。
 
 ## 启动流程
 
@@ -53,12 +69,14 @@ Electron 44 · electron-vite 5 · Vite 7 · Vue 3 · TypeScript · Element Plus 
 ## 数据与配置
 
 - **应用设置**：配置目录下 `settings.json`（不是 Electron 的 userData）；
-- **dsh 自身设置**：`~/.dsh/settings.yaml`，应用会把主题 / 语言同步过去；
+- **dsh 的偏好配置**：落在 dsh 的 **Cordis patch 层**（`cordis.patch.yml`）——profile 层
+  （`$DSH_HOME/profiles/<profile>/cordis.patch.yml`，Box 把主题 / 语言写进 `web` profile 的这一层）与 home 层
+  （`$DSH_HOME/cordis.patch.yml`，优先级更高，放机器级覆盖）；旧的 `~/.dsh/settings.yaml` 由 dsh 一次性导入后改名，Box 不再读写；
 - **DeepSeek Harness / Node / npm**：配置目录下按版本存放，见[DeepSeek Harness 与环境安装链路](/zh/dev/installs)。
 
 ## 设置与状态传播
 
-- 应用设置的单一来源是配置目录下的 `settings.json`；`loadSettings()` 读取时做**一次性迁移**，由 `settingsVersion`（当前 2）控制——只有真正的老配置才改键名 / 升级默认值，用户后来手填的值不会被反复改写。改归一化逻辑时**必须保留 `legacy` 判断**。
+- 应用设置的单一来源是配置目录下的 `settings.json`；`loadSettings()` 读取时做**一次性迁移**，由 `settingsVersion`（当前 3）控制——只有真正的老配置才改键名 / 升级默认值，用户后来手填的值不会被反复改写。改归一化逻辑时**必须保留 `legacy` 判断**。
 - 渲染层保存走 `PUT /settings`：主进程落盘后**广播 `settings:changed` 给所有窗口**；配置文件监听只负责**外部改动**，对程序自己的写入刻意静默。
 - 因此**凡是从设置派生状态的组件都要订阅 `settings:changed`**，漏订阅的表现就是「改完要重启才生效」；发起保存的那个窗口自己忽略这次回放（设置 store 的 `lastSaveAt`）。
 - `PUT /settings` 里还会顺带做几件幂等的事：同步 dsh 主题、写开机自启登录项、更新内嵌网页的 UA 与代理、应用程序图标。

@@ -101,6 +101,7 @@ export default defineModule({
 | `appupdate.ts` | `GET /app/meta`、`/app/update/state`、`/slots`、`POST /app/update/check`、`/rollback`、`/restart`、`/app/relaunch`、`/app/quit` | 检查 / 触发 / 版本槽 / 回退 / 重启退出 |
 | `shell.ts` | `GET /shell/meta`、`POST /shell/open-url`、`/focus-core`、`/move-tab`、`PUT /shell/title`、`/windows/*`、`/dialog/*` | 多窗口与标签转移、窗口控制、对话框 |
 | `tabdrag.ts` | `POST` / `PATCH` / `DELETE /tab-drag`、`POST /tab-drag/drop` | 源窗口驱动，屏幕坐标决定落点 |
+| `extensions.ts` | `GET /extensions`、`PUT /extensions/:id/enabled`、`POST /extensions/:id/forgive`、`POST /extensions/:id/exit-safe-mode` | 扩展管理：列表 / 启停 / 安全模式；扩展自身端点固定走 `/ext/...` 前缀（`kernel/extroute.ts`） |
 
 ::: tip
 完整列表以 `src/shared/api.ts` 的 `ApiRoutes` 为准；模块契约见 `src/main/kernel/module.ts`，路由引擎见 `src/main/kernel/router.ts`。

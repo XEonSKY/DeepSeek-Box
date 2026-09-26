@@ -70,7 +70,7 @@
 | 谁 | 做什么 |
 |---|---|
 | `main.ts` | `startOperationTracking()` —— 启动时**订阅一次**三条进度频道（`nodeenv:deploy-progress` / `npmenv:progress` / `pnmenv:progress`，载荷带 `kind` 用来归位） |
-| 主进程 `operationProgress.ts` | 记住进行中的操作；操作结束（成功 / 失败 / 取消）时清空 |
+| 主进程 `kernel/operations.ts` | 记住进行中的操作；操作结束（成功 / 失败 / 取消）时清空 |
 | 面板 | 只读 `useOperation(kind)` → `{ op, busy }`；`onMounted` 与操作返回后调 `refreshOperations()` |
 
 两条必须记住的：
