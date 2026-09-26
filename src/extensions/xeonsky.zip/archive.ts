@@ -19,67 +19,29 @@ import { ARCHIVE_FORMATS, COMPRESSION_METHODS, type ArchiveEntry, type ArchiveLi
 // ---------------------------------------------------------------------------
 
 /**
- * 7-Zip 官方的平台发行包表。
+ * 内置的 7-Zip 命令行核心（7-Zip 26.03，LGPL）。
  *
- * 关键事实（决定了实现方式）：
- *  - **Windows**：官方提供 `7z<ver>-x64.exe`（自解压安装包）与 `7z<ver>-extra.7z`
- *    （含 `7za.exe` / `7zr.exe` 等额外二进制）。我们取 **`-extra.7z`**：
- *    它是纯归档、可被 7-Zip 自己解开，且 `x64/7za.exe` 是独立的命令行核心，无需安装。
- *    —— 但首次仍需一个能解 `.7z` 的工具，故 Windows 路径优先用官方 **`7zr.exe`**
- *    （单文件独立版，能解 7z），或系统已有 7-Zip。
- *  - **Linux**：官方提供 `7z<ver>-linux-x64.tar.xz`，内含 `7zz`（统一二进制）。
- *  - **macOS**：官方提供 `7z<ver>-mac.tar.xz`（通用二进制，内含 `7zz`）。
+ * 二进制**随扩展内置**（`src/extensions/xeonsky.zip/bin/<平台>/`），不再运行时下载：
+ *  - **Windows**：取官方 `-extra.7z` 里的命令行核心 —— `7za.exe` + 它的两个 DLL
+ *    （`7za.dll` / `7zxa.dll`，同一个目录里缺一不可），x64 与 arm64 各一套原生版；
+ *  - **Linux**：官方 `linux-x64` / `linux-arm64` 包里的 `7zz`（统一命令行二进制）；
+ *  - **macOS**：官方 `mac` 包里的 `7zz`（通用二进制，x64 与 arm64 共用一份）。
  *
- * 这里只登记 **URL 与包内可执行文件路径**；「怎么解开这个包」由 main.ts 决定
- * （Windows 用 7zr.exe / 系统 7z，Linux 用系统 tar，macOS 用系统 tar）。
+ * 由官方 `https://www.7-zip.org/download.html` 指向的分发包取得（镜像仓库
+ * ip7z/7zip 的 26.03 release），许可证见同目录 `7zip-LICENSE.txt`。
+ *
+ * 布局由 `dir`（bin 下的子目录）与 `binary`（可执行文件名）共同描述；
+ * 「bin 目录在磁盘上的绝对路径」由 main.ts 解析（打包后相对应用根）。
  */
-const SEVEN_ZIP_VERSION = '24.09'
+export const BUNDLED_VERSION = '26.03'
 
 export const TARGETS: readonly SevenZipTarget[] = [
-    {
-        os: 'win32',
-        arch: 'x64',
-        // Windows 官方 extra 包：内含 x64/7za.exe（独立命令行核心）。
-        url: `https://www.7-zip.org/a/7z${SEVEN_ZIP_VERSION.replace('.', '')}-extra.7z`,
-        binary: 'x64/7za.exe',
-        label: `Windows x64 (7-Zip ${SEVEN_ZIP_VERSION} extra)`
-    },
-    {
-        os: 'win32',
-        arch: 'arm64',
-        // 官方暂无 arm64 原生 Windows 包；用 x64 版经系统仿真运行（Windows 11 on ARM 可跑）。
-        url: `https://www.7-zip.org/a/7z${SEVEN_ZIP_VERSION.replace('.', '')}-extra.7z`,
-        binary: 'x64/7za.exe',
-        label: `Windows ARM64 (7-Zip ${SEVEN_ZIP_VERSION} x64, 经仿真)`
-    },
-    {
-        os: 'linux',
-        arch: 'x64',
-        url: `https://www.7-zip.org/a/7z${SEVEN_ZIP_VERSION.replace('.', '')}-linux-x64.tar.xz`,
-        binary: '7zz',
-        label: `Linux x64 (7-Zip ${SEVEN_ZIP_VERSION})`
-    },
-    {
-        os: 'linux',
-        arch: 'arm64',
-        url: `https://www.7-zip.org/a/7z${SEVEN_ZIP_VERSION.replace('.', '')}-linux-arm64.tar.xz`,
-        binary: '7zz',
-        label: `Linux ARM64 (7-Zip ${SEVEN_ZIP_VERSION})`
-    },
-    {
-        os: 'darwin',
-        arch: 'x64',
-        url: `https://www.7-zip.org/a/7z${SEVEN_ZIP_VERSION.replace('.', '')}-mac.tar.xz`,
-        binary: '7zz',
-        label: `macOS (7-Zip ${SEVEN_ZIP_VERSION}, 通用二进制)`
-    },
-    {
-        os: 'darwin',
-        arch: 'arm64',
-        url: `https://www.7-zip.org/a/7z${SEVEN_ZIP_VERSION.replace('.', '')}-mac.tar.xz`,
-        binary: '7zz',
-        label: `macOS ARM64 (7-Zip ${SEVEN_ZIP_VERSION}, 通用二进制)`
-    }
+    { os: 'win32', arch: 'x64', dir: 'win32-x64', binary: '7za.exe', label: 'Windows x64' },
+    { os: 'win32', arch: 'arm64', dir: 'win32-arm64', binary: '7za.exe', label: 'Windows ARM64' },
+    { os: 'linux', arch: 'x64', dir: 'linux-x64', binary: '7zz', label: 'Linux x64' },
+    { os: 'linux', arch: 'arm64', dir: 'linux-arm64', binary: '7zz', label: 'Linux ARM64' },
+    { os: 'darwin', arch: 'x64', dir: 'darwin', binary: '7zz', label: 'macOS（通用二进制）' },
+    { os: 'darwin', arch: 'arm64', dir: 'darwin', binary: '7zz', label: 'macOS ARM64（通用二进制）' }
 ]
 
 /** 归一化 Node 的架构名到本表用的两种。 */

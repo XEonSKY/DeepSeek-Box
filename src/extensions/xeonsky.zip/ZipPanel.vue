@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { DownloadOutlined, FolderOpenOutlined, FileZipOutlined, ReloadOutlined } from '@antdv-next/icons'
+import { FolderOpenOutlined, FileZipOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
 import { extApi, extErrorMessage, extT } from '../renderer-api'
 import type { ArchiveFormat, CompressionMethod, SevenZipRunResult, SevenZipStatus } from './types'
@@ -30,7 +30,7 @@ function call<T>(action: string, payload?: unknown): Promise<T> {
 const status = ref<SevenZipStatus | null>(null)
 const formats = ref<ArchiveFormat[]>([])
 const methods = ref<CompressionMethod[]>([])
-const targets = ref<Array<{ os: string; arch: string; label: string; url: string }>>([])
+const targets = ref<Array<{ os: string; arch: string; dir: string; label: string; binary: string }>>([])
 const busy = ref(false)
 
 /** 二进制路径输入框（初始化为当前生效值，用户改完点「应用」）。 */
@@ -44,7 +44,7 @@ async function reload(): Promise<void> {
         const desc = await call<{ formats: ArchiveFormat[]; methods: CompressionMethod[] }>('describe')
         formats.value = desc.formats
         methods.value = desc.methods
-        if (!targets.value.length) targets.value = await call<Array<{ os: string; arch: string; label: string; url: string }>>('listTargets')
+        if (!targets.value.length) targets.value = await call<Array<{ os: string; arch: string; dir: string; label: string; binary: string }>>('listTargets')
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
     } finally {
@@ -59,21 +59,6 @@ async function applyPath(): Promise<void> {
         ElMessage.success(extT('ext.xeonskyZip.panel.pathSaved'))
     } catch (err) {
         ElMessage.error(extErrorMessage(err))
-    }
-}
-
-/** 下载并解出 7-Zip 核心。 */
-async function download(): Promise<void> {
-    busy.value = true
-    try {
-        const r = await call<{ ok: boolean; extracted?: boolean; message?: string }>('downloadCore')
-        if (r.ok) ElMessage.success(r.extracted ? extT('ext.xeonskyZip.panel.downloadOk') : extT('ext.xeonskyZip.panel.downloadPartial'))
-        else ElMessage.error(r.message ?? extT('ext.xeonskyZip.panel.downloadFail'))
-        await reload()
-    } catch (err) {
-        ElMessage.error(extErrorMessage(err))
-    } finally {
-        busy.value = false
     }
 }
 
@@ -144,7 +129,8 @@ const availableText = computed(() => {
 const sourceText = computed(() => {
     const s = status.value?.source
     if (s === 'custom') return extT('ext.xeonskyZip.panel.srcCustom')
-    if (s === 'auto') return extT('ext.xeonskyZip.panel.srcAuto')
+    if (s === 'bundled') return extT('ext.xeonskyZip.panel.srcBundled')
+    if (s === 'system') return extT('ext.xeonskyZip.panel.srcSystem')
     return extT('ext.xeonskyZip.panel.srcMissing')
 })
 
@@ -169,10 +155,6 @@ onMounted(() => void reload())
                     <template #icon><ReloadOutlined /></template>
                     {{ $t('ext.xeonskyZip.panel.refresh') }}
                 </a-button>
-                <a-button type="primary" @click="download">
-                    <template #icon><DownloadOutlined /></template>
-                    {{ $t('ext.xeonskyZip.panel.download') }}
-                </a-button>
             </a-space>
         </div>
 
@@ -193,8 +175,12 @@ onMounted(() => void reload())
                 </template>
                 <span v-else class="zpanel__muted">{{ $t('ext.xeonskyZip.panel.targetUnsupported') }}</span>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('ext.xeonskyZip.panel.coreDir')">
-                <span class="zpanel__path">{{ status?.coreDir }}</span>
+            <a-descriptions-item :label="$t('ext.xeonskyZip.panel.bundledVersion')">
+                <span class="zpanel__path">{{ status?.bundledVersion }}</span>
+            </a-descriptions-item>
+            <a-descriptions-item :label="$t('ext.xeonskyZip.panel.binDir')">
+                <span class="zpanel__path">{{ status?.binDir }}</span>
+                <span v-if="status?.binPlatformDir" class="zpanel__muted">{{ status.binPlatformDir }}/{{ status.target?.binary }}</span>
             </a-descriptions-item>
         </a-descriptions>
 

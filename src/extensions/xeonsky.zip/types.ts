@@ -22,30 +22,34 @@ export interface SevenZipTarget {
     os: 'win32' | 'darwin' | 'linux'
     /** 目标架构。 */
     arch: 'x64' | 'arm64'
-    /** 发行包 URL（官方站点）。 */
-    url: string
-    /** 包里可执行文件相对压缩包根的名字（解出来后用于定位）。 */
+    /** 内置二进制所在子目录（相对 `bin/`，如 `win32-x64` / `darwin`）。 */
+    dir: string
+    /** 可执行文件名（Windows 为 `7za.exe`，类 Unix 为 `7zz`）。 */
     binary: string
-    /** 展示名（界面里显示「将下载哪一份」）。 */
+    /** 平台展示名。 */
     label: string
 }
 
 /** 7-Zip 核心的当前状态（界面展示用）。 */
 export interface SevenZipStatus {
-    /** 实际使用的可执行文件绝对路径（用户指定优先，否则是自动定位到的）。 */
+    /** 实际使用的可执行文件绝对路径（用户指定优先，否则是内置的）。 */
     binaryPath: string
-    /** 该路径的来源：用户指定 / 自动定位 / 未找到。 */
-    source: 'custom' | 'auto' | 'missing'
-    /** 是否可用（能跑出 `--help` 的程度）。 */
+    /** 该路径的来源：用户指定 / 内置 / 系统 / 未找到。 */
+    source: 'custom' | 'bundled' | 'system' | 'missing'
+    /** 是否可用（能跑出版本输出的程度）。 */
     available: boolean
-    /** 版本字符串（能从 `7z i` 或 `--help` 解析出来时给出）。 */
+    /** 版本字符串（能从 `7z i` 解析出来时给出）。 */
     version: string
     /** 当前平台是否在支持列表里。 */
     supported: boolean
-    /** 当前平台对应的官方发行包（不支持时为 null）。 */
+    /** 当前平台对应的内置目标（不支持时为 null）。 */
     target: SevenZipTarget | null
-    /** 核心解压后的存放目录（`<配置目录>/xeonsky.zip/core`）。 */
-    coreDir: string
+    /** 内置二进制目录（`<应用>/src/extensions/xeonsky.zip/bin`）。 */
+    binDir: string
+    /** 内置二进制所在平台子目录（如 `win32-x64`；不支持时为空串）。 */
+    binPlatformDir: string
+    /** 内置的 7-Zip 版本（如 `26.03`）。 */
+    bundledVersion: string
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +269,6 @@ export const CAPABILITY_ACTIONS = [
     'status',
     'locate',
     'setBinaryPath',
-    'downloadCore',
     'listTargets',
     'describe',
     'listFormats',

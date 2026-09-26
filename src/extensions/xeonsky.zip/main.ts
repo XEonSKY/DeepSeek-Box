@@ -1,6 +1,7 @@
 import path from 'node:path'
 import type { ExtContext } from '@main/extensions/loader/ctx'
 import {
+    BUNDLED_VERSION,
     buildCompressArgs,
     buildExtractArgs,
     buildListArgs,
@@ -27,26 +28,25 @@ import {
  * ## 它与内核的关系
  *
  * 本文件**不 import 任何内核模块**（除类型 `ExtContext`）：所有能力都经
- * `ctx.capabilities.call(...)` 取用。所以内核换掉下载实现、换掉子进程实现，
+ * `ctx.capabilities.call(...)` 取用。所以内核换掉子进程实现、换掉日志实现，
  * 本扩展一行都不用改 —— 这正是扩展层「只依赖加载器给的 ctx」的落点。
  *
- * 依赖的三项系统能力都写进了 `manifest.ts`：
+ * 依赖的系统能力写进了 `manifest.ts`：
  *  - `fs`   读写自己的配置、探测二进制、建目录；
- *  - `net`  下载 7-Zip 核心（复用内核 downloader 的多线程 / 代理 / 进度）；
  *  - `proc` 跑 7z 命令行（复用内核 runChild 的登记 / 取消 / stderr 收集）。
  *
- * ## 它对外提供什么
+ * ## 二进制内置（不再运行时下载）
  *
- * 经 `ctx.provides(...)` 注册能力 `ext:xeonsky.zip`，动作见 {@link CAPABILITY_ACTIONS}。
- * 别的扩展申请它之后即可解压 / 压缩 / 查询，不必各自去找 7z、各自拼命令行 ——
- * 这是「扩展间经加载器能力槽互调」的既定模型。
+ * 7-Zip 命令行核心**随扩展内置**：`src/extensions/xeonsky.zip/bin/<平台>/`
+ * （Windows 取官方 `-extra` 包里的 `7za.exe` + 它的两个 DLL；Linux / macOS 取 `7zz`）。
+ * 打包时用 `asarUnpack` 把这些可执行文件解开（asar 内的可执行文件**不能被执行**），
+ * 因此定位路径里要把 `app.asar` 换回 `app.asar.unpacked`。
  *
  * ## 二进制的三级定位
  *
  * 1. 用户在面板里**指定**的路径（存扩展自己的配置文件，最高优先）；
- * 2. 核心目录里**已下载**的二进制（`<扩展数据目录>/core`，**散装** —— 二进制
- *    直接平铺在 core 根下，下载解压用 `e` 命令展平，不保留包内子目录）；
- * 3. **系统已装**的 7-Zip（各平台常见安装位）。
+ * 2. **内置**的当前平台二进制（绝大多数情况就是它，开箱即用）；
+ * 3. **系统已装**的 7-Zip（各平台常见安装位，仅作兜底）。
  *
  * 定位结果会缓存；`locate` 动作与改路径时清缓存。
  */
@@ -72,13 +72,20 @@ export function activate(ctx: ExtContext): void {
 
     const fsCall = <T,>(action: string, ...args: unknown[]): T => ctx.capabilities.call<T>('fs', action, ...args)
     const procCall = <T,>(action: string, ...args: unknown[]): T => ctx.capabilities.call<T>('proc', action, ...args)
-    const netCall = <T,>(action: string, ...args: unknown[]): T => ctx.capabilities.call<T>('net', action, ...args)
 
     // ---- 路径约定 -------------------------------------------------------------
 
-    /** 核心目录：下载得到的 7-Zip 放这里（在扩展数据目录下，重装不丢）。 */
-    const coreDir = path.join(ctx.dataDir, 'core')
-    /** 扩展自己的配置文件（与 core 目录平级）。 */
+    /**
+     * 内置二进制目录。
+     *
+     * 打包产物里 `__dirname` 是 `…/app.asar/out/main`，上两级即应用根；
+     * 可执行文件被 asarUnpack 解到 `app.asar.unpacked`，所以要把 `.asar` 换回去 ——
+     * 否则打包后会「文件存在但无法执行」。
+     */
+    const binDir = path
+        .join(__dirname, '../../src/extensions/xeonsky.zip/bin')
+        .replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`)
+    /** 扩展自己的配置文件（数据目录，重装不丢）。 */
     const configPath = path.join(ctx.dataDir, 'config.json')
 
     // ---- 配置读写 -------------------------------------------------------------
@@ -117,21 +124,23 @@ export function activate(ctx: ExtContext): void {
         return resolveTarget(process.platform, process.arch)
     }
 
+    /** 内置二进制的绝对路径（不支持的平台返回 null）。 */
+    function bundledBinary(): { file: string; dir: string } | null {
+        const target = currentTarget()
+        if (!target) return null
+        return { file: path.join(binDir, target.dir, target.binary), dir: target.dir }
+    }
+
     // ---- 二进制定位 -----------------------------------------------------------
 
-    /** 候选路径：用户指定 → 核心目录 → 系统常见位置。 */
+    /** 候选路径：用户指定 → 内置 → 系统常见位置。 */
     function candidatePaths(): string[] {
         const cfg = readConfig()
         const out: string[] = []
         if (cfg.binaryPath.trim()) out.push(cfg.binaryPath.trim())
 
-        const target = currentTarget()
-        if (target) {
-            // 核心目录下：散装布局是裸文件名（core/7za.exe）；也兼容旧版按包内
-            // 相对位置（x64/7za.exe）留下来的安装。
-            out.push(path.join(coreDir, path.basename(target.binary)))
-            out.push(path.join(coreDir, target.binary))
-        }
+        const bundled = bundledBinary()
+        if (bundled) out.push(bundled.file)
 
         if (process.platform === 'win32') {
             const pf = process.env['ProgramFiles'] ?? 'C:\\Program Files'
@@ -152,9 +161,12 @@ export function activate(ctx: ExtContext): void {
     function locateBinaryPath(): { path: string; source: SevenZipStatus['source'] } {
         if (cached) return cached
         const cfg = readConfig()
+        const bundled = bundledBinary()
         for (const p of candidatePaths()) {
             if (p && fsCall<boolean>('exists', p)) {
-                cached = { path: p, source: p === cfg.binaryPath.trim() ? 'custom' : 'auto' }
+                const source: SevenZipStatus['source'] =
+                    p === cfg.binaryPath.trim() ? 'custom' : bundled && p === bundled.file ? 'bundled' : 'system'
+                cached = { path: p, source }
                 return cached
             }
         }
@@ -169,7 +181,7 @@ export function activate(ctx: ExtContext): void {
     async function run7z(argv: string[], timeoutMs?: number): Promise<SevenZipRunResult> {
         const { path: bin } = locateBinaryPath()
         if (!bin) {
-            return { ok: false, code: null, canceled: false, output: '7-Zip binary not found; set a path or download a core first.' }
+            return { ok: false, code: null, canceled: false, output: '7-Zip binary not found (bundled core missing?)' }
         }
         const r = await procCall<{ ok: boolean; code: number | null; canceled: boolean; stdout: string; stderrTail: string }>(
             'run',
@@ -186,6 +198,8 @@ export function activate(ctx: ExtContext): void {
         return r.ok ? parseVersion(r.output) : ''
     }
 
+    // ---- 动作实现 -------------------------------------------------------------
+
     /** 状态快照。 */
     async function status(): Promise<SevenZipStatus> {
         const { path: binaryPath, source } = locateBinaryPath()
@@ -196,51 +210,16 @@ export function activate(ctx: ExtContext): void {
             version = await probeVersion()
             available = version !== ''
         }
-        return { binaryPath, source, available, version, supported: target !== null, target, coreDir }
-    }
-
-    // ---- 动作实现 -------------------------------------------------------------
-
-    /** 下载 7-Zip 核心并尽力解开。 */
-    async function downloadCore(): Promise<{ ok: boolean; file?: string; extracted?: boolean; message?: string }> {
-        const target = currentTarget()
-        if (!target) return { ok: false, message: `unsupported platform: ${process.platform}/${process.arch}` }
-        fsCall('mkdir', coreDir)
-
-        const fileName = target.url.split('/').pop() ?? 'sevenzip-archive'
-        const dl = await netCall<{ ok: boolean; canceled?: boolean; message?: string; file: string }>('download', {
-            url: target.url,
-            destDir: coreDir,
-            fileName,
-            proxyScope: 'node'
-        })
-        if (!dl.ok) return { ok: false, message: dl.message ?? 'download failed' }
-
-        // 解开：Windows 的 extra.7z / Linux 与 macOS 的 .tar.xz。
-        // 用 **e（展平解压）**：包内文件全部撒到 core 根下 —— 二进制以**散装**形式
-        // 落位（core/7za.exe、core/7zz），不保留包内的 x64/ 等子目录结构。
-        // 优先用「已存在的 7z」解（可能是系统装的，也可能是上一次下好的核心）；
-        // 类 Unix 还可退回系统 tar（这两个发行包的二进制本来就在包根，天然散装）。
-        const { path: bin } = locateBinaryPath()
-        let extracted = false
-
-        // 注意排除「刚下载的这个包」，它不能解自己。
-        const usable7z = bin && path.resolve(bin) !== path.resolve(dl.file)
-        if (usable7z) {
-            const r = await run7z(['e', '-y', `-o${coreDir}`, dl.file])
-            extracted = r.ok
-        } else if (!process.platform.startsWith('win')) {
-            const tar = await procCall<{ ok: boolean; stdout: string; stderrTail: string }>('run', 'tar', ['-xf', dl.file, '-C', coreDir], {
-                timeoutMs: 5 * 60 * 1000
-            })
-            extracted = tar.ok
-        }
-        cached = null
         return {
-            ok: true,
-            file: dl.file,
-            extracted,
-            message: extracted ? undefined : 'downloaded, but auto-extract failed; extract the binary flat into the core directory manually'
+            binaryPath,
+            source,
+            available,
+            version,
+            supported: target !== null,
+            target,
+            binDir,
+            binPlatformDir: target?.dir ?? '',
+            bundledVersion: BUNDLED_VERSION
         }
     }
 
@@ -271,13 +250,6 @@ export function activate(ctx: ExtContext): void {
 
     // ---- 对外提供能力 ---------------------------------------------------------
 
-    /**
-     * 注册 `ext:xeonsky.zip`。别的扩展申请后即可调用，例如：
-     *
-     * ```ts
-     * const zip = ctx.capabilities.call('ext:xeonsky.zip', 'extract', { archive, destDir })
-     * ```
-     */
     ctx.provides.register('xeonsky.zip', {
         status,
         locate: () => {
@@ -291,8 +263,7 @@ export function activate(ctx: ExtContext): void {
             cached = null
             return locateBinaryPath()
         },
-        downloadCore,
-        listTargets: () => TARGETS.map((t) => ({ os: t.os, arch: t.arch, label: t.label, url: t.url, binary: t.binary })),
+        listTargets: () => TARGETS.map((t) => ({ os: t.os, arch: t.arch, dir: t.dir, label: t.label, binary: t.binary })),
         describe: () => describeCapabilities(),
         listFormats: () => describeCapabilities().formats,
         listMethods: () => describeCapabilities().methods,
@@ -335,8 +306,7 @@ export function activate(ctx: ExtContext): void {
         return status()
     })
 
-    ctx.ipc.handle('downloadCore', () => downloadCore())
-    ctx.ipc.handle('listTargets', () => TARGETS.map((t) => ({ os: t.os, arch: t.arch, label: t.label, url: t.url, binary: t.binary })))
+    ctx.ipc.handle('listTargets', () => TARGETS.map((t) => ({ os: t.os, arch: t.arch, dir: t.dir, label: t.label, binary: t.binary })))
     ctx.ipc.handle('describe', () => describeCapabilities())
     ctx.ipc.handle('compress', (c) => compress(bodyOf(c) as unknown as CompressOptions))
     ctx.ipc.handle('extract', (c) => extract(bodyOf(c) as unknown as ExtractOptions))
