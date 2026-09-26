@@ -84,14 +84,6 @@ export interface Settings {
     ignoreSystemScale: boolean
     /** 扩展翻译风格/区域变体（仅当前语言生效）：off ｜ anime/wenyan/hant(zh) ｜ pirate/shakespeare(en)。 */
     funLocale: FunLocale
-    /** 默认搜索引擎（地址栏/新标签页搜索用）。 */
-    searchEngine: SearchEngineId
-    /** 新标签页模式：'builtin'(内置导航页) ｜ 'url'(加载 newTabUrl)。 */
-    newTabMode: NewTabMode
-    /** 新标签页自定义 URL（newTabMode='url' 时生效）。 */
-    newTabUrl: string
-    /** 新标签页内置导航页的常用站点快捷方式。 */
-    shortcuts: Shortcut[]
     /**
    * 系统全局快捷键：任何程序里按下都回到本应用主窗口（Electron accelerator，空串=禁用）。
    * 由主进程 `globalShortcut` 注册，可能被别的程序占用而注册失败。
@@ -107,8 +99,6 @@ export interface Settings {
     autoLaunch: boolean
     /** 启动时隐藏到系统托盘，并用系统默认浏览器打开 DSH 界面。 */
     openDshInBrowser: boolean
-    /** 内嵌 webview 的 UserAgent；**留空 = 用按平台/版本生成的默认 UA**。 */
-    webviewUserAgent: string
     /** 配色方案 id（预制方案见 renderer 的 `lib/theme.ts`；同时决定主色与页面/侧栏底色）。 */
     colorScheme: ColorSchemeId
     /**
@@ -131,14 +121,6 @@ export interface Settings {
 export type ColorSchemeId = 'default' | 'purple' | 'green' | 'cyan' | 'orange' | 'rose' | 'graphite'
 
 export const COLOR_SCHEME_IDS: readonly ColorSchemeId[] = ['default', 'purple', 'green', 'cyan', 'orange', 'rose', 'graphite']
-
-/** Webview 设置页需要的只读信息（默认 UA 由主进程按当前平台与版本生成）。 */
-export interface WebviewInfo {
-    /** 按平台 / Chromium 版本 / 程序版本生成的默认 UA。 */
-    defaultUserAgent: string
-    /** 实际生效的 UA（设置里留空时等于默认）。 */
-    currentUserAgent: string
-}
 
 /** 扩展翻译：关闭、语言风格项（anime/wenyan 属 zh；pirate/shakespeare 属 en），
  *  或中文区域文本变体（hant=繁体中文，文本文件覆盖）。 */
@@ -213,18 +195,6 @@ export interface RegistrySpeedResult {
 
 export type Theme = 'system' | 'light' | 'dark'
 
-/** 支持的搜索引擎。 */
-export type SearchEngineId = 'baidu' | 'sogou' | '360' | 'bing' | 'google' | 'duckduckgo'
-
-/** 新标签页内容：内置导航页 ｜ 自定义 URL。 */
-export type NewTabMode = 'builtin' | 'url'
-
-/** 常用站点快捷方式（标题 + URL）。 */
-export interface Shortcut {
-    title: string
-    url: string
-}
-
 /**
  * dsh 的 `locale` 配置（patch 条目 `config.preference`）使用的两字母语言码。
  * 界面语言以此为单一存储来源（见 src/main/settings.ts 的 dsh locale 读写）。
@@ -235,10 +205,19 @@ export type LocaleCode = 'zh' | 'en'
 export type ResolvedLocale = 'zh' | 'en'
 
 /**
- * 设置结构版本：2 = 代理范围拆出 'app' / 'dsh' / 'registry'，下载并发数默认 'auto'。
+ * 设置结构版本。
+ *
+ *  - 2 = 代理范围拆出 'app' / 'dsh' / 'registry'，下载并发数默认 'auto'；
+ *  - 3 = （历史）原样；
+ *  - 4 = `webviewUserAgent` 迁出 —— webview 功能独立为内置扩展 `xeonsky.browser` 后，
+ *        该 UA 设置存在扩展自己的数据目录里。第 4 版在 loadSettings 里做一次性搬移
+ *        （把旧值写进扩展的 config.json），搬完即从设置结构中删除该字段。
+ *  - 5 = `searchEngine` / `shortcuts` 同样迁出（新标签页导航整体成为 `xeonsky.browser` 的
+ *        标签页视图），`newTabMode` / `newTabUrl` 直接删除（新标签页恒为内置导航视图）。
+ *
  * 每次做「改键名 / 改默认值」的迁移时 +1，见 settings.ts 的 loadSettings。
  */
-export const SETTINGS_VERSION = 3
+export const SETTINGS_VERSION = 5
 
 export const DEFAULT_SETTINGS: Settings = {
     settingsVersion: SETTINGS_VERSION,
@@ -269,17 +248,12 @@ export const DEFAULT_SETTINGS: Settings = {
     zoomPercent: 100,
     ignoreSystemScale: false,
     funLocale: 'off',
-    searchEngine: 'bing',
-    newTabMode: 'builtin',
-    newTabUrl: '',
-    shortcuts: [],
     hotkeyFocusWindow: 'CommandOrControl+Alt+H',
     hotkeyToggleTerminal: 'CommandOrControl+T',
     hotkeyDevTools: 'F12',
     hardwareAcceleration: true,
     autoLaunch: false,
     openDshInBrowser: false,
-    webviewUserAgent: '',
     colorScheme: 'default',
     appIcon: '',
     modelsCredConsent: false
@@ -442,7 +416,7 @@ export interface NodeDeployProgress {
 }
 
 /** 会报进度的操作种类。必须区分：npm 与 pnpm 的下载曾共用一条通道，进度会互相串台。 */
-export type OperationKind = 'node' | 'npm' | 'pnpm' | 'dsh-plugin'
+export type OperationKind = 'node' | 'npm' | 'pnpm'
 
 /**
  * 「进行中的操作」当前状态。
@@ -517,42 +491,6 @@ export interface PnpmStatus {
     system: PnpmRuntimeStatus
     /** 应用下载到配置目录的内置 pnpm。 */
     bundled: PnpmRuntimeStatus
-}
-
-/** 一个 dsh 插件（profile 的组合包 / 已安装依赖）。 */
-export interface DshPluginEntry {
-    /** 包名，如 @deepseek-ai/dsh-subagent-codex。 */
-    name: string
-    /** 是否列在 dsh.profile.bundles（= 启动时加载它的配置层）。 */
-    enabled: boolean
-    /** 是否作为 profile 依赖安装（随附模板 bundle 直接从 dsh 安装目录解析，也视为已安装）。 */
-    installed: boolean
-    /** 随附模板必备 bundle，不可停用。 */
-    required: boolean
-}
-
-/** 「设置 → 插件」页数据：profile 列表 + 当前 profile 的插件与 manifest 位置。 */
-export interface DshPluginsInfo {
-    /** 当前展示的 profile 名。 */
-    profile: string
-    /** 全部可选 profile（<dshHome>/profiles 下的目录名，按名称排序）。 */
-    profiles: string[]
-    /** 当前 profile 目录。 */
-    dir: string
-    /** 当前 profile 的 package.json 路径。 */
-    manifestPath: string
-    /** 插件条目（必备在前）。 */
-    entries: DshPluginEntry[]
-}
-
-/** dsh 插件安装 / 卸载结果。 */
-export interface DshPluginResult {
-    ok: boolean
-    message: string
-    /** 失败时 pnpm / dsh 的 stderr 尾部，供诊断。 */
-    tail?: string
-    /** 是否因用户取消而中止。 */
-    canceled?: boolean
 }
 
 /** 通用「下载 / 安装」结果（与 NodeDeployResult 同构；npm 更新走它）。 */
@@ -648,4 +586,18 @@ export const NEWTAB_URL = 'dssh://about:blank'
 /** 目标是否表示“打开内置导航页”（NEWTAB_URL）。 */
 export function isNewTabTarget(target: string | null | undefined): boolean {
     return typeof target === 'string' && target === NEWTAB_URL
+}
+
+/**
+ * 一行用户输入的解析结果（地址栏 / 导航页输入框）。
+ *
+ * 规则在浏览器扩展 `xeonsky.browser` 里（它才是「怎么浏览」的归属者），
+ * 外壳只负责把原文递过去、按结论行事。放在 shared 是因为它要跨 IPC 传输，
+ * 且渲染层两端（`/shell/resolve-input` 的返回、UI 的分派）都要用到这个形状。
+ */
+export interface ResolveResult {
+    /** `url` 内嵌页面加载；`external` 交系统默认程序；`none` 空输入。 */
+    kind: 'url' | 'external' | 'none'
+    /** 目标；`kind === 'none'` 时缺省。 */
+    url?: string
 }

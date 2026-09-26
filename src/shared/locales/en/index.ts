@@ -120,21 +120,12 @@ export default {
         extractingNode: 'Extracting Node…',
         extractingNpm: 'Extracting bundled npm…'
     },
-    engine: {
-        baidu: 'Baidu',
-        sogou: 'Sogou',
-        q360: '360',
-        bing: 'Bing',
-        google: 'Google',
-        duckduckgo: 'DuckDuckGo'
-    },
+    /** New-tab page (shell fallback: shown only when `xeonsky.browser` is disabled) */
     navPage: {
-        placeholder: 'Search or enter address',
-        search: 'Search',
-        quick: 'Quick links',
-        noShortcuts: 'No quick links yet.',
-        addInSettings: 'Add in Settings',
-        engineLabel: 'Search engine'
+        placeholder: 'Enter a URL, or search with the default engine',
+        go: 'Go',
+        noBrowserExt: 'The browser extension is disabled — this is a minimal new-tab page.',
+        addInSettings: 'Open extension settings'
     },
     update: {
         okTitle: 'Up to date',
@@ -158,15 +149,14 @@ export default {
     },
     sv: {
         cap: 'Settings',
-        nav: { general: 'General', system: 'System & performance', appearance: 'Appearance', network: 'Network', env: 'Environment', dsh: 'DeepSeek Harness', plugins: 'Plugins', models: 'Models', log: 'Terminal', hotkeys: 'Shortcuts', about: 'About' },
+        nav: { general: 'General', system: 'System & performance', appearance: 'Appearance', network: 'Network', env: 'Environment', dsh: 'DeepSeek Harness', models: 'Models', log: 'Terminal', hotkeys: 'Shortcuts', about: 'About' },
         intro: {
             general: 'Working directory, port, tabs and search basics.',
-            system: 'Launch at login, how DSH opens, graphics acceleration and page identity.',
+            system: 'Launch at login, how DSH opens and graphics acceleration.',
             appearance: 'Interface language, theme and zoom.',
             network: 'Proxy connection and scope.',
             env: 'Which Node and npm run the DeepSeek Harness, and the version of each source.',
             dsh: 'DeepSeek Harness source, npm source and updates.',
-            plugins: 'Manage each profile\u2019s dsh plugins (bundles) and choose which load at startup.',
             models: 'Token list: one row per key, showing its provider and balance (no secrets shown).',
             log: 'Live DeepSeek Box output (stdout / stderr).',
             hotkeys: 'Keyboard shortcuts: system-wide and in-app.',
@@ -184,28 +174,6 @@ export default {
             reveal: 'Open containing folder',
             tabs: 'Tabs provided by this extension'
         },
-        plugins: {
-            pnpmPreparing: 'Preparing pnpm (first run downloads it; see Settings → Environment)…',
-            pnpmWhere: 'Which pnpm plugin installs use is chosen in Settings → Environment → pnpm source (System / Bundled).',
-            listTitle: 'Plugins (profile bundles)',
-            profile: 'Profile',
-            listHint: 'The switch controls whether the plugin loads at startup; a disabled plugin stays installed and other install/remove operations will not re-enable it. Required templates cannot be disabled.',
-            loading: 'Loading…',
-            empty: 'This profile has no manageable plugins yet.',
-            required: 'Required',
-            notInstalled: 'Not installed',
-            install: 'Install',
-            installPlaceholder: 'npm package, local path, tarball or git URL',
-            installHint: 'Forwards dsh plugin add: relative paths anchor to your home directory; git installs may need a build allowlist in the profile pnpm-workspace.yaml.',
-            installOk: 'Plugin {name} installed.',
-            installFail: 'Plugin install failed.',
-            removeTitle: 'Uninstall plugin',
-            removeConfirm: 'Uninstall {name} and remove it from the profile bundle list. Continue?',
-            remove: 'Uninstall',
-            removeFail: 'Plugin uninstall failed.',
-            restart: 'Restart dsh',
-            restartHint: 'Adding, removing, enabling or disabling a plugin takes effect after dsh restarts (patch hot-reload does not change bundle membership).'
-        },
         general: {
             run: 'Run',
             workspace: 'Working directory',
@@ -216,16 +184,6 @@ export default {
             portAuto: 'Auto (recommended)',
             portManual: 'Manual',
             portHint: 'Picks the first free port starting at 3080.',
-            engineLabel: 'Default search engine',
-            newTabTitle: 'New tab',
-            newTabModeBuiltin: 'Built-in navigation page',
-            newTabModeUrl: 'Custom URL',
-            newTabUrlPlaceholder: 'https://example.com',
-            shortcuts: 'Quick links',
-            shortcutTitle: 'Name',
-            shortcutUrl: 'URL',
-            shortcutAdd: 'Add',
-            shortcutHint: 'Shown on the new-tab page; click to open directly.',
             closeSection: 'Closing the app',
             closeKeepRunning: 'Keep background extensions and apps running after closing',
             closeKeepRunningHint: 'When on, the close button only hides the window to the system tray and background work keeps running; when off, closing quits and stops DeepSeek Harness.',
@@ -258,13 +216,9 @@ export default {
             gpuAccel: 'Use graphics acceleration when available',
             gpuAccelHint: 'Renders the embedded pages on the GPU. Turning it off lowers resource usage and helps with old drivers, at the cost of choppier scrolling and animation.',
             gpuAccelText: 'Graphics acceleration can only be decided while the app starts, so this needs an app restart to take effect. Restart now?',
-            restartNow: 'Restart now',
-            identity: 'Browser identity',
-            ua: 'UserAgent',
-            uaHint: 'Leave empty to use the default UA below. Applies to the DeepSeek Harness UI, web chat and every dynamic tab; new requests pick it up immediately, already-loaded pages need a refresh (or a restart).',
-            uaDefault: 'Default UA',
-            uaCurrent: 'In effect',
-            uaReset: 'Reset to default'
+            restartNow: 'Restart now'
+            // The former "Browser identity (UserAgent)" group moved to the built-in
+            // xeonsky.browser extension's own locale table (ext.xeonskyBrowser.*).
         },
         appearance: {
             title: 'Appearance',
@@ -578,19 +532,9 @@ export default {
         continueBtn: 'Continue'
     },
     m: {
-        // Permission prompts for embedded pages (see src/main/app/webviewPermissionPolicy.ts)
-        webviewPerm: {
-            message: '"{origin}" requests access to your {kind}.',
-            allow: 'Allow',
-            deny: 'Deny',
-            camera: 'camera',
-            microphone: 'microphone',
-            cameraMic: 'camera and microphone',
-            location: 'location',
-            notifications: 'notifications',
-            midi: 'MIDI devices',
-            unknown: 'system permissions'
-        },
+        // Note: the former `webviewPerm` keys (embedded-page permission prompts) moved to the
+        // built-in `xeonsky.browser` extension; its dialog text is built inline in that
+        // extension's main process and never goes through the renderer i18n runtime.
         dsh: {
             missingMsg: '@deepseek-ai/dsh is not installed (the DeepSeek Box CLI tool)',
             noVersion: 'Could not read the installed @deepseek-ai/dsh version',
@@ -617,8 +561,6 @@ export default {
             bundledPnpmNoTar: 'Could not find a system tar to extract the bundled pnpm.',
             bundledPnpmExtractFail: 'Failed to extract the bundled pnpm.',
             bundledPnpmMissing: 'The bundled pnpm is missing its entry file after extraction.',
-            pluginSpecInvalid: 'Invalid plugin name: it must not be empty or start with "-".',
-            pluginOpFail: 'pnpm / dsh failed; check the log under Settings → Terminal.',
             uninstallFail: 'Uninstall failed: {tail}',
             uninstallOk: '@deepseek-ai/dsh uninstalled.',
             uninstallDiag: 'Uninstall failed — detected cause: {reason}\n\nnpm output:\n{tail}',

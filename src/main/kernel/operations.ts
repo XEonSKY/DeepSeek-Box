@@ -89,11 +89,6 @@ export function endOperation(kind: OperationKind): boolean {
     return running.delete(kind)
 }
 
-/** 清空全部记录（测试用）。 */
-export function resetOperations(): void {
-    running.clear()
-}
-
 // ---------------------------------------------------------------------------
 // 可取消操作令牌（与上面的进度注册表同属「在途操作」机制，故并入 kernel）
 // ---------------------------------------------------------------------------
@@ -146,8 +141,7 @@ export const CANCELED_MESSAGE = '操作已取消'
 const CHANNEL_OF: Record<OperationKind, string> = {
     'node': 'nodeenv:deploy-progress',
     'npm': 'npmenv:progress',
-    'pnpm': 'pnmenv:progress',
-    'dsh-plugin': 'pnmenv:progress'
+    'pnpm': 'pnmenv:progress'
 }
 
 /** 安装进度统一整形：解压阶段百分比无意义，仅保留 phase 供前端切动画。 */

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, markRaw, onMounted, ref } from 'vue'
 import type { Component } from 'vue'
-import { SettingOutlined, DashboardOutlined, BulbOutlined, ApiOutlined, DeploymentUnitOutlined, ClusterOutlined, AppstoreOutlined, CodeFilled, ControlOutlined, InfoCircleFilled, RobotFilled, ApiFilled, FileZipOutlined, DownloadOutlined } from '@antdv-next/icons'
+import { SettingOutlined, DashboardOutlined, BulbOutlined, ApiOutlined, DeploymentUnitOutlined, ClusterOutlined, AppstoreOutlined, CodeFilled, ControlOutlined, InfoCircleFilled, RobotFilled, ApiFilled, FileZipOutlined, DownloadOutlined, CompassOutlined } from '@antdv-next/icons'
 import { useRoute, useRouter } from 'vue-router'
 import { useSettingsStore } from './settings/useSettingsStore'
 import { extMenus } from '../extensions/panels'
 
-type Group = 'general' | 'system' | 'appearance' | 'network' | 'env' | 'dsh' | 'plugins' | 'models' | 'log' | 'hotkeys' | 'about'
+type Group = 'general' | 'system' | 'appearance' | 'network' | 'env' | 'dsh' | 'models' | 'log' | 'hotkeys' | 'about'
 
 const { actions } = useSettingsStore()
 const route = useRoute()
@@ -19,7 +19,6 @@ const menus: { key: Group; icon: Component }[] = [
     { key: 'network', icon: ApiOutlined },
     { key: 'env', icon: DeploymentUnitOutlined },
     { key: 'dsh', icon: ClusterOutlined },
-    { key: 'plugins', icon: AppstoreOutlined },
     { key: 'models', icon: RobotFilled },
     { key: 'log', icon: CodeFilled },
     { key: 'hotkeys', icon: ControlOutlined },
@@ -48,6 +47,7 @@ const EXT_ICONS: Record<string, Component> = {
     app: markRaw(AppstoreOutlined),
     archive: markRaw(FileZipOutlined),
     cluster: markRaw(ClusterOutlined),
+    compass: markRaw(CompassOutlined),
     dashboard: markRaw(DashboardOutlined),
     download: markRaw(DownloadOutlined),
     setting: markRaw(SettingOutlined)
@@ -139,6 +139,6 @@ onMounted(async () => {
 
 <!--
     样式已抽到 src/renderer/src/styles/settings.css（非 scoped 的全局样式，由 main.ts 统一加载）。
-    它要同时作用于经 <router-view> 嵌套渲染的 10 个子面板（General / System / Appearance / Network / Env / Dsh / Plugins / Models / Log / Hotkeys / About），留在本组件里既撑大文件、又让这层
+    它要同时作用于经 <router-view> 嵌套渲染的 10 个子面板（General / System / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / About），留在本组件里既撑大文件、又让这层
     依赖不可见；抽成独立样式表后，子面板改样式时可一眼看到该改哪个文件。
 -->

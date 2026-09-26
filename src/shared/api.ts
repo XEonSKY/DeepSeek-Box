@@ -22,8 +22,6 @@ import type {
     ConfirmDialogRequest,
     CurrentBalanceInfo,
     DshActionResult,
-    DshPluginResult,
-    DshPluginsInfo,
     EnvProbe,
     HotkeyState,
     InstalledVersions,
@@ -40,11 +38,11 @@ import type {
     PnpmStatus,
     RegistrySpeedResult,
     ResolvedLocale,
+    ResolveResult,
     Settings,
     Theme,
     ToolActionResult,
-    UpdateResult,
-    WebviewInfo
+    UpdateResult
 } from './types'
 import type { ExtensionsInfo } from './extensions'
 
@@ -134,14 +132,6 @@ export interface ApiRoutes {
     'DELETE /dsh': { result: DshActionResult }
     /** 请核心窗口重新加载内嵌的 dsh UI（标题栏刷新按钮）。 */
     'POST /dsh/reload': { result: void }
-    /** dsh 插件（profile 组合包）：列出 profile 与插件启用状态。 */
-    'GET /dsh/plugins': { query: { profile?: string }; result: DshPluginsInfo }
-    /** 启停某个插件（改 dsh.profile.bundles，仅改配置层，不装不卸）。 */
-    'PUT /dsh/plugins/:profile/enabled': { body: { name: string; enabled: boolean }; result: DshPluginsInfo }
-    /** 安装插件（转发 dsh plugin add；首次会自动准备内置 pnpm）。 */
-    'POST /dsh/plugins/:profile/install': { body: { spec: string }; result: DshPluginResult }
-    /** 卸载插件（转发 dsh plugin remove，同时删依赖与配置层）。 */
-    'POST /dsh/plugins/:profile/remove': { body: { name: string }; result: DshPluginResult }
 
     // ---- 应用元信息 / 自动更新 ----
     'GET /app/meta': { result: AppMeta }
@@ -190,8 +180,9 @@ export interface ApiRoutes {
     'DELETE /config-dir/migration': { result: void }
 
     // ---- 只读状态 ----
+    // 注：原 `GET /webview/info` 已随 webview 功能迁到内置扩展 xeonsky.browser
+    // （走它的扩展自有通道 `ext:xeonsky.browser:config`），内核不再提供。
     'GET /hotkeys/state': { result: HotkeyState }
-    'GET /webview/info': { result: WebviewInfo }
     'GET /models/info': { result: ModelsInfo }
     'GET /models/balance': { result: CurrentBalanceInfo | null }
 
@@ -208,6 +199,15 @@ export interface ApiRoutes {
     'PUT /extensions/:id/enabled': { body: { enabled: boolean }; result: ExtensionsInfo }
     /** 清掉某扩展的崩溃计数并解除停用（「我已知道并要试一次」）。 */
     'POST /extensions/:id/forgive': { result: ExtensionsInfo }
+    /**
+     * 重载单个扩展：卸载 → 按当前磁盘状态重新激活（改完扩展代码立刻生效）。
+     *
+     * 注意：重载「被别的扩展依赖」的扩展时，依赖方仍持有旧的动作表 ——
+     * 要一并刷新请用 `POST /extensions/reload-all`。
+     */
+    'POST /extensions/:id/reload': { result: ExtensionsInfo }
+    /** 重载全部扩展：卸载全部 → 重新走一遍完整加载（等价于重启加载器，不重启 Electron）。 */
+    'POST /extensions/reload-all': { result: ExtensionsInfo }
     /** 退出安全模式并清空崩溃计数（要求重新加载全部扩展）。 */
     'POST /extensions/exit-safe-mode': { result: ExtensionsInfo }
     /** 打开外部扩展安装目录（在文件管理器里定位）。 */
@@ -226,7 +226,15 @@ export interface ApiRoutes {
     'POST /dialog/confirm/reply': { body: { confirmed: boolean }; result: void }
 
     // ---- 外壳窗口 / 标签 ----
+    /** 交系统默认程序打开一个 URI（协议白名单见 main/app/openlink.ts）。 */
     'POST /shell/open-external': { body: { url: string }; result: void }
+    /**
+     * 解析地址栏输入：网址就跳、否则按浏览器扩展配置的默认搜索引擎搜。
+     * 规则整体在扩展 `xeonsky.browser` 里；扩展不可用时一律回落为 external（交系统浏览器）。
+     */
+    'POST /shell/resolve-input': { body: { raw: string }; result: ResolveResult }
+    /** 解析导航页输入（纯跳转语义，不搜索）。 */
+    'POST /shell/resolve-target': { body: { raw: string }; result: ResolveResult }
     'POST /shell/open-url': { body: { url: string }; result: void }
     'POST /shell/focus-core': { result: void }
     'GET /shell/meta': { result: { winId: number; isCore: boolean } }

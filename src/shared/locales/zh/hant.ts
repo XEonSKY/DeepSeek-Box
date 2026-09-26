@@ -118,21 +118,11 @@ export default {
         extractingNode: '正在解壓縮 Node…',
         extractingNpm: '正在解壓縮內建 npm…'
     },
-    engine: {
-        baidu: '百度',
-        sogou: '搜狗',
-        q360: '360',
-        bing: 'Bing',
-        google: 'Google',
-        duckduckgo: 'DuckDuckGo'
-    },
     navPage: {
-        placeholder: '搜尋或輸入網址',
-        search: '搜尋',
-        quick: '常用網站',
-        noShortcuts: '還沒有常用網站。',
-        addInSettings: '前往設定新增',
-        engineLabel: '搜尋引擎'
+        placeholder: '輸入網址，或按預設搜尋引擎搜尋',
+        go: '跳轉',
+        noBrowserExt: '瀏覽器擴充功能已停用，這是精簡版導覽頁。',
+        addInSettings: '前往擴充功能設定'
     },
     update: {
         okTitle: '已是最新',
@@ -158,7 +148,7 @@ export default {
         nav: { general: '一般', system: '系統與效能', appearance: '外觀', network: '網路', env: '環境', dsh: 'DeepSeek Harness', models: '模型', log: '終端', hotkeys: '快速鍵', about: '關於' },
         intro: {
             general: '工作目錄、連接埠與分頁/搜尋等基礎行為。',
-            system: '開機自啟、瀏覽器開啟方式、圖形加速與內嵌頁面的瀏覽器識別。',
+            system: '開機自啟、瀏覽器開啟方式與圖形加速。',
             appearance: '介面語言、主題與縮放等外觀設定。',
             network: '代理連線與網路作用範圍。',
             env: '執行 DeepSeek Harness 所用的 Node 與 npm 來自何處，以及各來源的版本。',
@@ -178,16 +168,6 @@ export default {
             portAuto: '自動（建議）',
             portManual: '手動指定',
             portHint: '自動從 3080 起挑空閒連接埠。',
-            engineLabel: '預設搜尋引擎',
-            newTabTitle: '新分頁',
-            newTabModeBuiltin: '內建導覽頁',
-            newTabModeUrl: '自訂網址',
-            newTabUrlPlaceholder: 'https://example.com',
-            shortcuts: '常用網站捷徑',
-            shortcutTitle: '名稱',
-            shortcutUrl: '網址',
-            shortcutAdd: '新增',
-            shortcutHint: '顯示在新分頁導覽頁上，點擊即可直達。',
             closeSection: '關閉程式',
             closeKeepRunning: '關閉程式後繼續執行背景擴充功能與應用',
             closeKeepRunningHint: '開啟後點擊關閉按鈕只會隱藏到系統匣，背景工作繼續執行；關閉則直接結束並停止 DeepSeek Harness。',
@@ -220,13 +200,9 @@ export default {
             gpuAccel: '在可用時使用圖形加速',
             gpuAccelHint: '用 GPU 呈現內嵌頁面。關閉後資源占用更低、對老舊驅動的相容性更好，但捲動與動畫會變卡。',
             gpuAccelText: '圖形加速只能在應用程式啟動時決定，改動需要重啟應用程式才能生效。現在重啟嗎？',
-            restartNow: '立即重啟',
-            identity: '瀏覽器識別',
-            ua: 'UserAgent',
-            uaHint: '留空即使用下面的預設 UA。作用於 DeepSeek Harness UI、網頁對話與所有動態分頁；改動後新請求立即採用，已載入的頁面需要重新整理（或重啟）才帶上新 UA。',
-            uaDefault: '預設 UA',
-            uaCurrent: '目前生效',
-            uaReset: '恢復預設'
+            restartNow: '立即重啟'
+            // 原「瀏覽器識別（UserAgent）」一組已隨 webview 功能遷到內建擴充
+            // xeonsky.browser 的自有文案表（ext.xeonskyBrowser.*），此處不再保留。
         },
         appearance: {
             title: '外觀',

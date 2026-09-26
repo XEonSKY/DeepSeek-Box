@@ -27,7 +27,6 @@ export const router = createRouter({
                 { path: 'network', name: 'settings-network', component: () => import('../views/settings/NetworkPanel.vue') },
                 { path: 'env', name: 'settings-env', component: () => import('../views/settings/EnvPanel.vue') },
                 { path: 'dsh', name: 'settings-dsh', component: () => import('../views/settings/DshPanel.vue') },
-                { path: 'plugins', name: 'settings-plugins', component: () => import('../views/settings/PluginsPanel.vue') },
                 { path: 'models', name: 'settings-models', component: () => import('../views/settings/ModelsPanel.vue') },
                 { path: 'log', name: 'settings-log', component: () => import('../views/settings/LogPanel.vue') },
                 { path: 'hotkeys', name: 'settings-hotkeys', component: () => import('../views/settings/HotkeysPanel.vue') },

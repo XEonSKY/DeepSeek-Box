@@ -122,22 +122,12 @@ export default {
         extractingNode: '正在解压 Node…',
         extractingNpm: '正在解压内置 npm…'
     },
-    engine: {
-        baidu: '百度',
-        sogou: '搜狗',
-        q360: '360',
-        bing: 'Bing',
-        google: 'Google',
-        duckduckgo: 'DuckDuckGo'
-    },
-    /** 内置新标签导航页 */
+    /** 新标签导航页（外壳兜底版：`xeonsky.browser` 停用时才显示） */
     navPage: {
-        placeholder: '搜索或输入网址',
-        search: '搜索',
-        quick: '常用站点',
-        noShortcuts: '还没有常用站点。',
-        addInSettings: '去设置添加',
-        engineLabel: '搜索引擎'
+        placeholder: '输入网址，或按默认搜索引擎搜索',
+        go: '跳转',
+        noBrowserExt: '浏览器扩展已停用，这是精简版导航页。',
+        addInSettings: '去扩展设置'
     },
     /** DeepSeek Harness 更新通知 */
     update: {
@@ -165,15 +155,14 @@ export default {
     /** 设置页（sv = Settings View） */
     sv: {
         cap: '设置',
-        nav: { general: '常规', system: '系统与性能', appearance: '外观', network: '网络', env: '环境', dsh: 'DeepSeek Harness', plugins: '插件', models: '模型', log: '终端', hotkeys: '快捷键', about: '关于' },
+        nav: { general: '常规', system: '系统与性能', appearance: '外观', network: '网络', env: '环境', dsh: 'DeepSeek Harness', models: '模型', log: '终端', hotkeys: '快捷键', about: '关于' },
         intro: {
             general: '工作目录、端口与标签页/搜索等基础行为。',
-            system: '开机自启、浏览器打开方式、图形加速与内嵌页面的浏览器标识。',
+            system: '开机自启、浏览器打开方式与图形加速。',
             appearance: '界面语言、主题与缩放等观感设置。',
             network: '代理连接与网络作用范围。',
             env: '运行 DeepSeek Harness 所用的 Node 与 npm 来自哪里，以及各来源的版本。',
             dsh: 'DeepSeek Harness 的来源、npm 来源与更新。',
-            plugins: '管理各 profile 的 dsh 插件（组合包），选择启动时加载哪些。',
             models: '令牌列表：每个密钥（令牌）一行，显示所属供应商与余额，不显示密钥。',
             log: 'DeepSeek Box 的实时输出（stdout / stderr）。',
             hotkeys: '键盘快捷键：系统全局的与常用的操作。',
@@ -191,28 +180,6 @@ export default {
             reveal: '打开所在目录',
             tabs: '该扩展提供的标签页'
         },
-        plugins: {
-            pnpmPreparing: '正在准备 pnpm（首次会从镜像源下载，来源见「设置 → 环境」）…',
-            pnpmWhere: '插件安装用的 pnpm 在「设置 → 环境 → pnpm 来源」里选择（系统自带 / 内置）。',
-            listTitle: '插件（profile 组合包）',
-            profile: 'Profile',
-            listHint: '开关控制该插件是否在启动时加载；停用的插件仍保留安装，后续安装/卸载其它插件也不会把它重新启用。必备模板不可停用。',
-            loading: '正在读取…',
-            empty: '该 profile 还没有可管理的插件。',
-            required: '必备',
-            notInstalled: '未安装',
-            install: '安装',
-            installPlaceholder: 'npm 包名、本地路径、tarball 或 git 地址',
-            installHint: '转发 dsh plugin add：相对路径以本机主目录为基准；git 安装可能需要在 profile 的 pnpm-workspace.yaml 里授权构建。',
-            installOk: '插件 {name} 已安装。',
-            installFail: '插件安装失败。',
-            removeTitle: '卸载插件',
-            removeConfirm: '将卸载 {name}，并从 profile 的组合包列表中移除。确定继续吗？',
-            remove: '卸载',
-            removeFail: '插件卸载失败。',
-            restart: '重启 dsh 生效',
-            restartHint: '增删 / 启停插件后需要重启 dsh 才会生效（patch 文件的热重载不影响组合包成员）。'
-        },
         general: {
             run: '运行',
             workspace: '工作目录',
@@ -223,16 +190,6 @@ export default {
             portAuto: '自动（推荐）',
             portManual: '手动指定',
             portHint: '自动从 3080 起挑空闲端口。',
-            engineLabel: '默认搜索引擎',
-            newTabTitle: '新标签页',
-            newTabModeBuiltin: '内置导航页',
-            newTabModeUrl: '自定义网址',
-            newTabUrlPlaceholder: 'https://example.com',
-            shortcuts: '常用站点快捷方式',
-            shortcutTitle: '名称',
-            shortcutUrl: '网址',
-            shortcutAdd: '添加',
-            shortcutHint: '显示在新标签页导航页上，点击即可直达。',
             closeSection: '关闭程序',
             closeKeepRunning: '关闭程序后继续运行后台扩展和应用',
             closeKeepRunningHint: '开启后点击关闭按钮只隐藏到系统托盘，后台任务继续运行；关闭则直接退出并结束 DeepSeek Harness。',
@@ -265,13 +222,9 @@ export default {
             gpuAccel: '在可用时使用图形加速',
             gpuAccelHint: '用 GPU 渲染内嵌页面。关闭后资源占用更低、对老旧驱动的兼容性更好，但滚动与动画会变卡。',
             gpuAccelText: '图形加速只能在应用启动时决定，改动需要重启应用才能生效。现在重启吗？',
-            restartNow: '立即重启',
-            identity: '浏览器标识',
-            ua: 'UserAgent',
-            uaHint: '留空即使用下面的默认 UA。作用于 DeepSeek Harness UI、网页对话与所有动态标签；改动后新请求立即采用，已加载的页面需要刷新（或重启）才带上新 UA。',
-            uaDefault: '默认 UA',
-            uaCurrent: '当前生效',
-            uaReset: '恢复默认'
+            restartNow: '立即重启'
+            // 原「浏览器标识（UserAgent）」一组已随 webview 功能迁到内置扩展
+            // xeonsky.browser 的自有文案表（ext.xeonskyBrowser.*），此处不再保留。
         },
         appearance: {
             title: '外观',
@@ -587,19 +540,8 @@ export default {
     },
     /** main 进程文案（dsh/updater/托盘/对话框） */
     m: {
-        // 内嵌页面的权限询问（见 src/main/app/webviewPermissionPolicy.ts）
-        webviewPerm: {
-            message: '“{origin}” 请求使用{kind}。',
-            allow: '允许',
-            deny: '拒绝',
-            camera: '摄像头',
-            microphone: '麦克风',
-            cameraMic: '摄像头与麦克风',
-            location: '位置信息',
-            notifications: '系统通知',
-            midi: 'MIDI 设备',
-            unknown: '系统权限'
-        },
+        // 注：原 `webviewPerm`（内嵌页面权限询问）已随 webview 功能迁到内置扩展
+        // `xeonsky.browser`，其弹窗文案现由该扩展主进程内联构造（不经过渲染层 i18n）。
         dsh: {
             missingMsg: '未安装 @deepseek-ai/dsh（DeepSeek Box 命令行工具）',
             noVersion: '无法读取已安装的 @deepseek-ai/dsh 版本',
@@ -626,8 +568,6 @@ export default {
             bundledPnpmNoTar: '未能找到系统 tar 以解压内置 pnpm。',
             bundledPnpmExtractFail: '内置 pnpm 解压失败。',
             bundledPnpmMissing: '内置 pnpm 解压后缺少入口文件。',
-            pluginSpecInvalid: '插件名不合法：不能为空或以“-”开头。',
-            pluginOpFail: 'pnpm / dsh 执行失败，请在「设置 → 终端」查看日志。',
             uninstallFail: '卸载失败：{tail}',
             uninstallOk: '已卸载 @deepseek-ai/dsh。',
             uninstallDiag: '卸载失败，原因检测：{reason}\n\nnpm 输出：\n{tail}',
