@@ -44,8 +44,7 @@
         "**/release": true,
         "**/.vite": true,
         "**/.vitepress/cache": true,
-        "**/.vitepress/dist": true,
-        "**/.agents/temp": true
+        "**/.vitepress/dist": true
     },
     "files.watcherExclude": {
         "**/node_modules/**": true,

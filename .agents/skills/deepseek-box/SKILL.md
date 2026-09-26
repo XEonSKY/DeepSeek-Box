@@ -32,7 +32,7 @@ metadata:
 
 ## 项目速览
 
-**DeepSeek Box** 是 DeepSeek Harness（npm 包 `@deepseek-ai/dsh`）的桌面外壳：Electron 44 + electron-vite 5 + Vite 7 + Vue 3 + TypeScript + Element Plus + Pinia + vue-i18n + @xterm/xterm。它负责定位 / 安装 / 启动 / 守护 dsh，并把 dsh 的 Web UI 嵌进原生窗口。
+**DeepSeek Box** 是 DeepSeek Harness（npm 包 `@deepseek-ai/dsh`）的桌面外壳：Electron 44 + electron-vite 6 + Vite 8 + Vue 3 + TypeScript + Element Plus + Pinia + vue-i18n + @xterm/xterm。它负责定位 / 安装 / 启动 / 守护 dsh，并把 dsh 的 Web UI 嵌进原生窗口。
 
 | 目录 | 职责 |
 |---|---|

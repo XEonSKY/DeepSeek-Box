@@ -65,6 +65,15 @@
   - `dependencies`：**只放主进程 / 预加载的运行时依赖**。`electron.vite.config.ts` 给 `main` 与 `preload` 设了 `externalizeDeps: true`，它们不打进 bundle，必须随包分发。目前有 `defu`、`electron-updater`、`pino`、`pino-roll`、`semver`、`write-file-atomic`、`yaml`。
     - 注意 `pino-pretty` 刻意**留在 `devDependencies`**：它是开发态控制台的格式化器，打包产物里不该有它（`kernel/logger` 只在 `NODE_ENV=development` 时才把它作为 transport 目标）。
   - 判断方法：`grep` 该包在 `src/main` / `src/preload` 是否有 import——有则 `dependencies`，只被 `src/renderer` 或构建配置使用则 `devDependencies`。
+- **构建链版本与两个硬约束**（2026-09-26 升级后）：
+  - `electron-vite ^6.0.0-beta.1` + `vite ^8.3.1`。Vite 8 的内核换成了 **rolldown**（不再是 rollup/esbuild），
+    所以顶层不再有 `esbuild` 依赖 —— 这是 npm 主动移除的，不是缺装，别回去补。
+  - **`typescript` 停在 `5.9.3`，不能升 7**：`typescript-eslint@8.70.1` 的 peer 是 `>=4.8.4 <6.1.0`，
+    而 npm 上 typescript 的 `latest` 已经是 7.0.2，直接 `npm i -D typescript@latest` 会装出被工具链拒绝的版本。
+    TS 7 是 Go 重写版，`vue-tsc` 也未必跟得上。要用必须先等 `typescript-eslint` 放开 upper bound。
+  - 升级后 rolldown 会报 `[INEFFECTIVE_DYNAMIC_IMPORT]`：`WebHost.vue` 同时被 `App.vue` 静态 import
+    和 `router.ts` 动态 import（同一模块），懒加载实际不生效。这是**升级前就存在**的缺陷，rollup 不报、
+    rolldown 报；修它会改动外壳渲染路径，属独立任务。
 - 用户可见的日志与错误必须走现有日志入口与 i18n（主进程 `mt()`、渲染层 `t()`），禁止硬编码文案。
 - **日志统一走 pino**（不要新增裸 `console.*`）：
   - 主进程：`import { logger } from '../kernel/logger'` → `const log = logger('[Manager]')`，然后 `log.error({ err }, 'msg')`（结构化字段放第一参，消息放第二参）。
