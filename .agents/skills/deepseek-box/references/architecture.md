@@ -84,14 +84,23 @@ manifest id 与已发现扩展重复，三者任一命中即记 skipped。**7-Zi
 `xeonsky.zip` 被停用 / 加载失败时 extm 照常激活但 status 自报不可用，加载器据此
 **整体禁用压缩包加载**（只登记原因，不读取任何包文件，也不算崩溃失败）。
 
+**7-Zip 核心内置于扩展**（`xeonsky.zip`）：全平台命令行二进制放在
+`src/extensions/xeonsky.zip/bin/<平台>/`（Windows 取官方 `-extra` 包的 `7za.exe` +
+`7za.dll`，注意 **x64 子目录里才是 64 位**、包根是 32 位；Linux / macOS 取 `7zz`），
+**不运行时下载**（不申请 `net` 能力）。运行时路径 = `__dirname/../../src/…/bin`，
+且必须把 `app.asar` 换回 `app.asar.unpacked` —— **asar 内的可执行文件不能执行**，
+因此 `build.files` 要在 `!src/**` **之后**追加 `src/extensions/xeonsky.zip/bin/**`
+（顺序反了会被排除覆盖）并配同 glob 的 `build.asarUnpack`。
+类 Unix 的二进制入库时要用 `git update-index --chmod=+x` 保住可执行位。
+定位顺序：用户指定 → 内置 → 系统。
+
 **扩展数据目录**：`ctx.dataDir`（懒创建 getter，首次访问才在磁盘建目录），
-路径 `<配置目录>/data/extensions/<extId>`。放运行期产生的数据（下载的核心、状态文件、
+路径 `<配置目录>/data/extensions/<extId>`。放运行期产生的数据（扩展配置、状态文件、
 缓存），与 `dir`（代码目录，外部扩展在 `extensions/<dirName>/`）**分离** ——
 外部扩展卸载时整目录删除的是代码目录，数据目录在重装后仍然保留。
 实现：`sources.ts` 的 `ensureExtDataDir`（mkdir -p），由 loader 注入 ctx，
 `ctx.ts` 本身不碰 fs。内置 / 系统扩展同样有数据目录（它们的 `dir` 是源码路径，
-打包后在磁盘上不存在 —— 需要落盘的东西一律用 `dataDir`，参考 `xeonsky.zip` 的
-core 目录与 config.json）。
+打包后在磁盘上不存在 —— 需要落盘的东西一律用 `dataDir`，如 `xeonsky.zip` 的 config.json）。
 
 **系统扩展 id 用 `system.` 前缀**（`system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui`），
 与外部扩展能力名 `ext:<extId>` 对仗。注意**能力名是裸名**（`fs` / `net` / ...，见
