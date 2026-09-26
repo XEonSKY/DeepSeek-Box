@@ -1,62 +1,56 @@
 <script setup lang="ts">
-import { computed, markRaw, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, markRaw } from 'vue'
 import type { Component } from 'vue'
-import { SettingOutlined, DashboardOutlined, BulbOutlined, ApiOutlined, DeploymentUnitOutlined, ClusterOutlined, AppstoreOutlined, CodeFilled, ControlOutlined, InfoCircleFilled, RobotFilled, ApiFilled, FileZipOutlined, DownloadOutlined, CompassOutlined } from '@antdv-next/icons'
+import { SettingOutlined, BulbOutlined, DeploymentUnitOutlined, ClusterOutlined, CodeFilled, ControlOutlined, InfoCircleFilled, BuildFilled, CaretDownFilled, DownloadOutlined } from '@antdv-next/icons'
 import { useRoute, useRouter } from 'vue-router'
 import { useSettingsStore } from './settings/useSettingsStore'
 import { extMenus } from '../extensions/panels'
 
-type Group = 'general' | 'system' | 'appearance' | 'network' | 'env' | 'dsh' | 'models' | 'log' | 'hotkeys' | 'about'
+type Group = 'general' | 'appearance' | 'env' | 'dsh' | 'log' | 'download' | 'hotkeys' | 'about'
 
 const { actions } = useSettingsStore()
 const route = useRoute()
 const router = useRouter()
 
+/**
+ * 内置一级菜单。
+ *
+ * 侧栏刻意收窄到「一个面板一件事」：
+ *  - 原「系统与性能」「网络」已并入 `general`（都是程序的常规行为，拆开只是让人多点两次）；
+ *  - 原「模型」已并入 `dsh`（令牌与余额本来就属于 DeepSeek 的配置）。
+ * 剩余这些面板彼此不重叠，继续各自成一页。
+ */
 const menus: { key: Group; icon: Component }[] = [
     { key: 'general', icon: SettingOutlined },
-    { key: 'system', icon: DashboardOutlined },
     { key: 'appearance', icon: BulbOutlined },
-    { key: 'network', icon: ApiOutlined },
     { key: 'env', icon: DeploymentUnitOutlined },
     { key: 'dsh', icon: ClusterOutlined },
-    { key: 'models', icon: RobotFilled },
     { key: 'log', icon: CodeFilled },
+    { key: 'download', icon: DownloadOutlined },
     { key: 'hotkeys', icon: ControlOutlined },
     { key: 'about', icon: InfoCircleFilled }
 ]
 
 /**
- * 扩展贡献的设置面板：**追加在内置项之后**（不能插入内置项中间，
- * 否则"设置页长什么样"会变得不确定）。扩展面板的图标由外壳统一映射 —— 扩展不能传组件。
+ * 扩展贡献的设置面板 —— 统一收在「扩展」这个一级菜单之下。
  *
- * 注意：「扩展管理」页本身也走这条通路（由内置扩展 `xeonsky.extm` 贡献），
- * 外壳不为它写特例 —— 内置扩展与外部扩展在控制点上的待遇一致，唯一的差别是主进程侧的加载方式。
+ * 之所以收拢：扩展面板是**可变集合**（扩展可以装卸、可以停用），与上面那排固定的一级菜单
+ * 性质不同；平铺在一起时，用户分不清哪一项是程序自带、哪一项来自某个扩展。
+ * 现在一级项「扩展」是常量（永远在，即便一个扩展都没装），其下才是随扩展增减的子项。
+ *
+ * 「扩展管理」页本身也走这条通路（由内置扩展 `xeonsky.extm` 贡献），外壳不为它写特例。
  */
 const extItems = computed(() => extMenus())
 
 /**
- * 扩展面板侧栏图标：贡献里只能给**图标名**（字符串），外壳在这里查表映射成组件 ——
+ * 扩展面板的图标：扩展只能给**图标名**（字符串），外壳统一映射成 `<BuildFilled />` ——
  * 扩展不允许传组件进来，否则等于让它往外壳的 JS 上下文里注入任意实现。
  *
- * 表里没有的名字（或干脆没声明 `icon`）一律回落到 {@link EXT_ICON_FALLBACK}，
- * 所以这里**必须**有一个兜底项，不能出现"查不到就是空白"的情况。
+ * 之所以所有扩展项用同一个图标（而不是继续查 {@link EXT_ICONS} 那张表）：它们已经是
+ * 二级子项，被折叠在「扩展」一级项之下，各自的图标反而让层级更乱；统一图标把
+ * 「这一组都是扩展」这件事表达得更清楚。
  */
-const EXT_ICON_FALLBACK: Component = markRaw(ApiFilled)
-const EXT_ICONS: Record<string, Component> = {
-    api: markRaw(ApiFilled),
-    app: markRaw(AppstoreOutlined),
-    archive: markRaw(FileZipOutlined),
-    cluster: markRaw(ClusterOutlined),
-    compass: markRaw(CompassOutlined),
-    dashboard: markRaw(DashboardOutlined),
-    download: markRaw(DownloadOutlined),
-    setting: markRaw(SettingOutlined)
-}
-
-/** 取扩展面板的图标组件；查不到就回落（保证侧栏每项都有图标）。 */
-function extIcon(name: string | undefined): Component {
-    return (name && EXT_ICONS[name]) || EXT_ICON_FALLBACK
-}
+const EXT_ICON: Component = markRaw(BuildFilled)
 
 /**
  * 由当前子路由决定高亮分组。
@@ -74,8 +68,22 @@ const activeGroup = computed<string>(() => {
     return typeof n === 'string' && n.startsWith('settings-') ? n.slice(9) : 'general'
 })
 
+/** 「扩展」一级项是否处于展开 / 高亮态（子项任一命中即算）。 */
+const extRootOn = computed(() => extItems.value.some((m) => m.key === activeGroup.value))
+
+/** 分组是否收起（默认展开；用户手动折叠后保持）。 */
+const extCollapsed = ref(false)
+
+/** 实际渲染的扩展子项（收起时为空）。 */
+const visibleExtItems = computed(() => (extCollapsed.value ? [] : extItems.value))
+
 function go(g: string): void {
     void router.push(`/settings/${g}`)
+}
+
+/** 点「扩展」一级项：不导航（它没有自己的页面），只折叠 / 展开子项。 */
+function toggleExt(): void {
+    extCollapsed.value = !extCollapsed.value
 }
 
 const loading = ref(false)
@@ -99,30 +107,43 @@ onMounted(async () => {
         <aside class="side">
             <div class="side__cap">{{ $t('sv.cap') }}</div>
             <nav class="nav">
-                <button
-                    v-for="m in menus"
-                    :key="m.key"
-                    type="button"
-                    class="nav__item"
-                    :class="{ on: activeGroup === m.key }"
-                    @click="go(m.key)"
-                >
-                    <el-icon :size="18"><component :is="m.icon" /></el-icon>
-                    <span class="nav__label">{{ $t('sv.nav.' + m.key) }}</span>
-                </button>
-
-                <!-- 扩展贡献的面板：追加在内置项之后，图标由外壳统一给（扩展不能传组件）。 -->
-                <button
-                    v-for="m in extItems"
-                    :key="'ext-' + m.extId + '-' + m.key"
-                    type="button"
-                    class="nav__item"
-                    :class="{ on: activeGroup === m.key }"
-                    @click="go(m.key)"
-                >
-                    <el-icon :size="18"><component :is="extIcon(m.icon)" /></el-icon>
-                    <span class="nav__label" :title="m.extName">{{ $t(m.titleKey) }}</span>
-                </button>
+                <template v-for="m in menus" :key="m.key">
+                    <button
+                        type="button"
+                        class="nav__item"
+                        :class="{ on: activeGroup === m.key }"
+                        @click="go(m.key)"
+                    >
+                        <el-icon :size="18"><component :is="m.icon" /></el-icon>
+                        <span class="nav__label">{{ $t('sv.nav.' + m.key) }}</span>
+                    </button>
+                    <!-- 「扩展」一级项紧随「DeepSeek」之后：它承载的也是「可配置的东西」，
+                         而不是外观 / 环境 / 日志这类工具性面板。 -->
+                    <template v-if="m.key === 'dsh'">
+                        <button
+                            type="button"
+                            class="nav__item nav__item--root"
+                            :class="{ on: extRootOn }"
+                            @click="toggleExt"
+                        >
+                            <el-icon :size="18"><BuildFilled /></el-icon>
+                            <span class="nav__label">{{ $t('sv.nav.extensions') }}</span>
+                            <el-icon :size="12" class="nav__caret" :class="{ 'is-collapsed': extCollapsed }"><CaretDownFilled /></el-icon>
+                        </button>
+                        <!-- 各扩展贡献的二级面板：折叠在「扩展」之下，缩进一级。 -->
+                        <button
+                            v-for="m2 in visibleExtItems"
+                            :key="'ext-' + m2.extId + '-' + m2.key"
+                            type="button"
+                            class="nav__item nav__item--sub"
+                            :class="{ on: activeGroup === m2.key }"
+                            @click="go(m2.key)"
+                        >
+                            <el-icon :size="16"><component :is="EXT_ICON" /></el-icon>
+                            <span class="nav__label" :title="m2.extName">{{ $t(m2.titleKey) }}</span>
+                        </button>
+                    </template>
+                </template>
             </nav>
         </aside>
 
@@ -139,6 +160,6 @@ onMounted(async () => {
 
 <!--
     样式已抽到 src/renderer/src/styles/settings.css（非 scoped 的全局样式，由 main.ts 统一加载）。
-    它要同时作用于经 <router-view> 嵌套渲染的 10 个子面板（General / System / Appearance / Network / Env / Dsh / Models / Log / Hotkeys / About），留在本组件里既撑大文件、又让这层
-    依赖不可见；抽成独立样式表后，子面板改样式时可一眼看到该改哪个文件。
+    它要同时作用于经 <router-view> 嵌套渲染的子面板（General / Appearance / Env / DeepSeek / Log /
+    Hotkeys / About）以及扩展贡献的面板，留在本组件里既撑大文件、又让这层依赖不可见。
 -->

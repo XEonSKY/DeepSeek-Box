@@ -1,6 +1,6 @@
 # Settings Guide
 
-“Settings” is organized into groups on the left: General, Appearance, Network, Environment, DeepSeek Harness, Models, Terminal, Shortcuts, Webview, About. Every settings card can be **collapsed** by clicking its title. This page explains each item.
+“Settings” is organized into groups on the left: General, Appearance, Environment, DeepSeek, Terminal, Downloads, Extensions, Shortcuts, About. Every settings card can be **collapsed** by clicking its title. This page explains each item.
 
 ## General
 
@@ -38,27 +38,29 @@ A change is **not moved immediately**; instead you are prompted that it will “
 | **Interface zoom** | 50%–200%, applied to the shell window and embedded webviews. |
 | **Disable system scaling** | Ignore the operating system display scaling; requires a restart to take effect. |
 
-## Network
+## General → Network
+
+The former “Network” group has been merged into **General** (network / system / performance on one page). The “Network” collapse block on the General page contains:
 
 | Setting | Effect |
 |---|---|
 | **npm registry mirror** | Official `registry.npmjs.org` or `npmmirror`. |
 | **Proxy** | Enable + protocol (HTTP / SOCKS5) + host + port + proxy scope. The six scopes are independent: **the app itself** (model / balance lookups and embedded pages), **app updates** (self-update), **DSH itself** (the dsh process's own traffic), **npm installs / downloads**, **Node download & deploy**, and **version lookups** (the version list and update checks on the npm registry). Unchecked scopes follow the system settings. |
-| **Download concurrency** | Concurrent connections for multi-threaded segmented downloads. Defaults to **Auto** (2–8, derived from this machine's CPU core count); you can also pin it manually between 1 and 16, where 1 = single-threaded. |
 
-For download progress, temporary directories, de-duplication, and similar behavior, see [Environment Management](/en/user/environment).
+**Download concurrency** is fixed to **Auto** (2–8, derived from this machine's CPU core count) with no manual mode; the download settings of the Downloads page still control the download module's own default concurrency.
+
+For download progress, temporary directories, de-duplication, and similar behavior, see [Environment Management](/en/user/environment); for the task queue, see the Downloads page.
 
 ## Environment
 
 The Node and npm sources used to run DeepSeek Harness; see [Environment Management (Node / npm)](/en/user/environment).
 
-## DeepSeek Harness
+## DeepSeek
 
-Source, updates, version switching, and uninstalling; see [DeepSeek Harness management](/en/user/dsh). The page also has a whole **Startup** section: the **timeout** (`timeoutMs`, default 90000 ms), a running-state tag with the **Start / Stop / Restart** button group, and the **Apply now** button on the right.
+The former “DeepSeek Harness” group has been renamed **DeepSeek**, and the former “Models” group has been merged into it.
 
-## Models
-
-The model list, providers and balances; see [Models & balances](/en/user/models). The first visit asks for consent to read the local configuration; the page **never shows any key**.
+- Harness source, updates, version switching, and uninstalling; see [DeepSeek Harness management](/en/user/dsh). The page also has a whole **Startup** section: the **timeout** (`timeoutMs`, default 90000 ms), a running-state tag with the **Start / Stop / Restart** button group, and the **Apply now** button on the right.
+- The model list, providers and balances; see [Models & balances](/en/user/models). The first visit asks for consent to read the local configuration; the page **never shows any key**.
 
 ## Terminal
 
@@ -66,6 +68,14 @@ The model list, providers and balances; see [Models & balances](/en/user/models)
 - The terminal is **read-only** (it does not accept keyboard input); a placeholder is shown before dsh has produced any output;
 - Switching away and back re-fetches the most recent output (a server-side ring buffer, capped at 5000 lines);
 - Press `Ctrl` / `Cmd` + `T` to switch between the web view and “Settings · Terminal”.
+
+## Downloads
+
+The kernel download task queue: create downloads, pause / resume / cancel, progress and speed, plus download settings (concurrency, speed limits, etc.). Resume survives across sessions; for download behavior details see [Environment Management](/en/user/environment).
+
+## Extensions
+
+System / built-in / external extensions are managed here in one place: inspect status and versions, toggle them **instantly** with switch controls (system extensions cannot be disabled), and manage archive-form external extensions. Each extension's own settings panel is folded under this group as well.
 
 ## Shortcuts
 
@@ -80,12 +90,12 @@ The model list, providers and balances; see [Models & balances](/en/user/models)
 - A system-wide shortcut may be taken by another program; when that happens the page shows a prompt, and you can switch to another one;
 - Changes take effect immediately and do not require a restart.
 
-## Webview
+## Where the former “Webview” group went
 
-The rendering mode and browser identity of embedded pages (dsh Web UI, web chat, dynamic tabs).
+The former “Webview” group has been removed; its two settings moved elsewhere:
 
-- **Hardware acceleration**: enabled by default. Disabling it can reduce resource usage and improve compatibility with older drivers, but scrolling and animations become choppier. It can only be decided at **app startup**, so a change requires restarting the app.
-- **UserAgent**: leave blank to use the default, generated in real time from the current platform and version, like `... Chrome/<Chromium version> Safari/537.36 XEonSKY/<app version>`; a custom UA takes effect immediately for **new requests**, and for already-loaded pages after a refresh.
+- **Hardware acceleration**: now on the General page. Enabled by default. Disabling it can reduce resource usage and improve compatibility with older drivers, but scrolling and animations become choppier. It can only be decided at **app startup**, so a change requires restarting the app.
+- **UserAgent**: moved with the browser capability to the extension settings of “Extensions → Browser”. Leave blank to use the default, generated in real time from the current platform and version, like `... Chrome/<Chromium version> Safari/537.36 XEonSKY/<app version>`; a custom UA takes effect immediately for **new requests**, and for already-loaded pages after a refresh.
 
 ## About
 
@@ -104,7 +114,7 @@ The window's bottom status bar is read-only; on the right it shows, in order:
 
 | Item | Description |
 |---|---|
-| **Current provider balance** | Once authorized it shows the balance, refreshing automatically every 5 minutes while in the foreground; clicking refreshes manually. Before authorization it shows “Click to authorize”, which jumps to “Settings → Models”. Hovering shows the granted / topped-up breakdown. |
+| **Current provider balance** | Once authorized it shows the balance, refreshing automatically every 5 minutes while in the foreground; clicking refreshes manually. Before authorization it shows “Click to authorize”, which jumps to “Settings → DeepSeek”. Hovering shows the granted / topped-up breakdown. |
 | **App version · dsh version** | Shaped like `v0.1.5-rc-1 · dsh 0.1.5-rc.2`. Clicking opens a popover that checks for updates; when a newer version is found it **only shows a small red dot on the version item** (a silent notice, no toast), and the popover shows the status of both the app and dsh version lines. |
 
 ::: info

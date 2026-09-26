@@ -43,7 +43,7 @@ Pre-releases / test builds are hidden by default; if **only** pre-release versio
 
 ## Downloader
 
-- File downloads for Node / npm / app updates are **multi-threaded and segmented by default** (concurrent HTTP Range requests); the concurrency is adjusted under “Settings → Network → Download” and defaults to **Auto** (2–8, derived from this machine's CPU core count), or you can pin it manually between 1 and 16 (1 = single-threaded);
+- File downloads for Node / npm / app updates are **multi-threaded and segmented** (concurrent HTTP Range requests); the concurrency is fixed to **Auto** (2–8, derived from this machine's CPU core count) with no manual mode;
 - The progress bar shows **downloaded / total size** and the **real-time speed**;
 - Unfinished temporary files are all placed in **`temp/download` under the working directory** and are moved to the target location once complete;
 - Duplicate requests for the **same target file** are merged into a single in-flight task; later callers share the result and progress, with no duplicate downloads.
@@ -54,5 +54,5 @@ The cache directory for all npm calls (DeepSeek Harness installation, npm self-u
 
 ## Related settings
 
-- Mirror and proxy: [Settings → Network](/en/user/settings)
-- Download concurrency: [Settings → Network](/en/user/settings)
+- Mirror and proxy: [Settings → General → Network](/en/user/settings)
+- Download module's default concurrency and speed limit: [Settings → Downloads](/en/user/settings)

@@ -145,15 +145,12 @@ export default {
     },
     sv: {
         cap: '設定',
-        nav: { general: '一般', system: '系統與效能', appearance: '外觀', network: '網路', env: '環境', dsh: 'DeepSeek Harness', models: '模型', log: '終端', hotkeys: '快速鍵', about: '關於' },
+        nav: { general: '一般', appearance: '外觀', env: '環境', dsh: 'DeepSeek', log: '終端', hotkeys: '快速鍵', about: '關於' },
         intro: {
-            general: '工作目錄、連接埠與分頁/搜尋等基礎行為。',
-            system: '開機自啟、瀏覽器開啟方式與圖形加速。',
+            general: '工作目錄、連接埠、啟動、效能、網路與設定資料夾等程式基礎行為。',
             appearance: '介面語言、主題與縮放等外觀設定。',
-            network: '代理連線與網路作用範圍。',
             env: '執行 DeepSeek Harness 所用的 Node 與 npm 來自何處，以及各來源的版本。',
-            dsh: 'DeepSeek Harness 的來源、npm 來源與更新。',
-            models: '權杖清單：每個金鑰（權杖）一列，顯示所屬供應商與餘額，不顯示金鑰。',
+            dsh: 'DeepSeek Harness 的來源、更新，以及權杖供應商與餘額。',
             log: 'DeepSeek Box 的即時輸出（stdout / stderr）。',
             hotkeys: '鍵盤快速鍵：系統全域的與常用的操作。',
             about: '關於應用程式與 DeepSeek Harness，以及更新檢查。'
@@ -168,7 +165,6 @@ export default {
             portAuto: '自動（建議）',
             portManual: '手動指定',
             portHint: '自動從 3080 起挑空閒連接埠。',
-            closeSection: '關閉程式',
             closeKeepRunning: '關閉程式後繼續執行背景擴充功能與應用',
             closeKeepRunningHint: '開啟後點擊關閉按鈕只會隱藏到系統匣，背景工作繼續執行；關閉則直接結束並停止 DeepSeek Harness。',
             configDirSection: '設定資料夾',
@@ -256,12 +252,7 @@ export default {
             scopeNpm: 'npm 安裝 / 下載',
             scopeNode: 'Node 下載部署',
             scopeRegistry: '版本查詢（npm registry）',
-            scopeHint: '僅在勾選範圍內使用代理；未勾選的範圍跟隨系統設定直連。',
-            download: '下載',
-            downloadThreads: '並行連線數',
-            downloadThreadsAuto: '自動',
-            downloadThreadsManual: '手動',
-            downloadThreadsHint: '檔案下載（Node / npm / 應用程式更新）多執行緒分段下載；「自動」依本機 CPU 核心數調整（2–8），手動可指定 1–16，1 = 單執行緒。'
+            scopeHint: '僅在勾選範圍內使用代理；未勾選的範圍跟隨系統設定直連。'
         },
         dsh: {
             installedVersion: 'DeepSeek Harness 版本',

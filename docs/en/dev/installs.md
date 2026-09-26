@@ -28,16 +28,14 @@ Each root directory's `.active` records the currently active version. The core A
 Files that were occupied during the move (typically a running `node.exe`) may not have been migrated. An incomplete directory is treated as nonexistent, and the read side falls back to the old flat layout; `moveFlatInto` also refuses to write `.active` when the key files are not in place.
 :::
 
-## Downloading: extension capability with a kernel fallback
+## Downloading: a kernel module
 
-The download capability lives in the built-in extension **`xeonsky.download`** (`src/extensions/xeonsky.download/`): segmented concurrency, cross-session resume, token-bucket rate limiting, retries and size validation, with the task queue persisted as `tasks.json` in the extension data directory. The network stack stays in the kernel — the engine only issues requests through the injected `OpenStream` (the `stream` action of `system.net`), so **Settings → Network → Proxy** still applies.
+The download capability is a kernel module, **`src/main/download/`** (formerly the built-in extension `xeonsky.download`, now sunk into the kernel): `engine.ts` handles concurrent segmented downloads over HTTP Range (thread count is auto by default, adapting to the CPU core count), cross-session resume, token-bucket rate limiting, retries and size validation; `index.ts` is the task layer, with the queue persisted as `tasks.json` under `<configDir>/data/download/`. The network stack stays in the kernel — the engine calls `httpFetch` directly, so the proxy from **Settings → General → Network** still applies.
 
-Kernel callers (the Node distribution, bundled npm / pnpm) do not import the extension directly; they go through the **facade** `main/dsh/download.ts`, which looks up the capability slot `ext:xeonsky.download` by convention name and only falls back to the `downloadFile` of `main/dsh/downloader.ts` when it is missing (extension disabled / safe mode):
+Two entry points:
 
-- Concurrent segmented downloads over HTTP Range (default 4, configurable in settings, max 16); it degrades to a single stream below 1 MB or when the server does not support Range;
-- Retries and temp-file cleanup; temp files land in `temp/download` under the working directory and are moved to the target on completion (copying as a fallback across drives);
-- **Deduplication for the same target file**: `inFlightDownloads` merges by the lower-cased final path; a later call subscribes to the same task, and progress is broadcast to all subscribers; `isFileDownloading()` is exposed;
-- Supports cancellation via `signal`.
+- **The renderer** uses the IPC endpoints (`modules/download.ts`: `GET /download`, `POST /download/tasks`, `POST /download/tasks/:id/{start,pause,resume,cancel}`, `DELETE /download/tasks/:id`, `PUT /download/config`), consumed by the "Download" settings panel, with progress pushed via the `download:progress` event;
+- **Kernel callers** (the Node distribution, bundled npm / pnpm) go through the **facade** `main/dsh/download.ts` whose `downloadFile` only performs **deduplication for the same target file**: `inFlightDownloads` merges by the lower-cased final path; a later call subscribes to the same task, and progress is broadcast to all subscribers; cancellation via `signal` is supported.
 
 The authoritative record for resume state is the `.part.json` sidecar next to the `.part` file (total / etag / lastModified / per-segment offsets); any change re-downloads the whole file, avoiding a corrupt half-old-half-new result.
 

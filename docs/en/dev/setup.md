@@ -40,9 +40,11 @@ removed), so pure-logic changes have no automated safety net.
 ├─ src/
 │  ├─ main/            main process
 │  │  ├─ kernel/        microkernel: runtime / router / module / operations / treeops / services
-│  │  ├─ modules/       feature modules: settings / dsh / env / shell / tabdrag / appupdate / configdir
+│  │  ├─ modules/       feature modules: settings / dsh / env / shell / tabdrag / appupdate / configdir / extensions / download
 │  │  ├─ app/           settings / configmigrate / models / ipc / ui / appupdate / appslots …
-│  │  └─ dsh/           dsh / manage / nodeenv / npmRunner / download / downloader / installs / pluginManifest / ptcNode …
+│  │  ├─ dsh/           dsh / manage / nodeenv / npmRunner / download / installs / pluginManifest / ptcNode …
+│  │  ├─ zip/           kernel 7-Zip archive module (core / archive / bin)
+│  │  └─ download/      kernel download module (engine / task layer)
 │  ├─ preload/         window.api bridge and types
 │  ├─ renderer/        Vue 3 UI
 │  │  ├─ src/views/    pages and settings panels

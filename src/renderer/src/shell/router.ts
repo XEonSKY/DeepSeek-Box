@@ -22,13 +22,11 @@ export const router = createRouter({
             children: [
                 { path: '', name: 'settings-root', redirect: { name: 'settings-general' } },
                 { path: 'general', name: 'settings-general', component: () => import('../views/settings/GeneralPanel.vue') },
-                { path: 'system', name: 'settings-system', component: () => import('../views/settings/SystemPanel.vue') },
                 { path: 'appearance', name: 'settings-appearance', component: () => import('../views/settings/AppearancePanel.vue') },
-                { path: 'network', name: 'settings-network', component: () => import('../views/settings/NetworkPanel.vue') },
                 { path: 'env', name: 'settings-env', component: () => import('../views/settings/EnvPanel.vue') },
                 { path: 'dsh', name: 'settings-dsh', component: () => import('../views/settings/DshPanel.vue') },
-                { path: 'models', name: 'settings-models', component: () => import('../views/settings/ModelsPanel.vue') },
                 { path: 'log', name: 'settings-log', component: () => import('../views/settings/LogPanel.vue') },
+                { path: 'download', name: 'settings-download', component: () => import('../views/settings/DownloadPanel.vue') },
                 { path: 'hotkeys', name: 'settings-hotkeys', component: () => import('../views/settings/HotkeysPanel.vue') },
                 { path: 'about', name: 'settings-about', component: () => import('../views/settings/AboutPanel.vue') },
                 // 扩展贡献的面板：兜底路由，视图统一由 ExtSettingsPanel 渲染（扩展不注入组件）。

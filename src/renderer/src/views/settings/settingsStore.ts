@@ -1,4 +1,4 @@
-import type { ColorSchemeId, DownloadThreads, FunLocale, NpmRegistry, NpmSource, NodeRuntimeKind, PnpmSource, ProxyProtocol, ProxyScope, Settings, Theme } from '@shared/types'
+import type { ColorSchemeId, FunLocale, NpmRegistry, NpmSource, NodeRuntimeKind, PnpmSource, ProxyProtocol, ProxyScope, Settings, Theme } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 
 /** Short, friendly OS label (pure) used by the About header. */
@@ -30,8 +30,6 @@ export interface SettingsState {
     npmRegistry: NpmRegistry
     appAutoUpdate: boolean
     appCheckPrerelease: boolean
-    /** 文件下载并发连接数：'auto' = 按本机 CPU 核心数自适应，正整数 = 手动指定。 */
-    downloadThreads: DownloadThreads
     devMode: boolean
     /** dsh 来源：'local'（内置/默认）｜ 'global'（使用全局安装）。 */
     dshSource: 'local' | 'global'
@@ -119,7 +117,6 @@ export function payloadFrom(state: SettingsState): Settings {
         npmRegistry: state.npmRegistry,
         appAutoUpdate: state.appAutoUpdate,
         appCheckPrerelease: state.appCheckPrerelease,
-        downloadThreads: state.downloadThreads,
         devMode: state.devMode,
         dshSource: state.dshSource,
         nodeRuntime: state.nodeRuntime,

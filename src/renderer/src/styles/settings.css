@@ -86,6 +86,38 @@ html.dark .settings .side {
 .settings .nav__label {
     line-height: 1.3;
 }
+/*
+ * 「扩展」一级项：与普通一级项外观一致，但右侧多一个折叠箭头，且**永远可点**
+ * （它没有自己的页面，点击只是折叠 / 展开子项）。
+ */
+.settings .nav__item--root .nav__label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.settings .nav__caret {
+    flex: 0 0 auto;
+    color: var(--el-text-color-secondary);
+    transition: transform 0.15s;
+}
+.settings .nav__caret.is-collapsed {
+    transform: rotate(-90deg);
+}
+/*
+ * 扩展面板的二级子项：缩进对齐到一级项文字的左边缘（图标 16 + gap 10 = 26px），
+ * 字号略小、颜色偏次要，让「层级」一眼可见；高亮态仍用主色，与一级项同一套语言。
+ */
+.settings .nav__item--sub {
+    padding: 7px 12px 7px 30px;
+    font-size: 13px;
+}
+.settings .nav__item--sub .nav__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
 /* ---- 右侧内容区 ---- */
 .settings .main {

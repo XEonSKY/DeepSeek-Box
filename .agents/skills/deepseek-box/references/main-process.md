@@ -19,7 +19,7 @@ modules/    ← 可插拔的「策略」：每个功能一个文件，自己声�
   settings.ts  dsh.ts  env.ts  shell.ts  tabdrag.ts  appupdate.ts  configdir.ts  extensions.ts
   index.ts        allModules()：模块清单
 app/ipc.ts  ← 装配器：建 Router → new ModuleRegistry(allModules()) → mountRoutes
-app/… dsh/… ← 具体实现，被 modules 调用（modules 不互相 import）
+app/… dsh/… zip/ download/ ← 具体实现，被 modules 调用（modules 不互相 import）
 ```
 
 **依赖方向是单向的**：`modules → kernel`、`modules → app/dsh`；**模块之间不 import**。
@@ -111,8 +111,7 @@ export default defineModule({
 | `nodeenv.ts` | Node 下载部署 | `deployLocalNode` / `listNodeVersions` / `nodeStatus` |
 | `npmRunner.ts` | npm 探测 / 执行 / 缓存 | `ensureBundledNpmReady` / `runNpm` / `npmCacheEnv`（`hasSystemNpm` 导出给 pnpm 的 system 来源复用） |
 | `pnpmRunner.ts` | pnpm 获取 / 运行（**两种来源**：系统自带 / 内置） | `pnpmStatus`（system + bundled）/ `updatePnpm({source})`（system 走 `npm i -g pnpm`，bundled 走 tarball）/ `systemPnpmPath` / `pnpmShimEnv`（内置的 PATH 垫片）；入口解析见 `pnpmEntry.ts` |
-| `download.ts` | **内核下载门面**（内核所有「下一个文件到磁盘」从这里走） | 按约定名查能力槽 `ext:xeonsky.download`，查不到才回落 `downloader.ts`（扩展停用 / 安全模式时核心功能不失效） |
-| `downloader.ts` | 下载**兜底**实现 | `downloadFile`（HTTP Range 分段、去重、取消）；扩展不可用时才走到 |
+| `download.ts` | **内核下载门面**（内核所有「下一个文件到磁盘」从这里走） | `downloadFile` 直连内核下载模块 `../download`（实现唯一路径，**无回落**——原 `downloader.ts` 已随 `xeonsky.download` 扩展内核化一并删除）；**去重留在这层**：`inFlightDownloads` 按小写化最终路径合并同目标并发请求，后到者订阅同一份进度。调用方（nodeenv / npmRunner / pnpmRunner）不该知道任务表与限速器，这层就是隔离垫 |
 | `child.ts` | 子进程共同流程（**纯编排**） | spawn → 登记 → 收日志 → 可取消 → 只 settle 一次（原在 npm / 解压三处各写一遍） |
 | `logbus.ts` | 日志环形缓冲 + 子进程登记表 | 不依赖 dsh 服务状态，被整条 dsh 链路共用 |
 | `pluginManifest.ts` | dsh profile / 组合包清单**纯读取** | 不碰 fs、不 import electron；`readBundleList` / `readBundlePatchFiles` / `requiredBundles` 供 `dshPatchLayers.ts` 合成有效配置层。（插件的增删启停原在此体系内，随「设置 → 插件」页移除） |
@@ -160,9 +159,21 @@ export default defineModule({
 
 ## 下载 / 取消 / 解压 / npm 缓存
 
-- **两层结构**：能力在内置扩展 `xeonsky.download`（`src/extensions/xeonsky.download/`：分段、跨会话断点续传、令牌桶限速、重试、大小校验、`tasks.json` 队列持久化）；内核调用方（Node 发行包、内置 npm / pnpm）走门面 `dsh/download.ts`，按约定名查能力槽，查不到才回落 `downloader.ts`。网络栈仍在内核——扩展引擎只经注入的 `OpenStream`（= `net.stream`）发请求，「设置 → 网络 → 代理」照常生效；断点续传靠 `.part` 旁的 `.part.json` 侧车。
-- 兜底 `downloader.ts` 的 `downloadFile`：HTTP Range 并发（默认 4，设置可调最多 16）；小于 1MB 或服务端不支持 Range 时退化单流；带重试与临时文件清理；完成后再搬到目标。
-- **同一目标去重**：`inFlightDownloads` 按小写化最终路径合并，后到者订阅同一任务；`isFileDownloading()` 查询；支持 `signal` 取消。
+- **下载是内核模块**（原内置扩展 `xeonsky.download` 已下沉，扩展目录与兜底 `downloader.ts` 一并删除）：
+  `src/main/download/engine.ts` 是引擎（HTTP Range 分段、跨会话断点续传、令牌桶限速、重试、大小校验；
+  引擎直接走 `httpFetch` ——「设置 → 常规 → 网络」的代理照常生效；断点续传靠 `.part` 旁的 `.part.json` 侧车，
+  复用条件含「ETag 与 Last-Modified 都为空则不续传」与「`.part` 的 `size >= total` 则不续传」），
+  `src/main/download/index.ts` 是任务层（`tasks.json` 队列持久化，任务可见 / 可 start / pause / resume / cancel）。
+- **两条入口**：内核调用方（Node 发行包、内置 npm / pnpm）走门面 `dsh/download.ts`（见上表，只管去重）；
+  渲染层走 IPC 端点 `modules/download.ts`（`GET /download`、`POST /download/tasks`、
+  `POST /download/tasks/:id/{start,pause,resume,cancel}`、`DELETE /download/tasks/:id`、`PUT /download/config`），
+  设置页「下载」面板（`views/settings/DownloadPanel.vue`）消费；进度经 `download:progress` 事件推送
+  （模块 `onReady` 里 `onProgress()` 注册订阅、`onQuit` 里 `shutdownDownloads()` 收尾）。
+- **同一目标去重**：门面的 `inFlightDownloads` 按小写化最终路径合并，后到者订阅同一任务；支持 `signal` 取消。
+- 归档核心 `src/main/zip/`（原 `xeonsky.extm/sevenzip/` 已下沉）：`core.ts` 以模块单例暴露
+  `zipAvailable` / `pkgStatus` / `listPackages` / `extractPackage`，加载器（`loader/index.ts`）直接 import 解包扩展包，
+  `xeonsky.extm` 面板只转发包清单；二进制在 `src/main/zip/bin/<平台>/`（`asarUnpack` 指向 `src/main/zip/bin/**`），
+  配置在 `<配置目录>/data/zip.json`。
 - 取消是单活动令牌（`kernel/operations.ts` 的 `beginCancelable` / `cancelActive` / `CANCELED_MESSAGE`，
   原 `dsh/cancel.ts` 已并入），下载与解压都挂上去；路由 `POST /installs/cancel`；取消后返回
   `{ ok:false, canceled:true }`，渲染层不当作错误。

@@ -155,16 +155,15 @@ export default {
     /** 设置页（sv = Settings View） */
     sv: {
         cap: '设置',
-        nav: { general: '常规', system: '系统与性能', appearance: '外观', network: '网络', env: '环境', dsh: 'DeepSeek Harness', models: '模型', log: '终端', hotkeys: '快捷键', about: '关于' },
+        nav: { general: '常规', appearance: '外观', env: '环境', dsh: 'DeepSeek', log: '终端', download: '下载', extensions: '扩展', hotkeys: '快捷键', about: '关于' },
         intro: {
-            general: '工作目录、端口与标签页/搜索等基础行为。',
-            system: '开机自启、浏览器打开方式与图形加速。',
+            general: '工作目录、端口、启动、性能、网络与配置目录等程序基础行为。',
             appearance: '界面语言、主题与缩放等观感设置。',
-            network: '代理连接与网络作用范围。',
             env: '运行 DeepSeek Harness 所用的 Node 与 npm 来自哪里，以及各来源的版本。',
-            dsh: 'DeepSeek Harness 的来源、npm 来源与更新。',
-            models: '令牌列表：每个密钥（令牌）一行，显示所属供应商与余额，不显示密钥。',
+            dsh: 'DeepSeek Harness 的来源、更新，以及令牌供应商与余额。',
             log: 'DeepSeek Box 的实时输出（stdout / stderr）。',
+            download: '下载任务队列与下载设置：断点续传、并发、限速。',
+            extensions: '扩展：系统 / 内置 / 外部三级，可查看状态、即时启停扩展、管理扩展包。',
             hotkeys: '键盘快捷键：系统全局的与常用的操作。',
             about: '关于应用与 DeepSeek Harness，以及更新检查。'
         },
@@ -190,7 +189,6 @@ export default {
             portAuto: '自动（推荐）',
             portManual: '手动指定',
             portHint: '自动从 3080 起挑空闲端口。',
-            closeSection: '关闭程序',
             closeKeepRunning: '关闭程序后继续运行后台扩展和应用',
             closeKeepRunningHint: '开启后点击关闭按钮只隐藏到系统托盘，后台任务继续运行；关闭则直接退出并结束 DeepSeek Harness。',
             configDirSection: '配置文件夹',
@@ -278,12 +276,49 @@ export default {
             scopeNpm: 'npm 安装 / 下载',
             scopeNode: 'Node 下载部署',
             scopeRegistry: '版本查询（npm registry）',
-            scopeHint: '仅在勾选范围内使用代理；未勾选的范围跟随系统设置直连。',
-            download: '下载',
-            downloadThreads: '并发连接数',
-            downloadThreadsAuto: '自动',
-            downloadThreadsManual: '手动',
-            downloadThreadsHint: '文件下载（Node / npm / 应用更新）多线程分段下载；「自动」按本机 CPU 核心数自适应（2–8），手动可指定 1–16，1 = 单线程。'
+            scopeHint: '仅在勾选范围内使用代理；未勾选的范围跟随系统设置直连。'
+        },
+        download: {
+            panel: {
+                newTitle: '新建下载',
+                url: '下载链接',
+                urlPlaceholder: 'http / https 链接',
+                dir: '保存目录',
+                dirPlaceholder: '留空 = 用下面的默认目录',
+                name: '文件名',
+                namePlaceholder: '留空 = 按链接推断',
+                add: '添加',
+                added: '已加入下载队列。',
+                listTitle: '任务队列',
+                refresh: '刷新',
+                clearDone: '清除已完成',
+                empty: '还没有下载任务。',
+                active: '正在进行：{n}',
+                noName: '（未命名）',
+                unknownSize: '未知大小',
+                stQueued: '排队中',
+                stRunning: '下载中',
+                stPaused: '已暂停',
+                stDone: '已完成',
+                stError: '出错',
+                stCanceled: '已取消',
+                start: '开始',
+                pause: '暂停',
+                resume: '继续',
+                retry: '重试',
+                cancel: '取消',
+                remove: '删除',
+                settingsTitle: '下载设置',
+                defaultDir: '默认下载目录',
+                defaultDirPlaceholder: '留空 = 系统「下载」目录',
+                browse: '选择…',
+                maxConcurrent: '同时进行的任务数',
+                speedLimit: '全局限速（KB/s，0 = 不限）',
+                threads: '默认连接数',
+                threadsAuto: '自动（当前 {n}）',
+                apply: '应用',
+                saved: '下载设置已保存。'
+            }
         },
         dsh: {
             installedVersion: 'DeepSeek Harness 版本',
@@ -405,6 +440,7 @@ export default {
             npmListHint: '列表来自当前 registry（新 → 旧）；安装作用于上方选中的标签对应的来源。'
         },
         models: {
+            section: '令牌与余额',
             consentTitle: '读取本地模型配置',
             consentDesc:
                 'DeepSeek Box 需要读取 dsh 的本地配置与凭据文件，以便列出已配置的供应商，并用已保存的密钥向供应商接口查询余额。页面不展示任何密钥；查询只在本机发起，结果不写入日志，也不会发送到别处。',

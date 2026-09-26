@@ -38,9 +38,11 @@
 ├─ src/
 │  ├─ main/            主进程
 │  │  ├─ kernel/        微内核：runtime / router / module / operations / treeops / services
-│  │  ├─ modules/       功能模块：settings / dsh / env / shell / tabdrag / appupdate / configdir
+│  │  ├─ modules/       功能模块：settings / dsh / env / shell / tabdrag / appupdate / configdir / extensions / download
 │  │  ├─ app/           settings / configmigrate / models / ipc / ui / appupdate / appslots …
-│  │  └─ dsh/           dsh / manage / nodeenv / npmRunner / download / downloader / installs / pluginManifest / ptcNode …
+│  │  ├─ dsh/           dsh / manage / nodeenv / npmRunner / download / installs / pluginManifest / ptcNode …
+│  │  ├─ zip/           内核 7-Zip 归档模块（core / archive / bin）
+│  │  └─ download/      内核下载模块（engine / 任务层）
 │  ├─ preload/         window.api 桥接与类型
 │  ├─ renderer/        Vue 3 界面
 │  │  ├─ src/views/    页面与设置面板

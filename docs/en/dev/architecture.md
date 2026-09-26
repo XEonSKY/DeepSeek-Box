@@ -36,16 +36,16 @@ Next to the main process there is an **extension system**:
   (the `GET /extensions` management endpoints);
 - The **business code of built-in / system extensions** lives one directory per extension under the top-level
   `src/extensions/<id>/` (`main.ts` main-process entry + `manifest.ts` + optional `*.vue` renderer views).
-  Present today: `xeonsky.download` (multi-threaded download / resume / rate limiting), `xeonsky.extm`
-  (the Extensions settings page, the package manager for archive-form external extensions, and the bundled
-  7-Zip archive core), plus the five system-capability extensions `system.fs` / `system.net` /
-  `system.proc` / `system.app` / `system.ui`;
+  Present today: `xeonsky.extm` (the Extensions settings page and the package manager for archive-form
+  external extensions), `xeonsky.browser` (browser / new tab / search), plus the seven system-capability
+  extensions `system.*`; multi-threaded download and the 7-Zip archive core have **moved into the kernel**
+  (`src/main/download/` and `src/main/zip/`) and are no longer extensions;
 - **Extensions can only reach the kernel through the API surface**: the main-process side uses `ExtContext`
   (`main/extensions/loader/ctx.ts`) only, the renderer side uses `src/extensions/renderer-api.ts` only —
   importing shell internals (`@/lib/*`, `@/components/*`, `@/shell/*`) is not allowed; extend the API surface
   first when a new capability is needed;
 - Extension endpoints use the fixed `/ext/...` prefix (`kernel/extroute.ts`, registered into the same Router);
-  extensions call each other via capability names like `ext:xeonsky.download`.
+  extensions call each other via capability names like `ext:xeonsky.extm`.
 
 ## Startup flow
 

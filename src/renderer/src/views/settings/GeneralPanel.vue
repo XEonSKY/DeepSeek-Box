@@ -2,22 +2,59 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { FolderOutlined, ReloadOutlined, PoweroffOutlined, SettingOutlined } from '@antdv-next/icons'
+import { FolderOutlined, ReloadOutlined, SettingOutlined, RocketOutlined, ThunderboltOutlined, ApiOutlined } from '@antdv-next/icons'
 import type { ConfigDirInfo } from '@shared/types'
 import TagLabel from '../../components/TagLabel.vue'
+import ProxyFields from '../../components/ProxyFields.vue'
 import { useSettingsStore } from './useSettingsStore'
+import { useSystemSettings } from './useSystemSettings'
 import { confirmDialog } from '../../lib/confirm'
 
+/**
+ * 「常规」页 —— 程序的基础行为，由原先的「常规」「系统与性能」「网络」三页合并而来。
+ *
+ * ## 为什么合成一页
+ *
+ * 那三页的内容同属一件事：**这个程序本身怎么运行**（工作目录、端口、开机自启、
+ * 图形加速、镜像源、代理）。拆成三页时用户要改一个"程序行为"得先猜它在哪一页，
+ * 而每一页实际上都只有两三组开关 —— 分成三个菜单项带来的导航成本高于内容本身。
+ * 合并后一页里按「运行 / 启动 / 性能 / 网络 / 配置目录 / 恢复默认」分组，
+ * 折叠面板让长页面依然可扫读。下载并发固定自动（内核按核心数自适应），
+ * 下载任务与下载模块自身的配置在「下载」页。
+ *
+ * ## 折叠面板的分组（顺序即使用频率）
+ *
+ *  1. **运行** —— 工作目录与端口（最常改）；
+ *  2. **启动** —— 开机自启、用系统浏览器打开 DSH、关闭后是否驻留后台；
+ *  3. **性能** —— 图形加速（改动需重启，故紧邻启动）；
+ *  4. **网络** —— npm 镜像源与代理；
+ *  5. **配置文件夹** —— 数据落在哪；
+ *  6. **恢复默认设置** —— 兜底。
+ */
 const { state, actions } = useSettingsStore()
 const { t } = useI18n({ useScope: 'global' })
+const { onGpuAccelChange } = useSystemSettings()
 
 // a-collapse：默认全部展开。用 :active-key + @change（Antdv 未声明 update:activeKey 事件）。
-const open = ref<string[]>(['general-run', 'general-configdir', 'general-close', 'general-reset'])
+const open = ref<string[]>([
+    'general-run',
+    'general-startup',
+    'general-performance',
+    'general-network',
+    'general-configdir',
+    'general-reset'
+])
 
 /** a-collapse 展开项变化。 */
 function onOpenChange(keys: string[]): void {
     open.value = keys
 }
+
+/** 镜像源下拉：a-select 用 :options（项目约定，见 DshWizard.vue）；用 computed 跟随语言切换。 */
+const registryOptions = computed(() => [
+    { value: 'npmjs', label: t('sv.dsh.registryNpmjs') },
+    { value: 'npmmirror', label: t('sv.dsh.registryNpmmirror') }
+])
 
 // ---- 配置文件夹：默认 ~/.dsbox/{release,dev}，更改后在下次重启自动迁移 ----
 const cfg = ref<ConfigDirInfo | null>(null)
@@ -116,6 +153,66 @@ async function cancelPendingMigration(): Promise<void> {
                 </a-form>
             </a-collapse-panel>
 
+            <a-collapse-panel key="general-startup">
+                <template #header>
+                    <div class="sec__title"><RocketOutlined /> {{ $t('sv.system.startup') }}</div>
+                </template>
+                <div class="au">
+                    <div class="au__txt">
+                        <div class="au__t"><TagLabel :label="$t('sv.system.autoLaunch')" /></div>
+                        <div class="au__desc">{{ $t('sv.system.autoLaunchHint') }}</div>
+                    </div>
+                    <a-switch v-model:checked="state.autoLaunch" />
+                </div>
+                <div class="au">
+                    <div class="au__txt">
+                        <div class="au__t">{{ $t('sv.system.openInBrowser') }}</div>
+                        <div class="au__desc">{{ $t('sv.system.openInBrowserHint') }}</div>
+                    </div>
+                    <a-switch v-model:checked="state.openDshInBrowser" />
+                </div>
+                <div class="au">
+                    <div class="au__txt">
+                        <div class="au__t">{{ $t('sv.general.closeKeepRunning') }}</div>
+                        <div class="au__desc">{{ $t('sv.general.closeKeepRunningHint') }}</div>
+                    </div>
+                    <a-switch v-model:checked="state.closeKeepRunning" />
+                </div>
+            </a-collapse-panel>
+
+            <a-collapse-panel key="general-performance">
+                <template #header>
+                    <div class="sec__title"><ThunderboltOutlined /> {{ $t('sv.system.performance') }}</div>
+                </template>
+                <div class="au">
+                    <div class="au__txt">
+                        <div class="au__t">{{ $t('sv.system.gpuAccel') }}</div>
+                        <div class="au__desc">{{ $t('sv.system.gpuAccelHint') }}</div>
+                    </div>
+                    <a-switch :checked="state.hardwareAcceleration" @change="onGpuAccelChange" />
+                </div>
+            </a-collapse-panel>
+
+            <a-collapse-panel key="general-network">
+                <template #header>
+                    <div class="sec__title"><ApiOutlined /> {{ $t('sv.network.registry') }}</div>
+                </template>
+                <a-form layout="vertical">
+                    <a-form-item :label="$t('sv.network.registry')">
+                        <a-select v-model:value="state.npmRegistry" :options="registryOptions" class="reg" />
+                        <div class="hint">{{ $t('sv.network.registryHint') }}</div>
+                    </a-form-item>
+                    <!-- 代理字段与首次安装向导共用同一组件（见 components/ProxyFields.vue） -->
+                    <ProxyFields
+                        v-model:enabled="state.proxyEnabled"
+                        v-model:protocol="state.proxyProtocol"
+                        v-model:host="state.proxyHost"
+                        v-model:port="state.proxyPort"
+                        v-model:scope="state.proxyScope"
+                    />
+                </a-form>
+            </a-collapse-panel>
+
             <a-collapse-panel key="general-configdir">
                 <template #header>
                     <div class="sec__title"><FolderOutlined /> {{ $t('sv.general.configDirSection') }}</div>
@@ -135,19 +232,6 @@ async function cancelPendingMigration(): Promise<void> {
                         </div>
                     </a-form-item>
                 </a-form>
-            </a-collapse-panel>
-
-            <a-collapse-panel key="general-close">
-                <template #header>
-                    <div class="sec__title"><PoweroffOutlined /> {{ $t('sv.general.closeSection') }}</div>
-                </template>
-                <div class="au">
-                    <div class="au__txt">
-                        <div class="au__t">{{ $t('sv.general.closeKeepRunning') }}</div>
-                        <div class="au__desc">{{ $t('sv.general.closeKeepRunningHint') }}</div>
-                    </div>
-                    <a-switch v-model:checked="state.closeKeepRunning" />
-                </div>
             </a-collapse-panel>
 
             <a-collapse-panel key="general-reset">
@@ -172,5 +256,9 @@ async function cancelPendingMigration(): Promise<void> {
     font-size: 12px;
     color: var(--el-color-warning);
     word-break: break-all;
+}
+/* 镜像源下拉占满表单项宽度（a-select 默认按内容宽）。 */
+.reg {
+    width: 100%;
 }
 </style>

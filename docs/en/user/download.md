@@ -50,7 +50,7 @@ Match the architecture of **the process you run**: ARM machines download the `ar
 ## Verification & security
 
 - Download only from the official Releases; the app's self-update also goes through GitHub releases.
-- If your network is slow to reach GitHub, or a proxy is required, enable the proxy under “Settings → Network” and tick **app updates**.
+- If your network is slow to reach GitHub, or a proxy is required, enable the proxy under “Settings → General → Network” and tick **app updates**.
 - By default this app listens only on `127.0.0.1` and does not expose ports externally.
 
 ## Next steps

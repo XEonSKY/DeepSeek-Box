@@ -425,24 +425,6 @@ export function normalizeNodeRuntime(v: unknown): Settings['nodeRuntime'] {
     return v === 'system' ? 'system' : 'local'
 }
 
-/** 旧版默认并发数。存量配置里几乎人人都是这个值（自动保存会把默认值一起写盘）。 */
-const LEGACY_DEFAULT_DOWNLOAD_THREADS = 4
-
-/**
- * 归一化下载并发数：'auto'（自动）或 1–16 的整数，其余一律回默认（'auto'）。
- *
- * `legacy` 为真（老配置）且值恰好是旧默认 4 时升级为 'auto' —— 否则「默认自动」只对新装生效。
- * 之所以必须带 `legacy`：跑过新版之后再手动填 4 是**明确的选择**，不能被反复改回自动。
- * 数值上限与 downloader.ts 的 MAX_DOWNLOAD_THREADS 一致，避免设置里存下用不到的大值。
- */
-export function normalizeDownloadThreads(v: unknown, legacy: boolean): Settings['downloadThreads'] {
-    if (v === 'auto' || v === undefined || v === null) return DEFAULT_SETTINGS.downloadThreads
-    const n = Math.floor(Number(v))
-    if (!Number.isFinite(n) || n < 1) return DEFAULT_SETTINGS.downloadThreads
-    if (legacy && n === LEGACY_DEFAULT_DOWNLOAD_THREADS) return DEFAULT_SETTINGS.downloadThreads
-    return Math.min(16, n)
-}
-
 /** 旧版的默认代理范围；数组与之完全一致说明用户从未自定义过。 */
 const LEGACY_DEFAULT_PROXY_SCOPES: readonly ProxyScope[] = ['npm', 'node', 'update']
 
@@ -584,7 +566,6 @@ export function loadSettings(): Settings {
         proxyPort: merged.proxyPort ?? null,
         // kernelSource 是 dshSource 的旧键名，只在迁移时读一次
         dshSource: merged.dshSource ?? (disk as { kernelSource?: Settings['dshSource'] }).kernelSource,
-        downloadThreads: normalizeDownloadThreads(disk.downloadThreads, legacy),
         nodeRuntime: normalizeNodeRuntime(merged.nodeRuntime),
         npmSource: normalizeNpmSource(merged.npmSource),
         pnpmSource: normalizePnpmSource(merged.pnpmSource),

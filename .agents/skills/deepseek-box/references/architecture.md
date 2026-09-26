@@ -68,39 +68,40 @@ node 侧收全部 TS（顶层 `renderer-api.ts` 除外 —— 它引用 `window`
   需要新能力时**先扩 API 面**，让它保持唯一可见面；否则内核重构会波及所有扩展。
 
 **扩展间互调走 `ctx.provides` / `ctx.capabilities` 对**：提供方
-`ctx.provides.register('xeonsky.download', actions)`（自动补 `ext:` 前缀），消费方
-`ctx.capabilities.call('ext:xeonsky.download', action, ...)`。实现落在加载器持有的能力槽
+`ctx.provides.register('xeonsky.extm', actions)`（自动补 `ext:` 前缀），消费方
+`ctx.capabilities.call('ext:xeonsky.extm', action, ...)`。实现落在加载器持有的能力槽
 （`loader/capability.ts` 的 `provideActions` / `actionsOf` / `revokeName`），并经 registry
 按名记账 —— 卸载时逐名精确摘除（`revokeName`），不用按 owner 扫全表的 `revoke`，
 避免误伤同 owner 的其它登记。重复提供同一能力名 = 装配冲突，直接抛错。
 
 **压缩包形态的外部扩展**（`*.zip` / `*.xeonsky-ext` —— 后者是本项目的 zip 变种）：
-由内置扩展 **`xeonsky.extm`（扩展管理）** 提供解压能力（它内含 7-Zip 归档核心
-`sevenzip/`，不再跨扩展转发），加载器的**第二阶段**（`loadPkgExtensions`，在全部普通扩展加载结束后、
-安全模式下不运行）处理：扫描包文件 → 解压到暂存目录 `<配置目录>/.remapper/extensions/<包名>/`
+解压由**内核的 7-Zip 模块**（`main/zip/core.ts` 的 `extractPackage`）直接完成 ——
+加载器不再经能力槽查扩展（那是「7-Zip 曾是可停用扩展」时代的写法）。加载器的**第二阶段**
+（`loadPkgExtensions`，在全部普通扩展加载结束后、安全模式下不运行）处理：
+扫描包文件 → 解压到暂存目录 `<配置目录>/.remapper/extensions/<包名>/`
 （每次重新解压覆盖，包文件是权威来源）→ 定位 manifest（包根或唯一子目录）→
 按外部扩展激活。**包名冲突则不加载**：与 `extensions/` 下已装文件夹同名、包之间同名、
-manifest id 与已发现扩展重复，三者任一命中即记 skipped。**extm 缺失（被停用 / 激活失败）
-即整体禁用压缩包加载**（加载器查不到 `ext:xeonsky.extm` 能力槽，只登记原因，
+manifest id 与已发现扩展重复，三者任一命中即记 skipped。**7-Zip 核心不可用
+（内置二进制缺失 / 探测不到版本）即整体禁用压缩包加载**（只登记原因，
 不读取任何包文件，也不算崩溃失败）。
 
-**7-Zip 核心是 `xeonsky.extm` 的内部模块**（`sevenzip/`，原是独立扩展 `xeonsky.zip`）：
-全平台命令行二进制放在 `src/extensions/xeonsky.extm/sevenzip/bin/<平台>/`
+**7-Zip 核心是内核模块**（`src/main/zip/`，原是独立扩展 `xeonsky.zip` → 后并入
+`xeonsky.extm` 的 `sevenzip/` 内部模块 → 现下沉内核）：
+全平台命令行二进制放在 `src/main/zip/bin/<平台>/`
 （Windows 取**完整版** `7z.exe` + `7z.dll` ——
 **不要用 `-extra` 包里的 `7za.exe`**，它只有 12 种格式，而 Linux / macOS 的 `7zz` 有 60 多种，
 跨端行为会不一致；官方 Windows 安装包本身是 7z 自解压包，可直接
 `7z e <installer>.exe 7z.exe 7z.dll -o<dir>` 取出。Linux / macOS 取 `7zz`），
-**不运行时下载**（不申请 `net` 能力）。运行时路径 = `__dirname/../../src/…/sevenzip/bin`，
+**不运行时下载**。运行时路径 = `__dirname/../../src/main/zip/bin`，
 且必须把 `app.asar` 换回 `app.asar.unpacked` —— **asar 内的可执行文件不能执行**，
-因此 `build.files` 要在 `!src/**` **之后**追加 `src/extensions/xeonsky.extm/sevenzip/bin/**`
-（顺序反了会被排除覆盖）并配同 glob 的 `build.asarUnpack`。
+因此 `build.asarUnpack` 配 `src/main/zip/bin/**`。
 类 Unix 的二进制入库时要用 `git update-index --chmod=+x` 保住可执行位。
-定位顺序：用户指定 → 内置 → 系统。
+定位顺序：用户指定（配置文件 `<配置目录>/data/zip.json`）→ 内置 → 系统。
 
-**为什么 7-Zip 不是独立扩展**：独立时用户能在管理页把它停用，于是「扩展包解压」
-与「归档页」这类**内建功能**会莫名失灵。内部模块没有「被停用」这个状态。
-包能力（`ext:xeonsky.extm` 的 status / extract / listPackages）仍对外提供，
-供加载器第二阶段与其它扩展协作。
+**为什么 7-Zip 不是扩展**：独立扩展时用户能在管理页把它停用，于是「扩展包解压」
+这类**内建功能**会莫名失灵；下沉内核后不再有「被停用」这个状态。
+原先的「归档（7-Zip）」设置面板已取消（7-Zip 在本程序里只用于内部解压扩展包，
+面向用户的手动归档界面对本项目没有价值）。
 
 **扩展数据目录**：`ctx.dataDir`（懒创建 getter，首次访问才在磁盘建目录），
 路径 `<配置目录>/data/extensions/<extId>`。放运行期产生的数据（扩展配置、状态文件、
@@ -108,7 +109,7 @@ manifest id 与已发现扩展重复，三者任一命中即记 skipped。**extm
 外部扩展卸载时整目录删除的是代码目录，数据目录在重装后仍然保留。
 实现：`sources.ts` 的 `ensureExtDataDir`（mkdir -p），由 loader 注入 ctx，
 `ctx.ts` 本身不碰 fs。内置 / 系统扩展同样有数据目录（它们的 `dir` 是源码路径，
-打包后在磁盘上不存在 —— 需要落盘的东西一律用 `dataDir`，如 `xeonsky.extm` 的 sevenzip.json）。
+打包后在磁盘上不存在 —— 需要落盘的东西一律用 `dataDir`，如 `xeonsky.browser` 的 config.json）。
 
 **系统扩展 id 用 `system.` 前缀**（`system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui` / `system.webview` / `system.extmanage`），
 与外部扩展能力名 `ext:<extId>` 对仗。注意**能力名是裸名**（`fs` / `net` / ...，见
@@ -120,8 +121,8 @@ manifest id 与已发现扩展重复，三者任一命中即记 skipped。**extm
 调用同一份加载器实现（不存在两套行为；基础管理仍走内核路由，因为安全模式下也要可用）。
 `system.net` 现有三动作：`fetch` / `fetchJson`（只回文本）+ **`stream`**（返回 Node
 `Readable`，`fetch → Readable.fromWeb`，可带 `Range` 与 `AbortSignal`，代理档位只开放
-`app` / `npm` / `node`）。**`download` 动作已移除** —— 下载能力整体迁到内置扩展
-`xeonsky.download`，需要下载的扩展请申请 `ext:xeonsky.download` 并调它的 `download`。
+`app` / `npm` / `node`）。**`download` 动作已移除** —— 下载能力现为内核模块
+`src/main/download/`，扩展需要下载时经 `net.stream` 自己实现，或等内核另行开放。
 
 **启动前配置（`manifest.preReady`）**：Electron 有一批设置必须在 `app.whenReady()` **之前**
 决定（典型 `app.disableHardwareAcceleration()`），而扩展激活在 ready 之后。解法是内核在 ready 前
@@ -129,14 +130,17 @@ manifest id 与已发现扩展重复，三者任一命中即记 skipped。**extm
 `builtinExtensions` 两张常量表，**不经加载器**）。只有内置 / 系统扩展能申报（外部扩展在磁盘上、
 信任度不足）；硬件加速取「用户设置禁用」与「扩展申报禁用」的**或**。
 
-**下载能力在内置扩展 `xeonsky.download`**（`src/extensions/xeonsky.download/`）：
-`engine.ts`（分段 / 跨会话断点续传 / 令牌桶限速 / 重试 / 大小校验）+ `main.ts`
-（任务队列、状态机、`tasks.json` 持久化、IPC 与能力面）。网络栈**仍在内核** ——
-引擎只经注入的 `OpenStream`（= `net.stream`）发请求，所以「设置 → 网络 → 代理」照常生效。
+**下载能力是内核模块 `src/main/download/`**（原先是内置扩展 `xeonsky.download`，已下沉）：
+`engine.ts`（分段 / 跨会话断点续传 / 令牌桶限速 / 重试 / 大小校验）+ `index.ts`
+（任务队列、状态机、`<配置目录>/data/download/tasks.json` 持久化）。引擎直接调
+`dsh/http.ts` 的 `httpFetch` 发请求（代理按 scope 生效），「设置 → 网络 → 代理」照常生效。
 断点续传靠 `.part` 旁的 `.part.json` 侧车（记录 total / etag / lastModified / 各段偏移），
 三者任一变化就整份重下（避免拼出「前半旧后半新」）。内核调用方（Node 发行包、内置
-npm / pnpm）走**门面** `dsh/download.ts`：它按约定名查能力槽，查不到才回落
-`dsh/downloader.ts`（扩展被停用 / 安全模式时核心功能不能整体失效）。
+npm / pnpm）走**门面** `dsh/download.ts` 的 `downloadFile()`（同目标并发去重，后到者
+订阅同一份进度）。端点面在 `modules/download.ts`（`GET /download` 等，契约在
+`shared/api.ts` + `shared/download.ts`），进度经 `download:progress` 事件推送，
+界面是设置页的「下载」面板（`views/settings/DownloadPanel.vue`）；
+退出时模块 `onQuit` 调 `shutdownDownloads()` 把在跑任务落成 paused（可续传）。
 
 ## 启动顺序（`src/main/index.ts`）
 

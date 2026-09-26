@@ -33,6 +33,7 @@
 | `appupdate.ts` | `/app/meta`、`/app/update/*`、`/app/relaunch`、`/app/quit` |
 | `configdir.ts` | `/config-dir*`、`/models/*`、`/icons*` |
 | `extensions.ts` | `GET /extensions`、`PUT /extensions/:id/enabled`、`POST /extensions/:id/forgive`、`POST /extensions/:id/exit-safe-mode` | 扩展管理：内核与扩展层唯一桥，装配期把路由 / 广播落点交给加载器 |
+| `download.ts` | `GET /download`、`POST /download/tasks`、`POST /download/tasks/:id/{start,pause,resume,cancel}`、`DELETE /download/tasks/:id`、`PUT /download/config`；`download:progress` 事件 | 下载任务管理（实现是内核 `src/main/download/`） |
 
 `index.ts` 汇总 `allModules()`；`app/ipc.ts` 是装配器（建 `Router` + `new ModuleRegistry(allModules())` + `mountRoutes`）。
 
@@ -68,8 +69,7 @@
 | `nodeenv.ts` | Node 下载部署 | `deployLocalNode` / `listNodeVersions` / `nodeStatus` / 版本管理 |
 | `npmRunner.ts` | npm 探测 / 执行 / 缓存 | `ensureBundledNpmReady` / `runNpm` / `listNpmVersions` / `npmCacheEnv` |
 | `pnpmRunner.ts` | pnpm 获取 / 运行（系统自带 / 内置两种来源） | `pnpmStatus` / `updatePnpm` / `systemPnpmPath` / `pnpmShimEnv`；入口解析见 `pnpmEntry.ts` |
-| `download.ts` | **内核下载门面** | 内核所有「下一个文件到磁盘」从这里走：按约定名查能力槽 `ext:xeonsky.download`，查不到才回落 `downloader.ts` |
-| `downloader.ts` | 下载兜底实现 | `downloadFile`（HTTP Range 分段、去重、取消）；扩展停用 / 安全模式时才走到 |
+| `download.ts` | **内核下载门面** | 内核所有「下一个文件到磁盘」从这里走：`downloadFile` 直连内核下载模块 `../download`（唯一实现路径），只负责同目标并发去重 |
 | `child.ts` | 子进程共同流程（纯编排） | spawn → 登记 → 收日志 → 可取消 → 只 settle 一次 |
 | `logbus.ts` | 日志环形缓冲 + 子进程登记表 | 不依赖 dsh 服务状态，被整条 dsh 链路共用 |
 | `pluginManifest.ts` | dsh profile / 组合包清单**纯读取** | 不碰 fs、不 import electron；`readBundleList` / `readBundlePatchFiles` / `requiredBundles`，供 `dshPatchLayers.ts` 合成有效配置层 |
@@ -83,8 +83,9 @@
 
 扩展框架与登记表在 `src/main/extensions/`（`loader/` / `system/` / `builtin/`），内置与系统扩展的业务代码
 在顶层 `src/extensions/<id>/`（一扩展一目录：`main.ts` + `manifest.ts` + 可选 `*.vue`）。现有
-`xeonsky.download`（下载）/ `xeonsky.extm`（扩展管理页 + 扩展包管理 + 内置 7-Zip 核心），
-以及 `system.*` 五个系统能力扩展。扩展只能经 `ExtContext`（主进程）与 `src/extensions/renderer-api.ts`
+`xeonsky.extm`（扩展管理页 + 扩展包管理）/ `xeonsky.browser`（浏览器 / 新标签页 / 搜索），
+以及 `system.*` 七个系统能力扩展。下载（`src/main/download/`）与 7-Zip 核心（`src/main/zip/`）
+已下沉为内核模块。扩展只能经 `ExtContext`（主进程）与 `src/extensions/renderer-api.ts`
 （渲染层）触达内核，端点固定走 `/ext/...` 前缀（`kernel/extroute.ts`）。
 
 ::: tip

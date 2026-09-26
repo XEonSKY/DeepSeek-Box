@@ -40,7 +40,6 @@ export const useSettingsStore = defineStore('settings', () => {
         proxyHost: DEFAULT_SETTINGS.proxyHost,
         proxyPort: DEFAULT_SETTINGS.proxyPort,
         proxyScope: [...DEFAULT_SETTINGS.proxyScope],
-        downloadThreads: DEFAULT_SETTINGS.downloadThreads,
         zoomPercent: DEFAULT_SETTINGS.zoomPercent,
         ignoreSystemScale: DEFAULT_SETTINGS.ignoreSystemScale,
         funLocale: DEFAULT_SETTINGS.funLocale,
@@ -91,7 +90,6 @@ export const useSettingsStore = defineStore('settings', () => {
         state.proxyPort = v.proxyPort ?? null
         // 这两个字段要以**新数组**写回 state（defu 会把默认值数组原地合并），否则会改到 DEFAULT_SETTINGS
         state.proxyScope = Array.isArray(v.proxyScope) ? [...v.proxyScope] : [...DEFAULT_SETTINGS.proxyScope]
-        state.downloadThreads = v.downloadThreads
         state.zoomPercent = v.zoomPercent
         state.ignoreSystemScale = s.ignoreSystemScale === true
         state.funLocale = v.funLocale

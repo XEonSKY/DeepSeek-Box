@@ -42,7 +42,9 @@ metadata:
 | `src/main/app/` | 应用自身的实现（设置、迁移、模型、窗口、更新、图标）；`ipc.ts` 已瘦成**装配器** |
 | `src/main/dsh/` | DeepSeek Harness 与运行环境（安装、下载、Node/npm、版本目录） |
 | `src/main/extensions/` | **扩展框架**：`loader/`（发现 / 授权 / 激活 / 卸载 / 重载）、`system/` 与 `builtin/`（系统与内置扩展登记表）、`preready.ts`（ready 前预读 manifest）；`modules/extensions.ts` 是内核与扩展层唯一桥 |
-| `src/extensions/` | **内置 / 系统扩展业务代码**，一扩展一目录（`main.ts` + `manifest.ts` + 可选 `*.vue`）：现有 `xeonsky.download`（下载）/ `xeonsky.extm`（扩展管理页 + 扩展包管理 + 内置 7-Zip 核心，见其 `sevenzip/` 子目录）/ `xeonsky.browser`（内嵌浏览器的 UA / 代理 / 权限策略）；`renderer-api.ts` 是渲染层扩展 API 面 |
+| `src/main/zip/` | **内核 7-Zip 归档模块**（原 `xeonsky.extm/sevenzip/`）：解压扩展包 + 归档能力；二进制在 `bin/<平台>/`（asarUnpack 指向 `src/main/zip/bin/**`） |
+| `src/main/download/` | **内核下载模块**（原内置扩展 `xeonsky.download`）：`engine.ts`（分段 / 断点续传 / 限速）+ `index.ts`（任务层 / 队列持久化）；内核调用方经门面 `dsh/download.ts` |
+| `src/extensions/` | **内置 / 系统扩展业务代码**，一扩展一目录（`main.ts` + `manifest.ts` + 可选 `*.vue`）：现有 `xeonsky.extm`（扩展管理页 + 扩展包清单）/ `xeonsky.browser`（内嵌浏览器的 UA / 代理 / 权限策略）；`renderer-api.ts` 是渲染层扩展 API 面 |
 | `src/preload/` | 唯一 `contextBridge` 出口：`window.api`（REST 客户端 + 本地常量 + 事件订阅） |
 | `src/renderer/src/` | Vue 3 界面：标签页外壳、设置页、安装向导、状态栏、终端 |
 | `src/renderer/src/lib/antdv.ts` | antdv-next 运行时基座：`AntdvRoot`（ConfigProvider + App 上下文） |
@@ -57,7 +59,7 @@ metadata:
 1. **契约唯一事实来源是 `src/shared/api.ts`**：`ApiRoutes`（请求）与 `AppEvents`（推送）。新增端点必须**两处同步**：先在 `src/shared/api.ts` 登记 `ApiRoutes`，再到**对应功能模块** `src/main/modules/<功能>.ts` 里用 `defineModule` 声明处理函数（新功能就新建模块文件并挂进 `modules/index.ts` 的 `allModules()`）；`preload` 不改。模块声明的路径 / 方法 / 返回值与 `ApiRoutes` 对不上会**编译期报错**。
 2. **IPC 通道收口**：全项目只有 `src/main/kernel/router.ts` 直接碰 `ipcMain`；只有 `src/preload/index.ts` 直接碰 `ipcRenderer`。
 2b. **微内核分层不可越界**：`modules → kernel`、`modules → app/dsh` 单向依赖；**模块之间不 import**，跨模块动作走 `kernel/services.ts` 的服务槽（`provideService` / `useService`）。（`app/ipc.ts` 只是装配器，不再登记端点。）
-3. **主进程禁止裸 `fetch`**：所有 HTTP 走 `httpFetch(scope, url, init)`（`src/main/dsh/http.ts`），`scope` 决定是否走代理。**扩展内同样禁止 `fetch`**：网络请求走 `system.net` 的 `fetch` / `stream` 动作（代理由内核 session 决定，扩展里写 fetch 会绕开代理）；「下一个文件到磁盘」用内置扩展 `ext:xeonsky.download`。
+3. **主进程禁止裸 `fetch`**：所有 HTTP 走 `httpFetch(scope, url, init)`（`src/main/dsh/http.ts`），`scope` 决定是否走代理。**扩展内同样禁止 `fetch`**：网络请求走 `system.net` 的 `fetch` / `stream` 动作（代理由内核 session 决定，扩展里写 fetch 会绕开代理）；「下一个文件到磁盘」是内核模块 `src/main/download/`（断点续传 / 限速 / 任务队列），内核调用方经门面 `dsh/download.ts` 的 `downloadFile()`。
 3b. **扩展只能经 API 面触达内核**（两个方向都成立）：主进程侧只用 `ExtContext`（`main/extensions/loader/ctx.ts`），渲染层侧只用 `src/extensions/renderer-api.ts`（`extApi` / `extT` / `extErrorMessage`），**不 import 外壳内部**（`@/lib/*`、`@/components/*`、`@/shell/*`）；需要新能力**先扩 API 面**。
 4. **主进程推送不能直接 `webContents.send`**：用 `runtime.ts` 的 `broadcast` / `sendToWindow` / `sendToWcId` / `sendCore`，否则绕过 `ipc:event` 信封，渲染层收不到。
 5. **密钥不出主进程**：模型 / 余额相关的凭据读取只留在主进程，渲染层拿不到明文。
@@ -95,7 +97,7 @@ metadata:
 | 新增界面文案 | `locales/zh/index.ts`、`en/index.ts` | hant 可选（差异覆盖，不必补） | references/conventions.md |
 | 新增设置面板 | `renderer/src/views/settings/*.vue` | `SettingsView.vue` 注册 + 文案 | references/renderer.md |
 | 改 dsh / Node / npm 安装 | `main/dsh/{manage,nodeenv,npmRunner}.ts` | `dsh/installs.ts` 版本目录 | references/main-process.md |
-| 改下载 / 取消 / 解压 | `main/dsh/download.ts`（门面；实现在 `src/extensions/xeonsky.download/`，兜底 `downloader.ts`）、`kernel/operations.ts` | 进度事件 `phase` | references/main-process.md |
+| 改下载 / 取消 / 解压 | `main/download/`（引擎 `engine.ts` + 任务层 `index.ts`）、门面 `main/dsh/download.ts`、端点 `modules/download.ts` | 进度事件 `download:progress` | references/main-process.md |
 | 改内嵌浏览器（UA / 搜索引擎 / 常用站点 / 权限策略） | `src/extensions/xeonsky.browser/`（实现）+ `renderer/src/extensions/panels.ts`（面板） | 门面 `main/app/webview.ts`、机制 `main/extensions/system/system.webview/`、`preready.ts` 预读 | references/architecture.md |
 | 改新建标签页 / 地址栏跳转判定 | `src/extensions/xeonsky.browser/`（`shared.ts` / `main.ts` 的 `resolve*` / `NewTab.vue`） | 外壳兜底 `views/NewTabFallback.vue` + `renderer/src/extensions/tabviews.ts`；IPC `/shell/resolve-input`、`/shell/resolve-target` | references/architecture.md |
 | 改窗口级 webview 机制（webviewTag / 嵌套拦截 / 弹窗） | `main/app/ui.ts`（`buildShellWindow` / `did-attach-webview` / `openWebWindow`） | 纯策略在 `src/extensions/xeonsky.browser/`，经 `main/app/webview.ts` 门面查询；渲染层 `views/useWebviews.ts` 的 `allowpopups` | references/architecture.md |
@@ -104,7 +106,7 @@ metadata:
 | 改 dsh 的偏好配置（主题 / 语言 / 供应商） | `main/dsh/cordisPatch.ts`、`dshHome.ts` | `settings.ts`（语言 / 主题）、`models.ts`（供应商） | references/main-process.md |
 | 改窗口 / 标签 / 托盘 | `main/app/{ui,windowreg}.ts` + `renderer/src/shell/*` | `modules/shell.ts` 路由与事件 | references/architecture.md |
 | 改扩展加载 / 卸载 / 重载 | `main/extensions/loader/index.ts`（`startLoader` / `stopLoader` / `reloadExt` / `reloadAllLoader`） | `modules/extensions.ts` 路由 + 系统能力 `system.extmanage` | references/architecture.md |
-| 改扩展管理界面 | `src/extensions/xeonsky.extm/`（`ExtensionsPanel.vue` + `locales.ts`）；归档页在同目录 `sevenzip/ZipPanel.vue` | 端点走 `modules/extensions.ts`（基础管理）与 extm 自己的 IPC（包 / 归档）；文案键 `ext.xeonskyExtm.*` | references/renderer.md |
+| 改扩展管理界面 | `src/extensions/xeonsky.extm/`（`ExtensionsPanel.vue` + `locales.ts`） | 端点走 `modules/extensions.ts`（基础管理）与 extm 自己的 IPC（包清单）；文案键 `ext.xeonskyExtm.*` | references/renderer.md |
 | 新增一个主进程模块 | `main/kernel/module.ts`（契约） | `main/modules/<name>.ts` + `allModules()` | references/main-process.md |
 | 改文档站 | `docs/zh/...` + `docs/en/...` 成对 | `.vitepress/config.mts` nav/sidebar | references/conventions.md |
 | 新增 / 迁移 UI 组件 | `<a-*>` 组件（antdv-next） | 迁移同文件的 `el-*`；查 `antdv-next` 技能 | references/renderer.md |

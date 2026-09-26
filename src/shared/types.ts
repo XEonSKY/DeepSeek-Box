@@ -2,7 +2,7 @@
 export interface Settings {
     /**
    * 设置结构版本，**仅用于一次性迁移**，界面不展示。
-   * 缺失（老配置）时按第 1 版处理，见 settings.ts 的 normalizeProxyScope / normalizeDownloadThreads：
+   * 缺失（老配置）时按第 1 版处理，见 settings.ts 的 normalizeProxyScope 等归一化函数：
    * 只有真正的老配置才做键名拆分与默认值升级，用户后来手填的值不会被反复改写。
    */
     settingsVersion?: number
@@ -38,8 +38,6 @@ export interface Settings {
     appAutoUpdate: boolean
     /** App 更新检查也把预发布版本当作候选（默认关）。 */
     appCheckPrerelease: boolean
-    /** 文件下载并发连接数：'auto' = 按本机 CPU 核心数自适应（默认），正整数 = 手动指定。 */
-    downloadThreads: DownloadThreads
     /** 开发模式：开启后 F12 才允许打开 DevTools 控制台（默认关）。 */
     devMode: boolean
     /**
@@ -146,12 +144,6 @@ export type ProxyScope = 'app' | 'update' | 'dsh' | 'npm' | 'node' | 'registry'
 /** ProxyScope 的稳定顺序（界面按它排列，设置读取时按它校验并还原顺序）。 */
 export const PROXY_SCOPE_IDS: readonly ProxyScope[] = ['app', 'update', 'dsh', 'npm', 'node', 'registry']
 
-/**
- * 文件下载并发连接数：'auto' 按本机 CPU 核心数自适应，正整数为手动指定的连接数。
- * 归一化与取值见 src/main/dsh/downloader.ts 的 normalizeDownloadThreads()。
- */
-export type DownloadThreads = number | 'auto'
-
 /** 本地安装所用 npm：'system' ｜ 'bundled'(内置) ｜ 'localnode'(本地 Node 自带)。 */
 export type NpmSource = 'system' | 'bundled' | 'localnode'
 
@@ -214,10 +206,12 @@ export type ResolvedLocale = 'zh' | 'en'
  *        （把旧值写进扩展的 config.json），搬完即从设置结构中删除该字段。
  *  - 5 = `searchEngine` / `shortcuts` 同样迁出（新标签页导航整体成为 `xeonsky.browser` 的
  *        标签页视图），`newTabMode` / `newTabUrl` 直接删除（新标签页恒为内置导航视图）。
+ *  - 6 = `downloadThreads` 字段删除：下载并发固定自动（内核下载模块 resolveThreads 按
+ *        本机核心数自适应；「下载」页里下载模块自己的配置 threads 不受影响）。
  *
  * 每次做「改键名 / 改默认值」的迁移时 +1，见 settings.ts 的 loadSettings。
  */
-export const SETTINGS_VERSION = 5
+export const SETTINGS_VERSION = 6
 
 export const DEFAULT_SETTINGS: Settings = {
     settingsVersion: SETTINGS_VERSION,
@@ -233,7 +227,6 @@ export const DEFAULT_SETTINGS: Settings = {
     npmRegistry: 'npmjs',
     appAutoUpdate: true,
     appCheckPrerelease: false,
-    downloadThreads: 'auto',
     devMode: false,
     dshSource: 'local',
     nodeRuntime: 'local',

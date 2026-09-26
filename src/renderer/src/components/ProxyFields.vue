@@ -38,8 +38,8 @@ function toggleScope(s: ProxyScope): void {
 </script>
 
 <template>
-    <a-form-item>
-        <a-switch v-model:checked="enabled" :checked-children="$t('sv.network.enable')" />
+    <a-form-item :label="$t('sv.network.proxy')">
+        <a-switch v-model:checked="enabled" />
     </a-form-item>
 
     <template v-if="enabled">
@@ -89,7 +89,7 @@ function toggleScope(s: ProxyScope): void {
 }
 .pf__scope {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    flex-wrap: wrap;
+    gap: 6px 16px;
 }
 </style>

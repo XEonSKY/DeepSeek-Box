@@ -29,8 +29,8 @@ This means the current setting is **Locally deployed** Node, but no usable Node 
 
 ## Downloads are very slow / installation gets stuck
 
-- Switch the npm mirror to `npmmirror` under “Settings → Network”;
-- Lower “Download concurrency” when the network is unstable;
+- Switch the npm mirror to `npmmirror` under “Settings → General → Network”;
+- Downloads support resume; retrying after an interruption continues from where it left off;
 - The installation can be canceled at any time with “Cancel” and then retried.
 
 ## Pressing F12 does nothing in the console

@@ -16,7 +16,7 @@
 | `views/settings/useSettingsStore.ts`、`settingsStore.ts` | Pinia 设置镜像与写回 |
 | `views/settings/use{Node,Npm,Pnpm}Env.ts` | 「环境」页三档各自的**状态与动作**（`useNodeEnv` / `useNpmEnv` / `usePnpmEnv`）；`EnvPanel.vue` 只剩模板与一次加载编排 |
 | `views/settings/useInstallCancel.ts` | 「取消当前在途安装」的共享实现（dsh / node / npm / pnpm 共用） |
-| `components/` | `DshWizard.vue`（安装向导）、`WizardSteps.vue`（自绘步骤条）、`StatusBar.vue`、`TitleBar.vue`、`WindowControls.vue`、`ProxyFields.vue`、`ThreadsField.vue` |
+| `components/` | `DshWizard.vue`（安装向导）、`WizardSteps.vue`（自绘步骤条）、`StatusBar.vue`、`TitleBar.vue`、`WindowControls.vue`、`ProxyFields.vue` |
 | `components/wizard/` | 向导的三块自持逻辑：`useWizardRegistry.ts`（镜像源测速）、`useWizardNpm.ts`（内置 npm 准备）、`useWizardNode.ts`（本地 Node 版本与部署） |
 | `lib/` | 主题、格式化、更新状态、locale、图标等工具 |
 | `lib/update.ts` | 版本状态中心：`versionStatus` / `checkDsh` / `checkAllUpdates` / `applyAppUpdateEvent` |
