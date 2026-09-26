@@ -87,7 +87,7 @@ in `ApiRoutes` (`src/shared/api.ts`) — a wrong path is a **compile-time error*
 The extension framework and registries live in `src/main/extensions/` (`loader/` / `system/` / `builtin/`);
 the business code of built-in and system extensions lives one directory per extension under the top-level
 `src/extensions/<id>/` (`main.ts` + `manifest.ts` + optional `*.vue`). Present today: `xeonsky.download`
-(downloads) / `xeonsky.zip` (7-Zip) / `xeonsky.extm` (extension package manager) / `xeonsky.extui`, plus the
+(downloads) / `xeonsky.zip` (7-Zip) / `xeonsky.extm` (the Extensions page plus package management), plus the
 five `system.*` capability extensions. Extensions reach the kernel only through `ExtContext` (main process)
 and `src/extensions/renderer-api.ts` (renderer); endpoints always use the `/ext/...` prefix
 (`kernel/extroute.ts`).

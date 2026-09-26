@@ -83,7 +83,7 @@
 
 扩展框架与登记表在 `src/main/extensions/`（`loader/` / `system/` / `builtin/`），内置与系统扩展的业务代码
 在顶层 `src/extensions/<id>/`（一扩展一目录：`main.ts` + `manifest.ts` + 可选 `*.vue`）。现有
-`xeonsky.download`（下载）/ `xeonsky.zip`（7-Zip）/ `xeonsky.extm`（扩展包管理器）/ `xeonsky.extui`，
+`xeonsky.download`（下载）/ `xeonsky.zip`（7-Zip）/ `xeonsky.extm`（扩展管理页 + 扩展包管理），
 以及 `system.*` 五个系统能力扩展。扩展只能经 `ExtContext`（主进程）与 `src/extensions/renderer-api.ts`
 （渲染层）触达内核，端点固定走 `/ext/...` 前缀（`kernel/extroute.ts`）。
 

@@ -1,6 +1,4 @@
 import type { StaticExt } from '../loader/sources'
-import * as xeonskyExtui from '@ext/xeonsky.extui/main'
-import { manifest as xeonskyExtuiManifest } from '@ext/xeonsky.extui/manifest'
 import * as xeonskyZip from '@ext/xeonsky.zip/main'
 import { manifest as xeonskyZipManifest } from '@ext/xeonsky.zip/manifest'
 import * as xeonskyExtm from '@ext/xeonsky.extm/main'
@@ -22,7 +20,7 @@ import { manifest as xeonskyBrowserManifest } from '@ext/xeonsky.browser/manifes
  *    问题，用户仍需要一条「全部关掉」的自救路径。
  *
  * 迁入一个扩展 = 写一个目录（`src/extensions/<id>/`，内含 main.ts 与 manifest.ts，可含 .vue）+ 在这里加一行。
- * 清单写在扩展自己的目录里（见 xeonsky.extui/manifest.ts 的说明），
+ * 清单写在扩展自己的目录里（见 xeonsky.extm/manifest.ts 的说明），
  * 登记表只回答「有哪些内置扩展」。
  *
  * 目录在顶层 `src/extensions/` 而不是 `src/main/` 下：一个内置扩展同时有主进程与渲染层文件，
@@ -31,10 +29,14 @@ import { manifest as xeonskyBrowserManifest } from '@ext/xeonsky.browser/manifes
  */
 export const builtinExtensions: StaticExt[] = [
     {
+        // 扩展管理：设置面板「扩展」+ 扩展包能力（对外提供 ext:xeonsky.extm）。
+        // 声明硬依赖 xeonsky.zip？不 —— 7-Zip 是**软依赖**：它被停用/失败时
+        // 本扩展照常激活，只是 status 自报不可用、extract 返回 disabled，
+        // 加载器据此禁用压缩包扩展加载（见 xeonsky.extm/manifest.ts 的说明）。
         kind: 'builtin',
-        sourceDir: 'src/extensions/xeonsky.extui',
-        manifest: xeonskyExtuiManifest,
-        module: xeonskyExtui
+        sourceDir: 'src/extensions/xeonsky.extm',
+        manifest: xeonskyExtmManifest,
+        module: xeonskyExtm
     },
     {
         // 归档（7-Zip）：申请 fs / net / proc 三项系统能力，对外提供 ext:xeonsky.zip。
@@ -44,15 +46,6 @@ export const builtinExtensions: StaticExt[] = [
         sourceDir: 'src/extensions/xeonsky.zip',
         manifest: xeonskyZipManifest,
         module: xeonskyZip
-    },
-    {
-        // 扩展包管理器：声明硬依赖 xeonsky.zip（7-Zip 被停用/失败时它也不加载，
-        // 压缩包扩展随之全部跳过、不做读取）。压缩包形态外部扩展的加载时序
-        // 在 loader 第二阶段（loadPkgExtensions），见 loader/index.ts。
-        kind: 'builtin',
-        sourceDir: 'src/extensions/xeonsky.extm',
-        manifest: xeonskyExtmManifest,
-        module: xeonskyExtm
     },
     {
         // 下载：申请 fs / net 两项系统能力，对外提供 ext:xeonsky.download。

@@ -37,9 +37,9 @@ Next to the main process there is an **extension system**:
 - The **business code of built-in / system extensions** lives one directory per extension under the top-level
   `src/extensions/<id>/` (`main.ts` main-process entry + `manifest.ts` + optional `*.vue` renderer views).
   Present today: `xeonsky.download` (multi-threaded download / resume / rate limiting), `xeonsky.zip`
-  (a bundled 7-Zip core), `xeonsky.extm` (package manager for archive-form external extensions),
-  `xeonsky.extui`, plus the five system-capability extensions `system.fs` / `system.net` / `system.proc` /
-  `system.app` / `system.ui`;
+  (a bundled 7-Zip core), `xeonsky.extm` (the Extensions settings page plus the package manager for
+  archive-form external extensions), plus the five system-capability extensions `system.fs` / `system.net` /
+  `system.proc` / `system.app` / `system.ui`;
 - **Extensions can only reach the kernel through the API surface**: the main-process side uses `ExtContext`
   (`main/extensions/loader/ctx.ts`) only, the renderer side uses `src/extensions/renderer-api.ts` only —
   importing shell internals (`@/lib/*`, `@/components/*`, `@/shell/*`) is not allowed; extend the API surface

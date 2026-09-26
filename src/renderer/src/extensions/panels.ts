@@ -64,10 +64,10 @@ export function extMenus(): ExtMenuItem[] {
  * 也拿不到这里的组件 —— {@link resolveExtPanelView} 会按 kind 判定。
  */
 const LOCAL_VIEWS: Record<string, () => Promise<Component>> = {
-    // 「扩展管理」页（由内置扩展 xeonsky.extui 贡献）。
-    // 视图与它的主进程实现在同一个目录（`src/extensions/xeonsky.extui/`），
+    // 「扩展管理」页（由内置扩展 xeonsky.extm 贡献）。
+    // 视图与它的主进程实现在同一个目录（`src/extensions/xeonsky.extm/`），
     // 两端都用 `@ext/<id>/...` 引用 —— 见本文件顶部说明。
-    extensions: () => import('@ext/xeonsky.extui/ExtensionsPanel.vue'),
+    extensions: () => import('@ext/xeonsky.extm/ExtensionsPanel.vue'),
     // 「归档（7-Zip）」页（由内置扩展 xeonsky.zip 贡献）。
     zip: () => import('@ext/xeonsky.zip/ZipPanel.vue'),
     // 「下载」页（由内置扩展 xeonsky.download 贡献）。
