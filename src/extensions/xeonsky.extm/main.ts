@@ -98,18 +98,18 @@ export function activate(ctx: ExtContext): void {
 
     /** 列出外部扩展根目录下的包文件（*.zip / *.xeonsky-ext，按文件名排序）。 */
     const listPackages = (options: PkgListOptions): PkgEntry[] => {
-        const entries = fsCall<Array<{ name: string; isDirectory: boolean }>>('list', path.resolve(options.root))
+        const root = path.resolve(options.root)
+        // fs.list 只给目录名（string[]）；包文件都是普通文件，逐个 stat 排除子目录。
+        const names = fsCall<string[]>('list', root)
         const out: PkgEntry[] = []
-        for (const entry of entries) {
-            if (entry.isDirectory) continue
-            const lower = entry.name.toLowerCase()
+        for (const name of names) {
+            const lower = name.toLowerCase()
             const hit = PKG_EXTS.find((ext) => lower.endsWith(ext))
             if (!hit) continue
-            out.push({
-                file: path.join(path.resolve(options.root), entry.name),
-                stem: entry.name.slice(0, -hit.length),
-                format: hit.slice(1)
-            })
+            const file = path.join(root, name)
+            const st = fsCall<{ isDirectory: boolean } | null>('stat', file)
+            if (st?.isDirectory) continue
+            out.push({ file, stem: name.slice(0, -hit.length), format: hit.slice(1) })
         }
         out.sort((a, b) => a.stem.localeCompare(b.stem) || a.file.localeCompare(b.file))
         return out
