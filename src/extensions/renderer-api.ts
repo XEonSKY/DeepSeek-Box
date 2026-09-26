@@ -20,6 +20,8 @@
  *
  * 只给**扩展做界面必需**的几件事，刻意很窄（与 ctx 一样窄）：
  *  - 应用内 IPC（{@link extApi}，内核与扩展用同一份端点契约）；
+ *  - 本窗口界面状态（{@link extShell}，标签页 / 视图切换 —— 这些是渲染层单例，
+ *    不走 IPC）；
  *  - 取翻译（{@link extT}，组件外兜底；组件内请用 `useI18n()`）；
  *  - 错误信息归一（{@link extErrorMessage}）。
  *
@@ -36,6 +38,8 @@
 import type { RendererApi } from '@shared/api'
 import { tt } from '../renderer/src/lib/locales'
 import { errorMessage } from '@shared/errors'
+import { activateTab, closeTab, findTab, openTab, webTabs } from '../renderer/src/shell/tabs'
+import { useGoView } from '../renderer/src/shell/viewnav'
 
 /**
  * 应用内 IPC 面（`window.api` 的扩展可见子集）。
@@ -48,6 +52,66 @@ import { errorMessage } from '@shared/errors'
  * 也能用自己的 `ext:<id>:<action>` 通道，与主进程侧 `ctx.ipc` 对应。
  */
 export const extApi: RendererApi = window.api
+
+/**
+ * 外壳**标签页 / 视图**的受控操作面。
+ *
+ * ## 为什么需要它（而不是走 IPC 端点）
+ *
+ * 标签页模型（`renderer/src/shell/tabs.ts`）是**渲染层单例**，主进程根本不持有它 ——
+ * 「切到某个固定站」「开一个动态标签页并关掉发起它的导航页」这类动作在渲染层就地就能
+ * 完成，绕主进程一圈既慢、又把纯窗口内状态变成跨进程契约。
+ *
+ * 但扩展的渲染层实现**不能直接 import 外壳内部**（与主进程侧同一原则），
+ * 于是在这里给出一组**窄接口**：只暴露扩展做界面真正需要的几个动作，
+ * 每个都对应外壳的一个既有语义。扩展拿不到 `webTabs` 这个可变单例本身 ——
+ * 否则它能任意改标签列表，等于绕过外壳的状态机。
+ *
+ * ## 与 {@link extApi} 的分工
+ *
+ * `extApi` 管**跨进程**（设置、扩展信息、窗口控制……）；本对象管**本窗口内的界面状态**。
+ * 两者合起来才是扩展能看见的完整面。
+ */
+export interface ExtShellAccess {
+    /**
+     * 开一个动态标签页承载 url，并把它激活。
+     *
+     * @param closeSelf 是否顺带关掉「当前这个内置导航页」—— 导航页是一次性的，
+     *                  从它发起的跳转不该把它继续留在标签栏上。当前激活页不是导航页时无效果。
+     */
+    openTab(url: string, title?: string, closeSelf?: boolean): void
+    /** 激活外壳的固定站标签页（`home` / `chat` / `platform`）；`closeSelf` 语义同上。 */
+    activateFixed(tabId: string, closeSelf?: boolean): void
+    /** 切到设置页（可选定位到某个面板 key，如 `browser`）。 */
+    goSettings(panel?: string): void
+}
+
+/** 若当前激活页是内置导航页则关掉它（`closeSelf` 的统一实现）。 */
+function closeSelfIfNewTab(selfId: string | null): void {
+    if (!selfId) return
+    const self = findTab(selfId)
+    if (self && self.kind === 'newtab') closeTab(selfId)
+}
+
+export const extShell: ExtShellAccess = {
+    openTab(url, title, closeSelf) {
+        const selfId = closeSelf ? webTabs.activeId : null
+        openTab(url, title)
+        if (selfId) closeSelfIfNewTab(selfId)
+    },
+    activateFixed(tabId, closeSelf) {
+        const selfId = webTabs.activeId
+        if (!findTab(tabId)) return
+        activateTab(tabId)
+        if (closeSelf) closeSelfIfNewTab(selfId)
+    },
+    goSettings(panel) {
+        useGoView()('settings')
+        if (panel) {
+            void import('../renderer/src/shell/router').then((m) => m.router.push(`/settings/${panel}`))
+        }
+    }
+}
 
 /**
  * 在**非组件**环境取翻译（模块级代码 / 组合式函数里没有 `useI18n` 上下文）。

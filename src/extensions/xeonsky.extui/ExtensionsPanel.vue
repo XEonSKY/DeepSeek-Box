@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { AppstoreOutlined, ReloadOutlined, FolderOpenOutlined } from '@antdv-next/icons'
+import { AppstoreOutlined, ReloadOutlined, FolderOpenOutlined, SyncOutlined } from '@antdv-next/icons'
 import { ElMessage } from 'element-plus'
 import type { ExtInfo, ExtensionsInfo } from '@shared/extensions'
 import { extApi, extErrorMessage, extT } from '../renderer-api'
@@ -98,6 +98,32 @@ async function forgive(ext: ExtInfo): Promise<void> {
     }
 }
 
+/** 重载单个扩展（卸载 → 按当前磁盘状态重新激活；改完代码立刻生效）。 */
+async function reloadExt(ext: ExtInfo): Promise<void> {
+    loading.value = true
+    try {
+        info.value = await extApi.post('/extensions/:id/reload', { params: { id: ext.id } })
+        ElMessage.success(extT('ext.xeonskyExtui.page.reloaded', { name: ext.name }))
+    } catch (err) {
+        ElMessage.error(extErrorMessage(err))
+    } finally {
+        loading.value = false
+    }
+}
+
+/** 重载全部扩展（等价于重启加载器，不重启应用）。 */
+async function reloadAll(): Promise<void> {
+    loading.value = true
+    try {
+        info.value = await extApi.post('/extensions/reload-all')
+        ElMessage.success(extT('ext.xeonskyExtui.page.reloadedAll'))
+    } catch (err) {
+        ElMessage.error(extErrorMessage(err))
+    } finally {
+        loading.value = false
+    }
+}
+
 /** 退出安全模式并清空崩溃计数。 */
 async function exitSafeMode(): Promise<void> {
     try {
@@ -173,6 +199,11 @@ onBeforeUnmount(() => offChanged?.())
                     <template #icon><ReloadOutlined /></template>
                     {{ $t('ext.xeonskyExtui.page.refresh') }}
                 </a-button>
+                <!-- 全部重载：等价于重启加载器（不重启应用），改完扩展代码后一键生效。 -->
+                <a-button @click="reloadAll">
+                    <template #icon><SyncOutlined /></template>
+                    {{ $t('ext.xeonskyExtui.page.reloadAll') }}
+                </a-button>
                 <!-- 打开扩展目录：图标 + 目录路径；路径过长时省略，完整值放 title。 -->
                 <a-button @click="openDir">
                     <template #icon><FolderOpenOutlined /></template>
@@ -235,6 +266,10 @@ onBeforeUnmount(() => offChanged?.())
                             <a-tag :color="statusColor(item.status)">{{ $t('ext.xeonskyExtui.page.' + STATUS_KEY[item.status]) }}</a-tag>
                         </span>
                         <span class="iv__c4">
+                            <!-- 重载：任何已发现的扩展都可重载（含失败的 —— 正好用来「改完再试一次」）。 -->
+                            <a-button @click="reloadExt(item)">
+                                {{ $t('ext.xeonskyExtui.page.reload') }}
+                            </a-button>
                             <a-button v-if="item.removable" @click="toggle(item)">
                                 {{ item.status === 'disabled' ? $t('ext.xeonskyExtui.page.enable') : $t('ext.xeonskyExtui.page.disable') }}
                             </a-button>
@@ -350,7 +385,7 @@ onBeforeUnmount(() => offChanged?.())
     align-items: center;
 }
 .iv__c4 {
-    flex: 0 0 176px;
+    flex: 0 0 264px;
     display: flex;
     align-items: center;
     justify-content: flex-end;

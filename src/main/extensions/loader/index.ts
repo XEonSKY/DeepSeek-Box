@@ -685,6 +685,187 @@ export async function stopLoader(): Promise<void> {
     state.loaded = []
 }
 
+// ---------------------------------------------------------------------------
+// 重载：卸载 -> 重新发现 -> 重新激活
+// ---------------------------------------------------------------------------
+//
+// 与整机重启的区别是**只动扩展层**：不重启 Electron、不重建窗口、不重启动 dsh。
+// 因此对本节的两条约束要特别当心：
+//
+//  1. 两张全局表（registry / capability）必须保持「先撤后登」的次序 —— 重载一个扩展
+//     若不先 releaseOwner 就重新 activate，它会撞上「能力重复提供 / 贡献点重复登记」。
+//  2. 重载必须在**没有别的扩展持有它的能力**时才有意义。硬依赖它的扩展此刻拿着的
+//     是旧动作表（能力槽按名字查，撤销后立即失效），所以重载一个「被依赖者」时，
+//     依赖方需要一起重载 —— 界面侧用「全部重载」覆盖这种情形，单体重载则用于
+//     无依赖的叶子扩展（如 xeonsky.zip / xeonsky.browser）。
+
+/** 卸载一个已装载的扩展（不改变 state.entries —— 由调用方随后重填）。 */
+async function unloadOne(item: LoadedExt): Promise<void> {
+    try {
+        await item.module.deactivate?.()
+    } catch (err) {
+        log.error({ err }, `${item.id} deactivate threw during reload`)
+    }
+    try {
+        releaseOwner(item.id)
+    } catch (err) {
+        log.error({ err }, `${item.id} failed to revoke contributions during reload`)
+    }
+}
+
+/**
+ * 重新发现一个扩展的候选（重载用：磁盘上的代码可能已被用户替换）。
+ *
+ * 关键是**不能复用启动时的 module 对象**：外部扩展的改动只体现在磁盘文件上，
+ * 而 ESM 的 import 有模块缓存 —— 要让改动生效必须让缓存失效。这里对
+ * `file://` URL 追加一个递增的查询参数来绕过缓存（Electron 主进程的 ESM 加载器
+ * 遵守 URL 唯一性，`?v=N` 会让它当新模块加载）。
+ */
+let reloadSeq = 0
+
+/** 带缓存破除地加载外部扩展入口。 */
+async function loadDiskEntryFresh(dir: string, declared?: string): Promise<ResolvedEntry> {
+    const file = resolveEntryFile(dir, declared)
+    if (!file) return { ok: false, reason: '找不到入口文件（main.js / index.js）' }
+    try {
+        // `?v=` 递增：同一进程内重载两次也各拿一份新模块（否则第二次仍是旧代码）。
+        const url = `${pathToFileURL(file).href}?reload=${++reloadSeq}`
+        const mod = (await import(url)) as { default?: ExtModule } & ExtModule
+        const entry = mod.default ?? mod
+        if (!entry || typeof entry.activate !== 'function') return { ok: false, reason: '入口未导出 activate 函数' }
+        return { ok: true, module: entry }
+    } catch (err) {
+        return { ok: false, reason: `入口加载失败：${err instanceof Error ? err.message : String(err)}` }
+    }
+}
+
+/**
+ * 为一个候选重新装配（激活）它，返回是否成功。
+ *
+ * 静态扩展（系统 / 内置）的 module 在 `staticExts()` 里是编译期对象，直接复用；
+ * 外部扩展走 `loadDiskEntryFresh()` 绕开模块缓存。
+ *
+ * @param available 当前「已激活」的 id 集合（用于硬依赖判定），成功后会加入
+ */
+async function reactivate(id: string, available: Set<string>): Promise<boolean> {
+    // 找到它的候选：静态优先，其次磁盘。
+    const s = staticExts().find((x) => x.manifest.id === id)
+    let candidate: Candidate | null = null
+    if (s) {
+        candidate = { id, dependencies: s.manifest.dependencies, dir: s.sourceDir, kind: s.kind, manifest: s.manifest, module: s.module }
+    } else {
+        const ext = discoverExternal().find((e) => e.dirName === id || path.basename(e.dir) === id)
+        if (ext) {
+            // 磁盘目录名未必等于扩展 id（manifest 才是权威），所以要读 manifest 再比对。
+            const parsed = readDiskManifest(ext.dir)
+            if (parsed.ok && parsed.manifest.id === id) {
+                const loadedEntry = await loadDiskEntryFresh(ext.dir, parsed.manifest.main)
+                if (!loadedEntry.ok) {
+                    state.reasons[id] = loadedEntry.reason
+                    return false
+                }
+                candidate = { id, dependencies: parsed.manifest.dependencies, dir: ext.dir, kind: 'external', manifest: parsed.manifest, module: loadedEntry.module }
+            }
+        }
+        // 压缩包形态：入口在暂存目录，不在 externalRoot 下。
+        if (!candidate) {
+            const staged = discoverPkgs().find((p) => p.stem === id)
+            if (staged) {
+                const dir = path.join(pkgStagingRoot(), staged.stem)
+                const located = locateManifestDir(dir)
+                if (located) {
+                    const parsed = readDiskManifest(located)
+                    if (parsed.ok && parsed.manifest.id === id) {
+                        const loadedEntry = await loadDiskEntryFresh(located, parsed.manifest.main)
+                        if (loadedEntry.ok) {
+                            candidate = { id, dependencies: parsed.manifest.dependencies, dir: located, kind: 'external', manifest: parsed.manifest, module: loadedEntry.module }
+                        } else {
+                            state.reasons[id] = loadedEntry.reason
+                            return false
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (!candidate) {
+        state.reasons[id] = '找不到扩展来源（可能已被删除）'
+        return false
+    }
+    if (candidate.kind !== 'system' && state.disk.disabled.includes(id)) {
+        putEntry(baseInfo(candidate, 'disabled', '已被停用'))
+        return false
+    }
+    const missing = missingDependencies(candidate.manifest, available)
+    if (missing.length > 0) {
+        state.reasons[id] = `缺少依赖扩展：${missing.join(', ')}`
+        putEntry(baseInfo(candidate, 'skipped', state.reasons[id]))
+        return false
+    }
+    // 撤销旧的界面条目，避免旧 status 残留（activateOne 成功会重新 putEntry）。
+    const loaded = await activateOne(candidate, grantOf(candidate))
+    if (loaded) {
+        // state.loaded 里可能还有旧记录（重载同一 id）—— 去掉它再加入新的，避免卸载时重复 deactivate。
+        state.loaded = state.loaded.filter((x) => x.id !== id)
+        state.loaded.push(loaded)
+        available.add(id)
+        return true
+    }
+    return false
+}
+
+/**
+ * 重载**单个**扩展。
+ *
+ * 用于「改完扩展代码想立刻看效果」：只把这一个扩展卸掉再按当前磁盘状态重新激活。
+ * 系统扩展（如 system.fs）也可重载 —— 它的 module 是编译期对象，重载等于重新跑一遍
+ * activate（重新 provide 能力）。但**依赖它的扩展不会自动跟着重载**，所以此时
+ * 依赖方可能拿着已失效的动作表；要一并刷新请用 {@link reloadAllLoader}。
+ *
+ * @returns 该扩展重载后的界面信息；找不到该 id 时返回 null
+ */
+export async function reloadExt(id: string): Promise<ExtInfo | null> {
+    const has = state.loaded.some((x) => x.id === id) || state.entries.has(id)
+    if (!has) return null
+
+    // 已激活：先卸（deactivate + 归还贡献 / 能力）。
+    const loaded = state.loaded.filter((x) => x.id === id)
+    for (const item of reverseForUnload(loaded)) await unloadOne(item)
+
+    // 可用集合：重载这一个时，其余已激活扩展仍视为可用（硬依赖判定用）。
+    const available = new Set(state.loaded.map((x) => x.id))
+    state.entries.delete(id)
+    const ok = await reactivate(id, available)
+    if (!ok && !state.entries.has(id)) {
+        // reactivate 在「找不到来源」时只写了 reasons 没写 entry，补一条供界面展示。
+        state.entries.set(id, {
+            id,
+            name: id,
+            version: '',
+            kind: 'external',
+            status: 'failed',
+            message: state.reasons[id] ?? '重载失败',
+            capabilities: [],
+            dependencies: [],
+            dir: '',
+            removable: true
+        })
+    }
+    state.ports?.notifyChanged()
+    return state.entries.get(id) ?? null
+}
+
+/**
+ * 重载**全部**扩展（卸载全部 -> 重新走一遍完整加载）。
+ *
+ * 与「重启应用」的区别只是不重启 Electron —— 效果上等价于重新执行 `startLoader`，
+ * 因此直接复用它的实现。这是「改完扩展、依赖关系也变了」时该用的入口。
+ */
+export async function reloadAllLoader(): Promise<ExtensionsInfo> {
+    await stopLoader()
+    return startLoader()
+}
+
 /** 组装对外返回的概要信息。 */
 export function info(): ExtensionsInfo {
     const rank: Record<ExtKind, number> = { system: 0, builtin: 1, external: 2 }
@@ -698,11 +879,6 @@ export function info(): ExtensionsInfo {
 /** 当前 channel（界面提示用）。 */
 export function channel(): 'release' | 'dev' {
     return currentChannel()
-}
-
-/** 是否处于安全模式。 */
-export function isSafeMode(): boolean {
-    return state.safeMode
 }
 
 /** 清掉某扩展的崩溃计数与停用标记（用户在扩展页手动启用 / 重试时调用）。 */
