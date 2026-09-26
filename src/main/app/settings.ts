@@ -494,6 +494,63 @@ function withoutNulls(obj: Partial<Settings>): DiskSettings {
     return out as DiskSettings
 }
 
+/**
+ * 设置结构 v5 迁移：把旧的 `webviewUserAgent` / `searchEngine` / `shortcuts` 搬进内置扩展
+ * `xeonsky.browser`。
+ *
+ * v4 已开始搬 `webviewUserAgent`（UA 是它的第一项设置）；v5 把「默认搜索引擎」与
+ * 「常用站点」也一并搬走 —— 它们本来只服务于新标签页导航，而导航页现已整体成为
+ * 该扩展的标签页视图。`newTabMode` / `newTabUrl` **不搬**：新标签页恒为扩展贡献的内置
+ * 导航视图，旧的「自定义 URL」语义已不存在，搬过去没有接收方。
+ *
+ * 幂等：**逐键**判断「文件里尚无该键」才补写 —— 只要有一项已存在就说明用户在新版里
+ * 动过配置，不覆盖；`userAgent` 沿用 v4 的等价语义（旧实现是整文件不存在才写）。
+ * 仅当至少一个旧值非空时才尝试落盘。
+ *
+ * 容错：任何 IO 失败都只打 warn，不阻断启动（迁移的是一次性偏好，丢失的代价是用户重填一次）。
+ */
+function migrateBrowserPrefs(disk: {
+    webviewUserAgent?: unknown
+    searchEngine?: unknown
+    shortcuts?: unknown
+}): void {
+    const legacyUa = typeof disk.webviewUserAgent === 'string' ? disk.webviewUserAgent.trim() : ''
+    const legacyEngine = typeof disk.searchEngine === 'string' ? disk.searchEngine : ''
+    const legacyShortcuts = Array.isArray(disk.shortcuts) ? disk.shortcuts : []
+    if (!legacyUa && !legacyEngine && legacyShortcuts.length === 0) return
+    try {
+        const dir = path.join(configDir(), 'data', 'extensions', 'xeonsky.browser')
+        const file = path.join(dir, 'config.json')
+        let current: Record<string, unknown> = {}
+        if (fs.existsSync(file)) {
+            try {
+                current = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>
+            } catch {
+                current = {}
+            }
+        }
+        let changed = false
+        if (legacyUa && current.userAgent === undefined) {
+            current.userAgent = legacyUa
+            changed = true
+        }
+        if (legacyEngine && current.searchEngine === undefined) {
+            current.searchEngine = legacyEngine
+            changed = true
+        }
+        if (legacyShortcuts.length > 0 && current.shortcuts === undefined) {
+            current.shortcuts = legacyShortcuts
+            changed = true
+        }
+        if (!changed) return
+        fs.mkdirSync(dir, { recursive: true })
+        fs.writeFileSync(file, JSON.stringify(current, null, 4), 'utf8')
+        log.info({ file }, 'migrated legacy browser preferences into xeonsky.browser config')
+    } catch (err) {
+        log.warn({ err }, 'failed to migrate legacy browser preferences (ignored)')
+    }
+}
+
 export function loadSettings(): Settings {
     const disk = readDiskSettings()
     // 设置结构版本：缺失即第 1 版。只有真正的老配置才做改键名 / 改默认值的迁移，
@@ -510,6 +567,10 @@ export function loadSettings(): Settings {
     // 注意 defu 只认 `undefined`（null 会被当作已设置的值原样保留），
     // 而磁盘上确实可能存着 null（旧版清空过的字段），故显式用 ?? 剔除 null。
     const merged = defu<DiskSettings, [Settings]>(withoutNulls(disk), DEFAULT_SETTINGS)
+    // v4/v5：`webviewUserAgent`、`searchEngine`、`shortcuts` 迁出设置结构
+    // （webview / 新标签页功能已成内置扩展 xeonsky.browser）。一次性搬进扩展的数据文件，
+    // 之后设置里不再有这三个键。
+    if (legacy) migrateBrowserPrefs(disk as { webviewUserAgent?: unknown; searchEngine?: unknown; shortcuts?: unknown })
     return {
         ...merged,
         // 以下字段的取值优先级高于磁盘：命令行 / 环境变量 / 归一化
@@ -528,7 +589,6 @@ export function loadSettings(): Settings {
         npmSource: normalizeNpmSource(merged.npmSource),
         pnpmSource: normalizePnpmSource(merged.pnpmSource),
         proxyScope: normalizeProxyScope(disk.proxyScope, legacy),
-        shortcuts: Array.isArray(merged.shortcuts) ? merged.shortcuts : DEFAULT_SETTINGS.shortcuts,
         colorScheme: COLOR_SCHEME_IDS.includes(merged.colorScheme as ColorSchemeId)
             ? merged.colorScheme
             : DEFAULT_SETTINGS.colorScheme
@@ -738,7 +798,8 @@ export function startConfigWatchers(): void {
     watchConfigFile(PATCH_FILENAME, dshHomeDir(), onPatchChange)
 }
 
-export function stopConfigWatchers(): void {
+/** 关闭并清空外部变更 watcher（配置目录变更后由 {@link rewatchConfig} 重建）。 */
+function stopConfigWatchers(): void {
     for (const w of configWatchers) {
         try {
             w.close()

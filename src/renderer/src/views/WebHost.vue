@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import type { Component } from 'vue'
 import { ArrowLeftOutlined, ArrowRightOutlined, ReloadOutlined } from '@antdv-next/icons'
 import { webTabs, activeTab, openTarget, setHomeUrl } from '../shell/tabs'
-import NewTab from './NewTab.vue'
-import { buildSearchUrl } from '../lib/engines'
-import type { SearchEngineId } from '@shared/types'
-import { shellMeta } from '../shell/shellmeta'
+import NewTabFallback from './NewTabFallback.vue'
+import { newTabViewLoader } from '../extensions/tabviews'
+import { shellMeta } from '../shell/state'
 import { useWebviews } from './useWebviews'
 import type { WebviewEl } from './useWebviews'
 import { useLoadProgress } from './useLoadProgress'
@@ -19,8 +19,9 @@ import HarnessLoader from '../components/HarnessLoader.vue'
  * - 任一 webview 的 target=_blank / window.open (ui:new-tab) → openTab 动态新标签页。
  * - 顶部是浏览器式导航栏（后退/前进/刷新 + 地址栏），驱动当前激活 webview。
  * - 标题栏刷新(ui:reload-dsh) → 重载当前激活 webview。
+ * - **新建标签页**：内容由扩展 `xeonsky.browser` 贡献（程序内置标签页视图，见
+ *   `extensions/tabviews.ts`）；扩展停用时回落外壳自带的极简页（`NewTabFallback.vue`）。
  */
-let defaultEngine: SearchEngineId = 'bing'
 let pollTimer: number | null = null
 /** 轮询上限用尽仍未拿到 dsh URL：必须给出可见的失败态，不能留一个永远转圈的占位。 */
 const waitTimedOut = ref(false)
@@ -35,6 +36,19 @@ const nav = reactive({ url: '', canBack: false, canForward: false, loading: fals
 /** 地址栏可编辑文本。 */
 const urlInput = ref('')
 const addrEditing = ref(false)
+
+/**
+ * 新建标签页视图：由扩展贡献，扩展停用时回落自带页。
+ *
+ * 放在 `computed` 上而不是 `onMounted` 里算一次：扩展的启用/停用会触发
+ * `extensions:changed` → `refreshExtensions()` → `extState.tabs` 变化，
+ * 这时视图应当**立即**换掉。
+ */
+const NEWTAB_FALLBACK: Component = NewTabFallback
+const newTabView = computed<Component>(() => {
+    const loader = newTabViewLoader()
+    return loader ? defineAsyncComponent(loader) : NEWTAB_FALLBACK
+})
 
 /** 顶部加载进度条（真实百分比不可得，走模拟进度，见 useLoadProgress）。 */
 const {
@@ -93,7 +107,14 @@ function navReload(): void {
     if (nav.loading && typeof wv.stop === 'function') wv.stop()
     else if (typeof wv.reload === 'function') wv.reload()
 }
-/** 处理地址栏输入：URL / 扩展协议 / 搜索。 */
+/**
+ * 处理地址栏输入。
+ *
+ * 「这一行是什么意思」不由外壳判断 —— 交给浏览器扩展解析
+ * （`POST /shell/resolve-input`：网址就跳、否则按扩展配置的默认引擎搜），
+ * 扩展不可用时主进程一律返回 external，于是本窗口改走系统默认浏览器。
+ * 这正是「浏览器扩展关掉就不再由外壳浏览」那条规则的落点。
+ */
 async function onAddressEnter(): Promise<void> {
     const wv = wvApi.activeWv()
     if (!wv) return
@@ -102,31 +123,45 @@ async function onAddressEnter(): Promise<void> {
         urlInput.value = nav.url
         return
     }
-    const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(raw)
-    if (scheme) {
-        const proto = scheme[1].toLowerCase()
-        // http/https/about 由 webview 内置加载；其它协议（mailto:/tel:/自定义等）交系统打开。
-        if (proto === 'http' || proto === 'https' || proto === 'about') {
-            urlInput.value = raw
-            if (typeof wv.loadURL === 'function') await wv.loadURL(raw).catch(() => {})
-        } else {
-            urlInput.value = nav.url
-            await window.api.post('/shell/open-external', { body: { url: raw } })
-        }
+    let r: { kind: 'url' | 'external' | 'none'; url?: string }
+    try {
+        r = await window.api.post('/shell/resolve-input', { body: { raw } })
+    } catch {
+        nodeResolveFallback(raw, (u) => void onAddressLoad(u))
         return
     }
-    let url: string
-    if (/^[\w.-]+\.[a-zA-Z]{2,}$/.test(raw)) {
-        url = 'https://' + raw
-    } else {
-        url = buildSearchUrl(defaultEngine, raw) // 非网址 → 默认引擎搜索
+    if (r.kind === 'none' || !r.url) {
+        urlInput.value = nav.url
+        return
     }
+    if (r.kind === 'external') {
+        urlInput.value = nav.url
+        await window.api.post('/shell/open-external', { body: { url: r.url } })
+        return
+    }
+    void onAddressLoad(r.url)
+}
+
+/** 把解析出的 URL 交给当前 webview 加载（失败由 did-fail-load 呈现）。 */
+async function onAddressLoad(url: string): Promise<void> {
+    const wv = wvApi.activeWv()
+    if (!wv) return
     urlInput.value = url
     try {
         if (typeof wv.loadURL === 'function') await wv.loadURL(url)
     } catch {
-    /* did-fail-load will surface */
+        /* did-fail-load will surface */
     }
+}
+
+/**
+ * 主进程解析端点不可用时的极简兜底（理论上不该发生：它是本地 IPC）。
+ * 只做「带协议就照原样、否则补 https://」这一条，不猜搜索引擎 ——
+ * 搜索词表是浏览器扩展的知识，外壳不该复制一份。
+ */
+function nodeResolveFallback(raw: string, load: (url: string) => void): void {
+    if (/^https?:\/\//i.test(raw)) load(raw)
+    else load(`https://${raw}`)
 }
 
 function stopPolling(): void {
@@ -182,7 +217,6 @@ onMounted(async () => {
     try {
         const s = await window.api.get('/settings')
         wvApi.setZoom(s.zoomPercent ?? 100)
-        defaultEngine = s.searchEngine || 'bing'
     } catch {
         wvApi.setZoom(100)
     }
@@ -197,7 +231,6 @@ onMounted(async () => {
     offReload = window.api.on('ui:reload-dsh', () => wvApi.reloadActive())
     offSettings = window.api.on('settings:changed', (s) => {
         wvApi.setZoom(s.zoomPercent ?? 100)
-        if (s.searchEngine) defaultEngine = s.searchEngine
     })
 
     // 初始拉取 dsh URL 只对核心窗口做（dsh UI 固定站只在核心窗口）；副窗口由主进程以
@@ -257,7 +290,8 @@ onBeforeUnmount(() => {
                 class="whost__pane"
                 :class="{ on: tab.id === webTabs.activeId }"
             >
-                <NewTab v-if="tab.kind === 'newtab'" />
+                <!-- 新建标签页：实现由扩展贡献（无扩展时回落外壳自带极简页）。 -->
+                <component :is="newTabView" v-if="tab.kind === 'newtab'" />
                 <template v-else>
                     <div class="whost__holder" :ref="(el) => setHolder(tab.id, el as HTMLDivElement | null)"></div>
                     <div v-if="!tab.url" class="whost__wait">

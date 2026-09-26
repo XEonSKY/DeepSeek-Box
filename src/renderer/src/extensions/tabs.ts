@@ -2,14 +2,18 @@ import { watch } from 'vue'
 import { extState } from './store'
 import { openTab, findTab, webTabs } from '../shell/tabs'
 import { tt } from '../lib/locales'
+import { isTabViewContribution } from './tabviews'
 
 /**
  * 渲染层控制点 1：**标签页**。
  *
- * 扩展能做的只有一件事 —— 声明一个 URL，外壳把它当普通动态标签页打开。
- * 这正好复用了现成的标签页模型（`shell/tabs.ts` 的 `openTab`）：扩展标签页
- * 与用户手动开的动态页**完全同质**，共享保活、关闭、拖拽等全部既有行为，
- * 不需要给 `WebTabKind` 加新种类，也不会出现"扩展标签页行为不一样"的割裂。
+ * 扩展能做的有两条：
+ *   1. 声明一个 URL，外壳把它当普通动态标签页打开 —— 这正好复用了现成的标签页模型
+ *      （`shell/tabs.ts` 的 `openTab`）：扩展标签页与用户手动开的动态页**完全同质**，
+ *      共享保活、关闭、拖拽等全部既有行为，不需要给 `WebTabKind` 加新种类；
+ *   2. 声明一个 `view`（程序内置标签页视图）—— 这不是「要开一个标签页」，
+ *      而是「提供一个不经过 webview 的标签页界面」（如新建标签页页）。
+ *      这类贡献由外壳在渲染时按名挂载（见 `tabviews.ts`），**不在这里被打开**。
  *
  * 为什么不在标签栏塞一个"扩展页入口"列表：那等于给扩展开第三个控制点，
  * 而用户限定的能力面只有两个（标签页 + 设置页）。扩展想被打开，
@@ -29,10 +33,12 @@ export function extTabId(extId: string, key: string): string {
  *
  * 已存在则激活它，不重复开 —— 扩展入口常被当"设置/面板"点，
  * 每次都新开一个会让标签栏堆积。
+ *
+ * `view` 型贡献没有可打开的 URL，直接忽略（它们不是标签页，是视图声明）。
  */
 export function openExtTab(extId: string, key: string): void {
     const contribution = extState.tabs.find((t) => t.extId === extId && t.key === key)
-    if (!contribution) return
+    if (!contribution?.url) return
     const id = extTabId(extId, key)
     const existing = findTab(id)
     if (existing) {
@@ -60,6 +66,7 @@ export function registerExtTabs(): void {
         () => {
             for (const tab of extState.tabs) {
                 if (!tab.openOnStart) continue
+                if (isTabViewContribution(tab)) continue // 视图声明不是标签页
                 const marker = `${tab.extId}/${tab.key}`
                 if (autoOpened.has(marker)) continue
                 autoOpened.add(marker)

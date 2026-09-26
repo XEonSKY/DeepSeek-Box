@@ -57,16 +57,6 @@ export function extMenus(): ExtMenuItem[] {
     }))
 }
 
-/** 某 key 是否是扩展面板（SettingsView 据此把路由交给扩展面板视图）。 */
-export function isExtPanel(key: string): boolean {
-    return extState.panels.some((p) => p.key === key)
-}
-
-/** 取某 key 对应的扩展面板项。 */
-export function extPanelOf(key: string): ExtMenuItem | undefined {
-    return extMenus().find((p) => p.key === key)
-}
-
 /**
  * 外壳登记的本地视图实现：`view` 名 → 组件。
  *
@@ -81,7 +71,9 @@ const LOCAL_VIEWS: Record<string, () => Promise<Component>> = {
     // 「归档（7-Zip）」页（由内置扩展 xeonsky.zip 贡献）。
     zip: () => import('@ext/xeonsky.zip/ZipPanel.vue'),
     // 「下载」页（由内置扩展 xeonsky.download 贡献）。
-    download: () => import('@ext/xeonsky.download/DownloadPanel.vue')
+    download: () => import('@ext/xeonsky.download/DownloadPanel.vue'),
+    // 「内嵌浏览器」页（由内置扩展 xeonsky.browser 贡献）。
+    browser: () => import('@ext/xeonsky.browser/BrowserPanel.vue')
 }
 
 /**
@@ -94,9 +86,4 @@ export function resolveExtPanelView(view: string | undefined, kind: string | und
     if (!view) return undefined
     if (kind !== 'builtin' && kind !== 'system') return undefined
     return LOCAL_VIEWS[view]
-}
-
-/** 注册设置面板控制点（设置页通过 `extMenus()` 响应式读取，故此处无副作用）。 */
-export function registerExtPanels(): void {
-    // 与 registerExtTabs 对称保留：让 index.ts 的装配一眼可见两个控制点。
 }

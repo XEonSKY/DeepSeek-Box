@@ -11,7 +11,7 @@ import { writeRemoteLog } from '../kernel/logger'
 import { readDiskSettings, persistSettings, syncDshTheme, syncNativeTheme, dshLocale, writeDshLocale, normalizeNpmSource } from '../app/settings'
 import { syncGlobalHotkey } from '../app/ui'
 import { applyAutoLaunch } from '../app/autolaunch'
-import { applyWebviewProxy, applyWebviewUserAgent } from '../app/webview'
+import { reapplyWebviewProxy } from '../app/webview'
 import { applyAppIcon } from '../app/appicon'
 
 /**
@@ -48,10 +48,10 @@ export default defineModule({
                 syncGlobalHotkey()
                 // 开机自启同样立刻写系统登录项（幂等）。
                 applyAutoLaunch(merged.autoLaunch)
-                // UA 同理：改完立刻对新请求生效（已加载的页面按新 UA 重新请求）。硬件加速改不了 —— 见 app/webview.ts。
-                applyWebviewUserAgent(merged)
-                // 代理也立刻生效：已加载的内嵌网页要按新代理重新请求（dsh 子进程的代理随下次启动生效）。
-                await applyWebviewProxy(merged)
+                // 代理立刻生效：已加载的内嵌网页要按新代理重新请求（dsh 子进程的代理随下次启动生效）。
+                // UA 不在这里 —— 它已随 webview 功能迁入内置扩展 `xeonsky.browser`，
+                // 由那个扩展自己的设置面板改，改完由扩展侧重新应用。硬件加速改不了（需重启，见 extensions/preready.ts）。
+                await reapplyWebviewProxy()
                 // 程序图标：换图后立刻更新所有窗口 / 托盘，并把新预览广播给渲染层。
                 applyAppIcon(merged)
                 // 广播给**所有**窗口（含发起保存的那一个）：状态栏的余额授权、内嵌网页的缩放 / 搜索引擎
@@ -78,7 +78,7 @@ export default defineModule({
                 syncDshTheme(d.theme)
                 syncNativeTheme(d.theme)
                 applyAutoLaunch(d.autoLaunch)
-                await applyWebviewProxy(d)
+                await reapplyWebviewProxy()
                 applyAppIcon(d)
                 broadcast('settings:changed', d)
                 return d

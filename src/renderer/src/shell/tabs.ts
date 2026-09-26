@@ -230,7 +230,8 @@ export function openTarget(target: string | null | undefined): WebTab | null {
 /**
  * 打开一个内置导航页标签（点「＋」）。每次调用都新建一个导航页标签并激活，
  * 不自动复用，方便连续开新页。
- * 具体内容是否内置由设置 newTabMode 决定（'url' 时由调用方改走 openTab）。
+ * 页面内容由扩展贡献的标签页视图渲染（见 `views/WebHost.vue` 的 newTabView）；
+ * 扩展停用时回落外壳自带的极简页。
  */
 export function openNewTab(): WebTab {
     const tab: WebTab = {

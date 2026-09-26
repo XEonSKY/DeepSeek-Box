@@ -101,16 +101,21 @@ export interface ExtensionsInfo {
  * 按能力域拆开而不是合成一个大扩展：授权与排查都需要**粒度**，
  * 「要么全给要么全不给」会让能力申请失去意义。命名域与实现一一对应：
  *
- *  - `fs`   文件读写与整目录删除（包装 kernel/treeops）
- *  - `net`  主进程 HTTP 请求（包装 dsh/http 的 httpFetch）
- *  - `proc` 子进程（包装 dsh/child 的 runChild）
- *  - `app`  应用内服务（包装 kernel/services 的服务槽）
- *  - `ui`   对外壳界面的受控操作（标签页 / 设置页注册由渲染层 loader 承接）
+ *  - `fs`      文件读写与整目录删除（包装 kernel/treeops）
+ *  - `net`     主进程 HTTP 请求（包装 dsh/http 的 httpFetch）
+ *  - `proc`    子进程（包装 dsh/child 的 runChild）
+ *  - `app`     应用内服务（包装 kernel/services 的服务槽）
+ *  - `ui`      对外壳界面的受控操作（标签页 / 设置页注册由渲染层 loader 承接）
+ *  - `webview` 内嵌页面所处的会话（defaultSession）配置：UserAgent / 代理 / 权限策略
+ *              （包装 Electron 的 session API）。单独成一个域，因为它是**唯一**
+ *              能改变「任意站点在内嵌页面里的行为」的能力，审计价值最高。
+ *  - `extmanage` 扩展层自身的管理（重载单个 / 全部扩展、列扩展）。包装加载器的
+ *              `reloadExt` / `reloadAll` / `info`，供扩展生态内部协作（改完代码立刻生效）。
  */
-export type SysCapability = 'fs' | 'net' | 'proc' | 'app' | 'ui'
+export type SysCapability = 'fs' | 'net' | 'proc' | 'app' | 'ui' | 'webview' | 'extmanage'
 
 /** 全部系统能力名（加载器与系统扩展共用，避免字符串散落各处）。 */
-export const SYS_CAPABILITIES: readonly SysCapability[] = ['fs', 'net', 'proc', 'app', 'ui']
+export const SYS_CAPABILITIES: readonly SysCapability[] = ['fs', 'net', 'proc', 'app', 'ui', 'webview', 'extmanage']
 
 /**
  * 扩展可申请的能力名：系统能力，或「某个扩展对外提供的能力」。
@@ -144,9 +149,21 @@ export interface ExtTabContribution {
     key: string
     /** 标签页标题：i18n 文案键，由扩展自己提供，避免硬编码中文。 */
     titleKey: string
-    /** 承载内容的 URL（可为内置的伪链接，由扩展自行解释）。 */
-    url: string
-    /** 是否随扩展启用就打开一次。 */
+    /** 承载内容的 URL（可为内置的伪链接，由扩展自行解释）。声明了 `view` 时不需要。 */
+    url?: string
+    /**
+     * 本地视图实现名 —— **程序内置标签页视图**（关键约束与设置面板的 `view` 完全相同：
+     * 只有内置 / 系统扩展能解析，外部扩展填了也会被忽略）。
+     *
+     * 用途是让扩展提供一个**不经过 webview** 的标签页界面。目前只有一个落点：
+     * 外壳的「新建标签页」页 —— 它从内建的 Vue 页面改为由扩展贡献
+     * （见 `xeonsky.browser` 的 `newtab`），扩展停用时外壳回落到自带的极简页。
+     *
+     * 注意带 `view` 的贡献**不会**被当成普通标签页打开（`registerExtTabs` 会跳过），
+     * 它只是一个「视图注册声明」，由外壳在需要时按名字挂载。
+     */
+    view?: string
+    /** 是否随扩展启用就打开一次（仅对 URL 型贡献有意义）。 */
     openOnStart?: boolean
 }
 
@@ -167,6 +184,31 @@ export interface ExtSettingsContribution {
      * 外部扩展填了也会被忽略，落到通用容器视图。
      */
     view?: string
+}
+
+/**
+ * 启动前配置：**内核必须在 `app.whenReady()` 之前**就落地的一组开关。
+ *
+ * 之所以要单独一条契约（而不是等扩展 `activate()` 时再设置）：Electron 有一批设置在
+ * 「进程启动就绪」那一刻就被固化，之后调用静默无效 —— 典型如 `app.disableHardwareAcceleration()`。
+ * 而扩展层的加载（`startLoader()`）本身就在 ready **之后**，等它跑到已经晚了。
+ *
+ * 因此做法反过来：内核在 ready **之前**扫一遍**内置 / 系统**扩展的静态清单（源码随构建进包，
+ * 无需磁盘发现），把这里申报的值先应用掉。扩展 `activate()` 时无需再管这些项。
+ *
+ * **限制**：只有内置 / 系统扩展能申报 —— 外部扩展装在磁盘上，ready 前读它的 manifest
+ * 需要同步 IO 且信任度不足，不做（外部扩展调用这些 API 静默无效，与 Electron 行为一致）。
+ */
+export interface ExtPreReadyConfig {
+    /**
+     * 是否禁用硬件加速。
+     *
+     * 注意语义是**「禁用」**而非常见的「启用」：Electron 原生 API 只有
+     * `disableHardwareAcceleration()`，且用户设置里的默认态是「开启硬件加速」。
+     * 用 `disable` 表述可以避免「未申报」与「申报为 false」两种情况的歧义 ——
+     * 未申报 = 不介入，沿用 Electron 默认（即开启）。
+     */
+    disableHardwareAcceleration?: boolean
 }
 
 /**
@@ -196,6 +238,11 @@ export interface ExtManifest {
     main?: string
     /** 渲染层入口（相对扩展目录）。 */
     renderer?: string
+    /**
+     * 启动前配置：内核在 ready 之前预读并应用（见 {@link ExtPreReadyConfig}）。
+     * 仅内置 / 系统扩展有效。
+     */
+    preReady?: ExtPreReadyConfig
 }
 
 /**

@@ -4,7 +4,8 @@ import { registerIpc, runModuleReady, runModuleQuit } from './app/ipc'
 import { startAutoCheckIfEnabled, noteGracefulExit } from './app/appupdate'
 import { loadSettings, startConfigWatchers, readDiskSettings, syncNativeTheme, ensureDefaultConfigMigration, waitForConfigMigration, configDir } from './app/settings'
 import { createShellWindow, createTray, showMainWindow, syncGlobalHotkey } from './app/ui'
-import { applyHardwareAcceleration, applyWebviewProxy, applyWebviewUserAgent, installWebviewPermissionPolicy } from './app/webview'
+import { initWebviewSession } from './app/webview'
+import { applyPreReadyExtConfig } from './extensions/preready'
 import { applyAutoLaunch } from './app/autolaunch'
 import { resolveInstall } from './dsh/manage'
 import { migrateLegacyInstalls } from './dsh/installs'
@@ -77,10 +78,11 @@ if (!gotLock) {
         showMainWindow()
     })
 
-    // 硬件加速必须在 app ready **之前**决定（Electron 限制）：先单独读一次设置。
+    // 硬件加速必须在 app ready **之前**决定（Electron 限制）：先单独读一次设置，
+    // 连同静态扩展清单里申报的 preReady 配置一起应用（见 extensions/preready.ts）。
     // 读失败就按默认（开着加速）继续，不能让设置文件的问题拦住启动。
     try {
-        applyHardwareAcceleration(loadSettings())
+        applyPreReadyExtConfig(loadSettings())
     } catch {
     /* 用默认值 */
     }
@@ -90,12 +92,6 @@ if (!gotLock) {
     app.whenReady().then(async () => {
         const cfg = loadSettings()
         syncNativeTheme(cfg.theme) // 建窗前先让 webview 深浅色与外壳一致
-        // UA 与代理同理：都只能在 ready 之后设（defaultSession 尚不存在），且必须早于建窗。
-        applyWebviewUserAgent(cfg)
-        // 权限策略同样必须在建窗之前装到 defaultSession 上：晚一步的话，先建出来的 webview
-        // 拿到的还是「未装处理器 = 默认放行一切」的策略。
-        installWebviewPermissionPolicy()
-        await applyWebviewProxy(cfg)
         registerIpc()
         // 各模块的 onReady：注册内核服务、准备需要 Electron 就绪态的能力（建窗之前）。
         await runModuleReady()
@@ -106,6 +102,12 @@ if (!gotLock) {
         } catch (err) {
             log.error({ err }, 'extension layer failed to start (ignored; app continues)')
         }
+        // webview 的会话设置（UA / 代理 / 权限策略）现在由内置扩展 `xeonsky.browser` 落地，
+        // 故必须在 `startLoader()` 之后调用；顺序上仍满足「早于建窗」这条硬约束
+        // —— 晚于建窗的话，先建出来的 webview 拿到的还是「未装处理器 = 默认放行一切」的策略。
+        // 扩展未能激活时（被停用 / 失败），这里降级为不配置会话（内嵌页面用 Electron 默认行为）。
+        // 必须 await：权限处理器要在建窗之前装好。
+        await initWebviewSession(cfg, log)
         createShellWindow() // 首个窗口注册为核心窗口（内部登记角色并设为主窗口）
         createTray()
         syncGlobalHotkey() // 系统全局快捷键（默认 Ctrl+Alt+H 回到主窗口）

@@ -1,4 +1,4 @@
-import type { ColorSchemeId, DownloadThreads, FunLocale, NewTabMode, NpmRegistry, NpmSource, NodeRuntimeKind, PnpmSource, ProxyProtocol, ProxyScope, SearchEngineId, Settings, Shortcut, Theme } from '@shared/types'
+import type { ColorSchemeId, DownloadThreads, FunLocale, NpmRegistry, NpmSource, NodeRuntimeKind, PnpmSource, ProxyProtocol, ProxyScope, Settings, Theme } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 
 /** Short, friendly OS label (pure) used by the About header. */
@@ -49,14 +49,6 @@ export interface SettingsState {
     zoomPercent: number
     ignoreSystemScale: boolean
     funLocale: FunLocale
-    /** 默认搜索引擎。 */
-    searchEngine: SearchEngineId
-    /** 新标签页内容模式。 */
-    newTabMode: NewTabMode
-    /** 新标签页自定义 URL。 */
-    newTabUrl: string
-    /** 导航页常用站点快捷方式。 */
-    shortcuts: Shortcut[]
     /** 系统全局快捷键：任何程序里按下都回到主窗口（Electron accelerator，空串=禁用）。 */
     hotkeyFocusWindow: string
     /** 应用内快捷键：切换终端视图。 */
@@ -69,8 +61,10 @@ export interface SettingsState {
     autoLaunch: boolean
     /** 启动时隐藏到托盘并用系统默认浏览器打开 DSH。 */
     openDshInBrowser: boolean
-    /** 内嵌 webview 的 UserAgent；留空 = 默认。 */
-    webviewUserAgent: string
+    // 注：原 `webviewUserAgent` 已随 webview 功能迁到内置扩展 xeonsky.browser
+    // （设置面板 `/settings/browser`，存于扩展数据目录），内核设置结构里不再有它。
+    // 同理，原 `searchEngine` / `newTabMode` / `newTabUrl` / `shortcuts` 随新标签页导航
+    // 一并迁入该扩展（导航页现在是扩展贡献的标签页视图）。
     /** 配色方案 id（预制方案见 lib/theme.ts）。 */
     colorScheme: ColorSchemeId
     /** 程序图标 id：'' = 内置 Logo；'diy/<文件>' 预制；'user/<文件>' 用户上传。 */
@@ -139,17 +133,12 @@ export function payloadFrom(state: SettingsState): Settings {
         zoomPercent: state.zoomPercent,
         ignoreSystemScale: state.ignoreSystemScale,
         funLocale: state.funLocale,
-        searchEngine: state.searchEngine,
-        newTabMode: state.newTabMode,
-        newTabUrl: state.newTabUrl,
-        shortcuts: state.shortcuts.map((s) => ({ title: s.title, url: s.url })),
         hotkeyFocusWindow: state.hotkeyFocusWindow,
         hotkeyToggleTerminal: state.hotkeyToggleTerminal,
         hotkeyDevTools: state.hotkeyDevTools,
         hardwareAcceleration: state.hardwareAcceleration,
         autoLaunch: state.autoLaunch,
         openDshInBrowser: state.openDshInBrowser,
-        webviewUserAgent: state.webviewUserAgent,
         colorScheme: state.colorScheme,
         appIcon: state.appIcon,
         modelsCredConsent: state.modelsCredConsent

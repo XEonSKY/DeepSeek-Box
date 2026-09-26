@@ -2,32 +2,21 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { FolderOutlined, ReloadOutlined, PoweroffOutlined, SettingOutlined, DesktopOutlined, PlusOutlined, DeleteOutlined } from '@antdv-next/icons'
+import { FolderOutlined, ReloadOutlined, PoweroffOutlined, SettingOutlined } from '@antdv-next/icons'
 import type { ConfigDirInfo } from '@shared/types'
 import TagLabel from '../../components/TagLabel.vue'
 import { useSettingsStore } from './useSettingsStore'
-import { SEARCH_ENGINE_IDS, ENGINE_LABEL_KEY } from '../../lib/engines'
 import { confirmDialog } from '../../lib/confirm'
 
 const { state, actions } = useSettingsStore()
 const { t } = useI18n({ useScope: 'global' })
 
 // a-collapse：默认全部展开。用 :active-key + @change（Antdv 未声明 update:activeKey 事件）。
-const open = ref<string[]>(['general-run', 'general-configdir', 'general-close', 'general-newtab', 'general-reset'])
+const open = ref<string[]>(['general-run', 'general-configdir', 'general-close', 'general-reset'])
 
 /** a-collapse 展开项变化。 */
 function onOpenChange(keys: string[]): void {
     open.value = keys
-}
-
-/** 搜索引擎下拉项：项目约定 a-select 用 :options（见 DshWizard.vue）。 */
-const engineOptions = computed(() => SEARCH_ENGINE_IDS.map((id) => ({ value: id, label: t(ENGINE_LABEL_KEY[id]) })))
-
-function addShortcut(): void {
-    state.shortcuts.push({ title: '', url: '' })
-}
-function removeShortcut(i: number): void {
-    state.shortcuts.splice(i, 1)
 }
 
 // ---- 配置文件夹：默认 ~/.dsbox/{release,dev}，更改后在下次重启自动迁移 ----
@@ -161,42 +150,6 @@ async function cancelPendingMigration(): Promise<void> {
                 </div>
             </a-collapse-panel>
 
-            <a-collapse-panel key="general-newtab">
-                <template #header>
-                    <div class="sec__title"><DesktopOutlined /> {{ $t('sv.general.newTabTitle') }} &amp; {{ $t('sv.general.engineLabel') }}</div>
-                </template>
-                <a-form layout="vertical">
-                    <a-form-item :label="$t('sv.general.engineLabel')">
-                        <a-select v-model:value="state.searchEngine" :options="engineOptions" style="width: 100%" />
-                    </a-form-item>
-
-                    <a-form-item :label="$t('sv.general.newTabTitle')">
-                        <a-radio-group v-model:value="state.newTabMode">
-                            <a-radio :value="'builtin'">{{ $t('sv.general.newTabModeBuiltin') }}</a-radio>
-                            <a-radio :value="'url'">{{ $t('sv.general.newTabModeUrl') }}</a-radio>
-                        </a-radio-group>
-                        <a-input
-                            v-if="state.newTabMode === 'url'"
-                            v-model:value="state.newTabUrl"
-                            :placeholder="$t('sv.general.newTabUrlPlaceholder')"
-                            style="margin-top: 8px"
-                        />
-                    </a-form-item>
-
-                    <a-form-item :label="$t('sv.general.shortcuts')">
-                        <div class="sh-list">
-                            <div v-for="(sc, i) in state.shortcuts" :key="i" class="sh-row">
-                                <a-input v-model:value="sc.title" class="sh-in" :placeholder="$t('sv.general.shortcutTitle')" />
-                                <a-input v-model:value="sc.url" class="sh-in" :placeholder="$t('sv.general.shortcutUrl')" />
-                                <a-button :icon="DeleteOutlined" type="text" @click="removeShortcut(i)" />
-                            </div>
-                        </div>
-                        <a-button :icon="PlusOutlined" @click="addShortcut">{{ $t('sv.general.shortcutAdd') }}</a-button>
-                        <div class="hint">{{ $t('sv.general.shortcutHint') }}</div>
-                    </a-form-item>
-                </a-form>
-            </a-collapse-panel>
-
             <a-collapse-panel key="general-reset">
                 <template #header>
                     <div class="sec__title"><ReloadOutlined /> {{ $t('sv.general.reset') }}</div>
@@ -211,21 +164,6 @@ async function cancelPendingMigration(): Promise<void> {
 </template>
 
 <style scoped>
-.sh-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    width: 100%;
-}
-.sh-row {
-    display: flex;
-    gap: 6px;
-    width: 100%;
-}
-/* 快捷方式的两个输入框等宽撑满，行尾的删除按钮不参与伸缩 */
-.sh-in {
-    flex: 1 1 auto;
-}
 .cfg-pending {
     display: flex;
     align-items: center;

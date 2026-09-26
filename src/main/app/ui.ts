@@ -24,6 +24,8 @@ import {
 } from '../kernel/runtime'
 import { registerShellWindow, hasCoreWindow, promoteNextToCore, windowByContentsId, listWindows } from './windowreg'
 import { attachContextMenu } from './contextmenu'
+import { parsePopupSize as webviewParsePopupSize, decideOpenAction as webviewDecideOpenAction } from './webview'
+import { openExternalSafe } from './openlink'
 import { dshInstalled } from '../dsh/manage'
 import { effectiveIconPath } from './appicon'
 import { logger } from '../kernel/logger'
@@ -76,37 +78,34 @@ function hookIconTheme(): void {
     })
 }
 
-function clampPopupPx(n: number): number {
-    if (!Number.isFinite(n) || n <= 0) return 0
-    return Math.max(300, Math.min(1600, Math.round(n)))
-}
-
-/** 从 window.open 的 features 提取宽高（默认用 900x720）。 */
+/** 从 window.open 的 features 提取宽高（默认用 900x720）。
+ *
+ *  实现与规则已迁到内置扩展 `xeonsky.browser`（`parsePopupSize`），这里只留门面转发；
+ *  扩展不可用时回落内核兜底。见 `app/webview.ts`。 */
 function parsePopupSize(features: string): { width: number; height: number } {
-    const out = { width: 900, height: 720 }
-    const mW = /(?:^|,)width=(\d+)/i.exec(features)
-    const mH = /(?:^|,)height=(\d+)/i.exec(features)
-    const w = mW ? clampPopupPx(Number(mW[1])) : 0
-    const h = mH ? clampPopupPx(Number(mH[1])) : 0
-    if (w) out.width = w
-    if (h) out.height = h
-    return out
-}
-
-/** 弹窗特征：带 frameName 或 features 视为真弹窗（开独立窗口），否则按普通新标签链接处理。 */
-function isPopupRequest(frameName: string, features: string): boolean {
-    return !!frameName || !!features
+    return webviewParsePopupSize(features)
 }
 
 /**
- * 某 webview 内发生的 target=_blank / window.open：
- * - 真弹窗（带 frameName/features）→ 独立轻量 BrowserWindow（不入壳窗口册）。
- * - 普通 target=_blank → 应用内新标签页，但只定向到“发起者所在的那个壳窗口”
- *   （多窗口下不再群发给所有窗口）。owner 为发起窗口；缺省（如弹窗内再点普通链接）回退到核心窗口。
+ * 某 webview 内发生的 target=_blank / window.open 的**执行端**。
+ *
+ * 「该不该接管、接管成什么」由内置扩展 `xeonsky.browser` 判定（`decideOpenAction`），
+ * 这里只执行它给出的动作：
+ *  - `popup`    真弹窗（带 frameName/features）→ 独立轻量 BrowserWindow；
+ *  - `tab`      普通 target=_blank → 应用内新标签页，且只定向到「发起者所在的那个壳窗口」
+ *               （多窗口下不再群发给所有窗口）；owner 缺省（如弹窗内再点普通链接）回退核心窗口；
+ *  - `external` 非 http(s)（mailto: 等），**或扩展不可用**（浏览器扩展被停用）→ 系统默认程序/浏览器。
+ *
+ * 机制（建窗 / 发事件）仍在内核：外壳内容区本身就靠 `<webview>` 渲染，这条通路不能被
+ * 可停用的扩展拿掉。但「谁来浏览」这件事在扩展缺席时整体让给系统浏览器 —— 见 `app/webview.ts`。
  */
 function openWebWindow(url: string, frameName: string, features: string, owner?: BrowserWindow | null): void {
-    if (!/^https?:/i.test(url)) return
-    if (isPopupRequest(frameName, features)) {
+    const action = webviewDecideOpenAction(url, frameName, features)
+    if (action === 'external') {
+        void openExternalSafe(url)
+        return
+    }
+    if (action === 'popup') {
         createPopupWindow(url, features)
     } else if (owner && !owner.isDestroyed()) {
         sendToWindow(owner, 'ui:new-tab', url)
@@ -523,7 +522,7 @@ export function createTray(): void {
 }
 
 /** Tray-driven real quit. */
-export function quitApp(): void {
+function quitApp(): void {
     setQuitting(true)
     destroyTray()
     app.quit()

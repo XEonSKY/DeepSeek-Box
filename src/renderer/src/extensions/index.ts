@@ -1,6 +1,5 @@
 import { refreshExtensions } from './store'
 import { registerExtTabs } from './tabs'
-import { registerExtPanels } from './panels'
 import { installExtensionLocales } from './locales'
 
 /**
@@ -26,9 +25,9 @@ export function startRendererExtensions(): void {
         void refreshExtensions()
     })
 
-    // 把两个控制点的注册函数挂到 store 上（store 只存数据，具体落地在这里）。
+    // 标签页控制点：贡献点变化时把 openOnStart 的扩展标签页自动打开一次。
+    // （设置侧栏控制点无需注册 —— SettingsView 直接响应式读 `extMenus()`。）
     registerExtTabs()
-    registerExtPanels()
 }
 
 export { extState, refreshExtensions } from './store'

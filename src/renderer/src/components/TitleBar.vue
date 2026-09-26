@@ -17,7 +17,7 @@ import { tt } from '../lib/locales'
 import WindowControls from './WindowControls.vue'
 import { useView, useGoView } from '../shell/viewnav'
 import { webTabs, activeTab, findTab, activateTab, closeTab, openTab, openNewTab, toggleKeep, tabLabel } from '../shell/tabs'
-import { shellMeta } from '../shell/shellmeta'
+import { shellMeta } from '../shell/state'
 import { useTabDrag } from '../shell/useTabDrag'
 import { NEWTAB_URL } from '@shared/types'
 
@@ -130,15 +130,9 @@ function onTabsWheel(e: WheelEvent): void {
     el.scrollLeft += delta
 }
 
-/** ＋ 新建：按设置开内置导航页或自定义 URL。 */
-async function onPlus(): Promise<void> {
-    try {
-        const s = await window.api.get('/settings')
-        if (s.newTabMode === 'url' && s.newTabUrl) openTab(s.newTabUrl)
-        else openNewTab()
-    } catch {
-        openNewTab()
-    }
+/** ＋ 新建：开一个内置标签页导航（导航页内容由 xeonsky.browser 扩展贡献）。 */
+function onPlus(): void {
+    openNewTab()
     go('web')
 }
 

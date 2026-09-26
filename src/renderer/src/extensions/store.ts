@@ -79,11 +79,3 @@ export async function refreshExtensions(): Promise<void> {
     rebuild()
     extState.loaded = true
 }
-
-/** 清空（扩展列表变化但拉取失败时的兜底）。 */
-export function clearExtensions(): void {
-    extState.info = null
-    extState.tabs = []
-    extState.panels = []
-    extState.loaded = false
-}

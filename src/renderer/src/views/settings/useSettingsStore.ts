@@ -44,17 +44,12 @@ export const useSettingsStore = defineStore('settings', () => {
         zoomPercent: DEFAULT_SETTINGS.zoomPercent,
         ignoreSystemScale: DEFAULT_SETTINGS.ignoreSystemScale,
         funLocale: DEFAULT_SETTINGS.funLocale,
-        searchEngine: DEFAULT_SETTINGS.searchEngine,
-        newTabMode: DEFAULT_SETTINGS.newTabMode,
-        newTabUrl: DEFAULT_SETTINGS.newTabUrl,
-        shortcuts: [...DEFAULT_SETTINGS.shortcuts],
         hotkeyFocusWindow: DEFAULT_SETTINGS.hotkeyFocusWindow,
         hotkeyToggleTerminal: DEFAULT_SETTINGS.hotkeyToggleTerminal,
         hotkeyDevTools: DEFAULT_SETTINGS.hotkeyDevTools,
         hardwareAcceleration: DEFAULT_SETTINGS.hardwareAcceleration,
         autoLaunch: DEFAULT_SETTINGS.autoLaunch,
         openDshInBrowser: DEFAULT_SETTINGS.openDshInBrowser,
-        webviewUserAgent: DEFAULT_SETTINGS.webviewUserAgent,
         colorScheme: DEFAULT_SETTINGS.colorScheme,
         appIcon: DEFAULT_SETTINGS.appIcon,
         modelsCredConsent: DEFAULT_SETTINGS.modelsCredConsent,
@@ -100,19 +95,12 @@ export const useSettingsStore = defineStore('settings', () => {
         state.zoomPercent = v.zoomPercent
         state.ignoreSystemScale = s.ignoreSystemScale === true
         state.funLocale = v.funLocale
-        state.searchEngine = v.searchEngine
-        state.newTabMode = v.newTabMode
-        state.newTabUrl = v.newTabUrl ?? ''
-        state.shortcuts = Array.isArray(v.shortcuts)
-            ? v.shortcuts.map((sc) => ({ title: sc.title || '', url: sc.url || '' }))
-            : [...DEFAULT_SETTINGS.shortcuts]
         state.hotkeyFocusWindow = v.hotkeyFocusWindow
         state.hotkeyToggleTerminal = v.hotkeyToggleTerminal
         state.hotkeyDevTools = v.hotkeyDevTools
         state.hardwareAcceleration = s.hardwareAcceleration !== false
         state.autoLaunch = s.autoLaunch === true
         state.openDshInBrowser = s.openDshInBrowser === true
-        state.webviewUserAgent = v.webviewUserAgent
         state.colorScheme = v.colorScheme
         state.appIcon = v.appIcon
         state.modelsCredConsent = s.modelsCredConsent === true
