@@ -181,7 +181,6 @@ export async function deployLocalNode(
             destDir: stage,
             fileName: `${dir}.${extOf()}`,
             tmpDir: tempDownloadDir(),
-            threads: loadSettings().downloadThreads,
             signal: token.signal,
             // Node 发行包属于「Node 下载部署」这一档代理范围
             proxyScope: 'node',

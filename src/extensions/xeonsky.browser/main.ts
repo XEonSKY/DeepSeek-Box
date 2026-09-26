@@ -32,7 +32,7 @@ import type { SearchEngineId, Shortcut } from './shared'
  * UA 这一项原先存在内核 `Settings.webviewUserAgent` 里。迁到本扩展后，它改为存在
  * **扩展自己的数据目录**（`ctx.dataDir/config.json`）—— 扩展不再伸手进内核设置结构，
  * 内核也就不必为「浏览器」这个可选功能保留一个字段（停用该扩展后设置里也不该残留）。
- * 与 `xeonsky.download` 的 `config.json` 同一套做法。
+ * 与 `xeonsky.extm` 的 `config.json` 同一套做法。
  *
  * ## 硬件加速为什么不在本文件
  *

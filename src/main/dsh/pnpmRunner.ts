@@ -187,7 +187,6 @@ async function ensureBundledPnpm(
         destDir: stage,
         fileName: `pnpm-${target}.tgz`,
         tmpDir: tempDownloadDir(),
-        threads: cfg.downloadThreads,
         signal,
         proxyScope: 'npm',
         onProgress: (p) => onProgress?.({ phase: 'download', ...p })

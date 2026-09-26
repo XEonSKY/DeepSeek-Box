@@ -1,13 +1,14 @@
 /**
- * 扩展 `xeonsky.download` 的能力契约与任务模型。
+ * 内核**下载模块**的契约与任务模型。
  *
- * 放在扩展自己的目录里（而不是 `src/shared/`）的原因与 `xeonsky.extm/sevenzip/types.ts` 相同：
- * 这些形状只服务本扩展，不是内核契约。内核的 `src/shared/api.ts` 是**内置端点**的
- * 唯一事实来源，而扩展对外提供的能力走 `ext:<id>` 命名空间，形状由扩展自己持有。
+ * 原先是内置扩展 `xeonsky.download` 的 `types.ts`，随下载能力一起下沉到内核
+ * （理由见 `index.ts`）。放在 `src/main/download/` 下与实现同目录：
+ * `src/shared/api.ts` 是**内置 IPC 端点**的唯一事实来源，而下载模块既要被内核
+ * 直接调用（`dsh/download.ts` 门面）又有自己的端点，形状由本文件持有。
  *
  * 三类东西：
  *  - **任务模型**（{@link TaskRecord} / {@link TaskView}）—— 持久化的形状与界面看到的形状；
- *  - **能力入参出参**（{@link CreateOptions} / {@link DownloadResult} …）—— 能力面契约；
+ *  - **调用入参出参**（{@link CreateOptions} / {@link DownloadResult} …）；
  *  - **配置**（{@link DownloadConfig}）—— 并发、限速、默认目录。
  */
 
@@ -18,7 +19,7 @@
 /**
  * 下载可用的「代理档位」。
  *
- * 与 `system.net` 的 `HttpScope` 同源，但**只暴露三档**：`update` 是应用自更新的专属
+ * 与 `dsh/http.ts` 的 `HttpScope` 同源，但**只暴露三档**：`update` 是应用自更新的专属
  * session、`registry` 只服务于注册表查询，都不该被下载任务使用。
  * 默认 `npm`（历史上的下载只服务于 npm / dsh 包）。
  */
@@ -54,7 +55,7 @@ export interface SegmentProgress {
 }
 
 /**
- * 任务的**持久化**形状（写进 `dataDir/tasks.json`）。
+ * 任务的**持久化**形状（写进 `<配置目录>/data/download/tasks.json`）。
  *
  * 只存「重启后仍需要」的东西；实时速度、进度这类派生物不落盘（见 {@link TaskView}）。
  */
@@ -65,7 +66,7 @@ export interface TaskRecord {
     fileName: string
     /** 最终落盘目录。 */
     destDir: string
-    /** 分段临时文件所在目录（默认 dataDir/tmp）。 */
+    /** 分段临时文件所在目录（默认 <配置目录>/data/download/tmp）。 */
     tmpDir: string
     /** 服务端声明的总大小（0 = 未知）。 */
     total: number
@@ -103,7 +104,7 @@ export interface TaskView extends TaskRecord {
     speed: number
 }
 
-/** 进度回调的形状（与内核 `dsh/downloader.ts` 历史形状一致，便于调用方平滑迁移）。 */
+/** 进度回调的形状（与内核历史 `dsh/downloader.ts` 的形状一致，便于调用方平滑迁移）。 */
 export interface DownloadProgress {
     total: number
     downloaded: number
@@ -126,7 +127,7 @@ export interface DownloadResult {
 // 配置
 // ---------------------------------------------------------------------------
 
-/** 扩展配置（存 `dataDir/config.json`）。 */
+/** 下载模块配置（存 `<配置目录>/data/download/config.json`）。 */
 export interface DownloadConfig {
     /** 默认下载目录（空串 = 系统下载目录）。 */
     defaultDir: string
@@ -147,7 +148,7 @@ export const DEFAULT_CONFIG: DownloadConfig = {
 }
 
 // ---------------------------------------------------------------------------
-// 能力面入参
+// 入参
 // ---------------------------------------------------------------------------
 
 /** 新建任务的入参。 */
@@ -165,10 +166,7 @@ export interface CreateOptions {
     start?: boolean
 }
 
-/**
- * 阻塞式下载的入参 —— 形状刻意与内核历史上 `dsh/downloader.ts` 的 `DownloadFileOpts`
- * 保持一致，于是 `dsh/nodeenv` / `npmRunner` / `pnpmRunner` 换后端时**一行都不用改**。
- */
+/** 阻塞式下载的入参（与内核 `dsh/downloader.ts` 的 `DownloadFileOpts` 同形）。 */
 export interface DownloadFileOptions {
     url: string
     destDir: string
@@ -182,7 +180,7 @@ export interface DownloadFileOptions {
     signal?: AbortSignal
 }
 
-/** 状态快照（界面与自检用）。 */
+/** 状态快照（自检与界面用）。 */
 export interface DownloadStatus {
     /** 引擎是否可用。 */
     available: boolean
@@ -194,7 +192,7 @@ export interface DownloadStatus {
     tasks: TaskView[]
 }
 
-/** 本扩展对外提供的动作名（与 main.ts 的 provides.register 表一致）。 */
+/** 本模块对外提供的动作名（与 index.ts 的动作表一致）。 */
 export const CAPABILITY_ACTIONS = [
     'status',
     'list',

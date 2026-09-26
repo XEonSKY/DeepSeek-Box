@@ -1,18 +1,18 @@
 /**
- * 扩展 `xeonsky.download` 的**下载引擎**：分段并发、跨会话断点续传、限速、重试、校验。
+ * 内核的**下载引擎**：分段并发、跨会话断点续传、限速、重试、校验。
  *
- * 与 `main.ts` 的分工：本文件只做「把一个 URL 变成一个落盘文件」，**不认识任务表**
- * （排队、持久化、状态机都在 main.ts）。开放一个注入点 {@link OpenStream} ——
- * 由调用方把「怎么发一次 HTTP」传进来，于是引擎不依赖任何网络栈实现：
- * 现在接的是系统能力的 `net.stream`（走内核 session，代理 / Cookie 由内核管），
- * 将来换成别的出口只是换一个函数。
+ * 与 `index.ts`（任务层）的分工：本文件只做「把一个 URL 变成一个落盘文件」，
+ * **不认识任务表**（排队、持久化、状态机都在 index.ts）。
  *
- * 为什么可以直接 `import node:fs`（而别的 I/O 走 fs 能力）：
- * 下载**必须**按偏移量随机写同一个文件（`r+` + `start`），而系统能力 `fs` 提供的是
- * read/write/exists/stat/mkdir/remove 这类**整文件**动作，没有流式写口子 ——
- * 为它加一个「开句柄写偏移」的动作等于把下载算法搬进内核，与「下载归扩展」相悖。
- * 所以流式写盘这一步在扩展内直接用 node:fs，**只写自己的临时目录**（dataDir/tmp），
- * 目录级清理仍然走 fs 能力的 `removeQuietly`（保证 removeTree 不跟符号链接的语义）。
+ * ## 它从哪来
+ *
+ * 原先是内置扩展 `xeonsky.download` 的 `engine.ts`，经系统能力 `net.stream` 发请求。
+ * 现已下沉到内核（连同任务层）—— 下载是「把文件弄到磁盘上」的基础设施，
+ * 装 Node 运行时 / npm / pnpm 都指着它，不该是可被用户停用的东西。
+ *
+ * 下沉带来的简化：不再需要 {@link OpenStream} 那个注入点 —— 引擎直接调
+ * `dsh/http.ts` 的 `httpFetch`（代理 / Cookie / UA 由 scope 决定），
+ * 少一层「调用方把怎么发 HTTP 传进来」的间接。
  *
  * 断点续传的做法：`.part` 文件旁边放一个 `.part.json` 侧车，记录总大小、ETag、
  * Last-Modified 与每个分段的完成偏移。下次下载同一 URL 时先探测服务端：
@@ -23,15 +23,18 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { once } from 'node:events'
-import type { Readable } from 'node:stream'
+import { Readable } from 'node:stream'
+import type { HttpScope } from '../dsh/http'
+import { httpFetch } from '../dsh/http'
+import { removeQuietly } from '../kernel/treeops'
 import type { DownloadProgress, DownloadResult, ProxyScope, SegmentProgress } from './types'
 
 // ---------------------------------------------------------------------------
-// 注入点：怎么发一次 HTTP
+// 发请求
 // ---------------------------------------------------------------------------
 
-/** 一次流式的响应（刻意不给 Response 本体：那会把 Electron session 的细节漏出去）。 */
-export interface OpenedStream {
+/** 一次流式响应的形状。 */
+interface OpenedStream {
     ok: boolean
     status: number
     headers: Record<string, string>
@@ -39,13 +42,52 @@ export interface OpenedStream {
     body: Readable | null
 }
 
-/**
- * 发起一次（可带 Range 的）请求。
- *
- * 由 main.ts 用系统能力 `net.stream` 实现：代理、Cookie、UA 仍然由内核的 session 决定，
- * 扩展只决定 URL、头与代理档位。
- */
-export type OpenStream = (url: string, init: { headers?: Record<string, string>; scope?: ProxyScope; signal?: AbortSignal }) => Promise<OpenedStream>
+/** 把 Headers 摊成小写键的普通对象（Header 名按规范已归一为小写）。 */
+function headersOf(res: Response): Record<string, string> {
+    const out: Record<string, string> = {}
+    res.headers.forEach((value, key) => {
+        out[key] = value
+    })
+    return out
+}
+
+/** 把 web ReadableStream 转成 Node 可读流；不兼容时退回手动拉读。 */
+function toNodeReadable(res: Response): Readable | null {
+    const body = res.body
+    if (!body) return null
+    try {
+        return Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0])
+    } catch {
+        // 极少数情况下 Chromium 的 ReadableStream 与 Node 的 fromWeb 不能互操作，
+        // 退回「手动拉一块推一块」的实现，语义等价。
+        const reader = body.getReader()
+        return new Readable({
+            read(): void {
+                reader.read().then(
+                    ({ done, value }) => {
+                        if (done) this.push(null)
+                        else this.push(Buffer.from(value))
+                    },
+                    (err: unknown) => this.destroy(err as Error)
+                )
+            },
+            destroy(err: Error | null, cb: (e: Error | null) => void): void {
+                void reader.cancel().catch(() => undefined)
+                cb(err)
+            }
+        })
+    }
+}
+
+/** 发一次（可带 Range 的）流式请求：经 `httpFetch`，代理按 scope 生效。 */
+async function open(url: string, init: { headers?: Record<string, string>; scope?: ProxyScope; signal?: AbortSignal }): Promise<OpenedStream> {
+    const res = await httpFetch((init.scope ?? 'npm') as HttpScope, url, {
+        method: 'GET',
+        headers: init.headers,
+        signal: init.signal
+    })
+    return { ok: res.ok, status: res.status, headers: headersOf(res), body: toNodeReadable(res) }
+}
 
 // ---------------------------------------------------------------------------
 // 限速
@@ -217,8 +259,8 @@ function dropBody(res: OpenedStream): void {
     }
 }
 
-/** 先试一个 Range 请求拿到总大小；不支持 Range 时退回普通 HEAD/GET 的 content-length。 */
-async function probe(open: OpenStream, url: string, scope: ProxyScope, signal?: AbortSignal): Promise<ProbeResult> {
+/** 先试一个 Range 请求拿到总大小；不支持 Range 时退回普通 GET 的 content-length。 */
+async function probe(url: string, scope: ProxyScope, signal?: AbortSignal): Promise<ProbeResult> {
     const res = await open(url, { headers: { Range: 'bytes=0-0' }, scope, signal })
     const etag = res.headers['etag'] ?? res.headers['ETag'] ?? ''
     const lastModified = res.headers['last-modified'] ?? res.headers['Last-Modified'] ?? ''
@@ -301,7 +343,7 @@ async function moveFile(from: string, to: string): Promise<void> {
         await fs.promises.rename(from, to)
     } catch {
         await fs.promises.copyFile(from, to)
-        await fs.promises.rm(from, { force: true })
+        await removeQuietly(from)
     }
 }
 
@@ -351,7 +393,6 @@ function makeReporter(baseBytes: number, emit: (p: DownloadProgress) => void, st
  * （`pos` 只在成功写入后前进），所以重试不会重复写、也不会漏写。
  */
 async function runSegment(
-    open: OpenStream,
     url: string,
     file: string,
     seg: SegmentProgress,
@@ -405,7 +446,6 @@ async function runSegment(
 
 /** 单流下载（服务端不支持 Range，或文件太小）；不支持续传，每次从头写。 */
 async function singleStream(
-    open: OpenStream,
     url: string,
     file: string,
     scope: ProxyScope,
@@ -453,7 +493,7 @@ async function singleStream(
  * 失败时**保留** `.part` 与侧车：下一次调用会接着下（断点续传的意义正在于此）。
  * 只有「服务端文件变了 / 不支持 Range」这两种情况才会丢弃重来。
  */
-export async function downloadWithEngine(open: OpenStream, o: EngineOptions): Promise<DownloadResult> {
+export async function downloadWithEngine(o: EngineOptions): Promise<DownloadResult> {
     const controller = new AbortController()
     const outer = o.signal
     if (outer) {
@@ -471,7 +511,7 @@ export async function downloadWithEngine(open: OpenStream, o: EngineOptions): Pr
 
     let info: ProbeResult
     try {
-        info = await probe(open, o.url, o.proxyScope, signal)
+        info = await probe(o.url, o.proxyScope, signal)
     } catch (err) {
         return { ok: false, canceled: signal.aborted, message: err instanceof Error ? err.message : String(err), file: o.finalPath }
     }
@@ -517,12 +557,12 @@ export async function downloadWithEngine(open: OpenStream, o: EngineOptions): Pr
 
     try {
         if (!segmented) {
-            await singleStream(open, o.url, o.tmpPath, o.proxyScope, o.limiter, signal, state, report)
+            await singleStream(o.url, o.tmpPath, o.proxyScope, o.limiter, signal, state, report)
         } else {
-            if (!resume) await fs.promises.rm(o.tmpPath, { force: true })
+            if (!resume) await removeQuietly(o.tmpPath)
             await preallocate(o.tmpPath, info.total)
             await Promise.all(
-                segments.map((seg) => runSegment(open, o.url, o.tmpPath, seg, o.proxyScope, o.limiter, signal, state, report))
+                segments.map((seg) => runSegment(o.url, o.tmpPath, seg, o.proxyScope, o.limiter, signal, state, report))
             )
         }
         report(true)
@@ -535,7 +575,7 @@ export async function downloadWithEngine(open: OpenStream, o: EngineOptions): Pr
 
         await fs.promises.mkdir(path.dirname(o.finalPath), { recursive: true })
         await moveFile(o.tmpPath, o.finalPath)
-        await fs.promises.rm(o.sidecarPath, { force: true })
+        await removeQuietly(o.sidecarPath)
         return { ok: true, file: o.finalPath }
     } catch (err) {
         const canceled = signal.aborted || (err instanceof Error && err.message === 'canceled')

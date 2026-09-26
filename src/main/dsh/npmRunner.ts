@@ -273,7 +273,6 @@ async function ensureBundledNpm(
         destDir: stage,
         fileName: `npm-${target}.tgz`,
         tmpDir: tempDownloadDir(),
-        threads: cfg.downloadThreads,
         signal,
         // 内置 npm 的安装包属于「npm 安装 / 下载」这一档代理范围
         proxyScope: 'npm',

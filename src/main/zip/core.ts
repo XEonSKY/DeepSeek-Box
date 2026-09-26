@@ -1,5 +1,8 @@
+import fs from 'node:fs'
 import path from 'node:path'
-import type { ExtContext } from '@main/extensions/loader/ctx'
+import { configDir } from '../app/settings'
+import { removeQuietly } from '../kernel/treeops'
+import { runProc } from '../dsh/proc'
 import {
     BUNDLED_VERSION,
     buildCompressArgs,
@@ -22,39 +25,44 @@ import {
 } from './types'
 
 /**
- * `xeonsky.extm` 的**内部 7-Zip 模块** —— 基于 7-Zip 核心的归档能力。
+ * 内核的 **7-Zip 归档模块**（原内置扩展 `xeonsky.zip` → 后并入 `xeonsky.extm`
+ * 的内部模块 → 现下沉到内核）。
  *
- * 它原先是一个独立的内置扩展 `xeonsky.zip`，现已并入扩展管理：7-Zip 是
- * **「扩展管理页的归档区块」+「外部扩展包解压」** 这一件事的实现细节，不该是可独立
- * 启停的扩展 —— 独立时用户能在界面里把它关掉，于是「扩展包加载」这种内建功能
- * 会莫名失灵（停用 7-Zip 就让所有压缩包扩展消失）。并入后不再有「内部模块被
- * 用户停用」这个状态。
+ * ## 为什么它是内核能力而不是扩展
  *
- * ## 它与内核的关系
+ * 7-Zip 在本程序里的真正用途只有一件：**解压扩展包**（`.zip` / `.xeonsky-ext`）。
+ * 那是加载器的「装配」职责，而加载器本身就是内核的一部分 —— 让内核反过来
+ * 经能力槽去取一个**可被用户停用**的扩展，会出现「停用 7-Zip 就让所有压缩包扩展消失」
+ * 这种把内建功能变成可关开关的怪状态。下沉到内核后不再有这个状态。
  *
- * 本文件**不 import 任何内核模块**（除类型 `ExtContext`）：所有能力都经
- * `ctx.capabilities.call(...)` 取用。依赖的系统能力写进扩展的 `manifest.ts`：
- *  - `fs`   读写自己的配置、探测二进制、建目录；
- *  - `proc` 跑 7z 命令行（复用内核 runChild 的登记 / 取消 / stderr 收集）。
+ * ## 它现在直接依赖什么
+ *
+ * 与作为扩展时不同，这里**不再经能力槽取用 fs / proc**，而是直接调用内核实现：
+ *  - 文件读写用 `node:fs`（模块就在主进程里，没有跨进程边界要守）；
+ *  - 跑 7z 命令行走 {@link runProc} —— 与系统能力 `proc` **共用同一份实现**
+ *    （`dsh/proc.ts` 的 `system.proc` 是它的转发），所以登记 / 取消 / stderr 收集
+ *    的行为不会分叉。
+ *  - 用户指定的二进制路径存在**配置目录**下（`configDir()/data/zip.json`），
+ *    不再是扩展数据目录 —— 内核模块没有扩展生命周期。
  *
  * ## 二进制内置（不再运行时下载）
  *
- * 7-Zip 命令行核心**随扩展内置**：`src/extensions/xeonsky.extm/sevenzip/bin/<平台>/`
+ * 7-Zip 命令行核心**随应用内置**：`src/main/zip/bin/<平台>/`
  * （Windows 取官方安装包里的完整版 `7z.exe` + `7z.dll`；Linux / macOS 取 `7zz`）。
  * 打包时用 `asarUnpack` 把这些可执行文件解开（asar 内的可执行文件**不能被执行**），
  * 因此定位路径里要把 `app.asar` 换回 `app.asar.unpacked`。
  *
  * ## 二进制的三级定位
  *
- * 1. 用户在面板里**指定**的路径（存扩展自己的配置文件，最高优先）；
+ * 1. 用户**指定**的路径（存配置文件，最高优先）；
  * 2. **内置**的当前平台二进制（绝大多数情况就是它，开箱即用）；
  * 3. **系统已装**的 7-Zip（各平台常见安装位，仅作兜底）。
  *
  * 定位结果会缓存；改路径时清缓存。
  */
 
-/** 扩展私有配置（存扩展自己的目录，不进内核设置）。 */
-interface ExtConfig {
+/** 用户在配置文件里的覆盖项。 */
+interface ZipConfig {
     /** 用户指定的 7z 可执行文件路径（空串 = 自动定位）。 */
     binaryPath: string
     /** 用户选定的目标平台键（`<os>-<arch>`）；缺省 = 跟随当前平台。 */
@@ -69,7 +77,7 @@ function mergeOutput(r: { stdout: string; stderrTail: string }): string {
     return parts.join('\n')
 }
 
-/** 内部 7-Zip 模块的公开面（{@link createSevenZip} 的返回）。 */
+/** 内核 7-Zip 模块的公开面。 */
 export interface SevenZip {
     status: () => Promise<SevenZipStatus>
     locate: () => { path: string; source: SevenZipStatus['source'] }
@@ -86,33 +94,42 @@ export interface SevenZip {
 }
 
 /**
+ * 内置二进制目录的绝对路径。
+ *
+ * 打包产物里 `__dirname` 是 `…/app.asar/out/main`，上两级即应用根；可执行文件被
+ * asarUnpack 解到 `app.asar.unpacked`，所以要把 `.asar` 换回 `.asar.unpacked` ——
+ * 否则打包后会「文件存在但无法执行」。
+ */
+function resolveBinDir(): string {
+    return path
+        .join(__dirname, '../../src/main/zip/bin')
+        .replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`)
+}
+
+/** 用户指定二进制路径的落盘位置（配置目录下，跨重装保留）。 */
+function configPath(): string {
+    return path.join(configDir(), 'data', 'zip.json')
+}
+
+/**
  * 创建一个 7-Zip 运行时（闭包持有配置与定位缓存）。
  *
- * 做成工厂而不是模块级单例：缓存与配置读写都绑定到**这次 activate 的 ctx**
- * （扩展重载时重新建一份，旧的自然丢弃），与「扩展不该持有跨生命周期的全局态」一致。
+ * 做成工厂而不是模块级单例：缓存与配置读写都绑定到**这一份实例**（测试或将来
+ * 换配置目录时重新建一份，旧的自然丢弃），与「模块不持有跨生命周期的全局可变态」一致。
  */
-export function createSevenZip(ctx: ExtContext): SevenZip {
-    const fsCall = <T,>(action: string, ...args: unknown[]): T => ctx.capabilities.call<T>('fs', action, ...args)
-    const procCall = <T,>(action: string, ...args: unknown[]): T => ctx.capabilities.call<T>('proc', action, ...args)
+export function createZip(): SevenZip {
+    const binDir = resolveBinDir()
+    const cfgPath = configPath()
 
-    /**
-     * 内置二进制目录。
-     *
-     * 打包产物里 `__dirname` 是 `…/app.asar/out/main`，上两级即应用根；
-     * 可执行文件被 asarUnpack 解到 `app.asar.unpacked`，所以要把 `.asar` 换回去 ——
-     * 否则打包后会「文件存在但无法执行」。
-     */
-    const binDir = path
-        .join(__dirname, '../../src/extensions/xeonsky.extm/sevenzip/bin')
-        .replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`)
-    /** 扩展自己的配置文件（数据目录，重装不丢）。 */
-    const configPath = path.join(ctx.dataDir, 'sevenzip.json')
-
-    function readConfig(): ExtConfig {
-        const raw = fsCall<string | null>('readIfExists', configPath)
-        if (!raw) return { binaryPath: '' }
+    function readConfig(): ZipConfig {
+        let raw: string
         try {
-            const parsed = JSON.parse(raw) as Partial<ExtConfig>
+            raw = fs.readFileSync(cfgPath, 'utf8')
+        } catch {
+            return { binaryPath: '' }
+        }
+        try {
+            const parsed = JSON.parse(raw) as Partial<ZipConfig>
             return {
                 binaryPath: typeof parsed.binaryPath === 'string' ? parsed.binaryPath : '',
                 targetKey: typeof parsed.targetKey === 'string' ? parsed.targetKey : undefined
@@ -122,8 +139,13 @@ export function createSevenZip(ctx: ExtContext): SevenZip {
         }
     }
 
-    function writeConfig(cfg: ExtConfig): void {
-        fsCall('write', configPath, JSON.stringify(cfg, null, 4))
+    function writeConfig(cfg: ZipConfig): void {
+        try {
+            fs.mkdirSync(path.dirname(cfgPath), { recursive: true })
+            fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 4), 'utf8')
+        } catch {
+            /* 配置写不进去只影响下次启动的定位，不该让本次操作失败 */
+        }
     }
 
     function targetKeyOf(t: { os: string; arch: string }): string {
@@ -177,7 +199,7 @@ export function createSevenZip(ctx: ExtContext): SevenZip {
         const cfg = readConfig()
         const bundled = bundledBinary()
         for (const p of candidatePaths()) {
-            if (p && fsCall<boolean>('exists', p)) {
+            if (p && fs.existsSync(p)) {
                 const source: SevenZipStatus['source'] =
                     p === cfg.binaryPath.trim() ? 'custom' : bundled && p === bundled.file ? 'bundled' : 'system'
                 cached = { path: p, source }
@@ -195,12 +217,7 @@ export function createSevenZip(ctx: ExtContext): SevenZip {
         if (!bin) {
             return { ok: false, code: null, canceled: false, output: '7-Zip binary not found (bundled core missing?)' }
         }
-        const r = await procCall<{ ok: boolean; code: number | null; canceled: boolean; stdout: string; stderrTail: string }>(
-            'run',
-            bin,
-            argv,
-            { timeoutMs: timeoutMs ?? 30 * 60 * 1000 }
-        )
+        const r = await runProc(bin, argv, { timeoutMs: timeoutMs ?? 30 * 60 * 1000 })
         return { ok: r.ok, code: r.code, canceled: r.canceled, output: mergeOutput(r) }
     }
 
@@ -241,7 +258,11 @@ export function createSevenZip(ctx: ExtContext): SevenZip {
 
     /** 解压。 */
     async function extract(options: ExtractOptions): Promise<SevenZipRunResult & { destDir: string }> {
-        fsCall('mkdir', options.destDir)
+        try {
+            fs.mkdirSync(options.destDir, { recursive: true })
+        } catch {
+            /* 目录已存在或由 7z 自己创建 */
+        }
         const r = await run7z(buildExtractArgs(options))
         return { ...r, destDir: options.destDir }
     }
@@ -280,5 +301,103 @@ export function createSevenZip(ctx: ExtContext): SevenZip {
         list,
         test,
         run: (argv: unknown) => run7z(Array.isArray(argv) ? argv.map(String) : [])
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 加载器要用的三个动作（原 `ext:xeonsky.extm` 的对外能力，同样形状）
+// ---------------------------------------------------------------------------
+
+/** 支持的包文件扩展名（大小写不敏感；`.xeonsky-ext` 是本项目的 zip 变种）。 */
+const PKG_EXTS = ['.zip', '.xeonsky-ext'] as const
+
+/** 单例：内核里只有一份 7-Zip 运行时（定位缓存也共用）。 */
+let singleton: SevenZip | null = null
+
+/** 取内核 7-Zip 模块（首次访问时建立）。 */
+export function zipModule(): SevenZip {
+    if (!singleton) singleton = createZip()
+    return singleton
+}
+
+/** 7-Zip 是否可用（实时判定：探测二进制能否跑出版本）。 */
+export async function zipAvailable(): Promise<boolean> {
+    try {
+        const s = await zipModule().status()
+        return s.available
+    } catch {
+        return false
+    }
+}
+
+/** 扩展包管理状态的返回形状（加载器与扩展管理页共用）。 */
+export interface PkgStatus {
+    /** 7-Zip 是否可用（不可用 = 压缩包扩展加载被禁用）。 */
+    zipAvailable: boolean
+    /** 支持的包格式。 */
+    formats: string[]
+}
+
+/** 内核侧的包管理状态。 */
+export async function pkgStatus(): Promise<PkgStatus> {
+    return { zipAvailable: await zipAvailable(), formats: [...PKG_EXTS.map((e) => e.slice(1))] }
+}
+
+/** 一个已发现的扩展包。 */
+export interface PkgEntry {
+    /** 包文件绝对路径。 */
+    file: string
+    /** 包名（文件名去掉扩展名）。 */
+    stem: string
+    /** 包格式（zip / xeonsky-ext）。 */
+    format: string
+}
+
+/** 列出外部扩展根目录下的包文件（*.zip / *.xeonsky-ext，按文件名排序）。 */
+export function listPackages(root: string): PkgEntry[] {
+    const dir = path.resolve(root)
+    let names: fs.Dirent[]
+    try {
+        names = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+        return []
+    }
+    const out: PkgEntry[] = []
+    for (const entry of names) {
+        if (!entry.isFile()) continue
+        const lower = entry.name.toLowerCase()
+        const hit = PKG_EXTS.find((ext) => lower.endsWith(ext))
+        if (!hit) continue
+        out.push({ file: path.join(dir, entry.name), stem: entry.name.slice(0, -hit.length), format: hit.slice(1) })
+    }
+    out.sort((a, b) => a.stem.localeCompare(b.stem) || a.file.localeCompare(b.file))
+    return out
+}
+
+/** 解压结果。disabled=true 表示 7-Zip 不可用、功能被禁用。 */
+export interface PkgExtractResult {
+    ok: boolean
+    disabled?: boolean
+    /** 失败或禁用时的说明。 */
+    message?: string
+}
+
+/**
+ * 解压一个扩展包到目标目录。
+ *
+ * 7-Zip 不可用 → 返回 disabled（加载器据此把包记为 skipped，不做读取）。
+ * 覆盖策略取 overwrite（-aoa）：加载器在解压前会清空目标目录，包内容是权威来源。
+ */
+export async function extractPackage(file: string, destDir: string): Promise<PkgExtractResult> {
+    if (!(await zipAvailable())) {
+        return { ok: false, disabled: true, message: '7-Zip 核心不可用，压缩包扩展加载已禁用' }
+    }
+    try {
+        const dest = path.resolve(destDir)
+        await removeQuietly(dest)
+        const r = await zipModule().extract({ archive: path.resolve(file), destDir: dest, overwrite: 'overwrite' })
+        return r.ok ? { ok: true } : { ok: false, message: r.output || '7-Zip 返回失败' }
+    } catch (err) {
+        return { ok: false, message: err instanceof Error ? err.message : String(err) }
     }
 }

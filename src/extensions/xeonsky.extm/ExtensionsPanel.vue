@@ -49,10 +49,11 @@ const packages = ref<PkgEntry[]>([])
 /** 拉取包管理状态与包列表（失败一律降级为「不可用」，不让包区块拖垮整页）。 */
 async function reloadPackages(): Promise<void> {
     try {
-        const st = await extApi.ext.invoke(`${PKG_CHANNEL}:pkgStatus`) as { available: boolean; zipAvailable: boolean }
-        pkgReady.value = st.available
+        // 端点能应答 = 包能力就绪（本扩展激活即注册）；7-Zip 不可用只影响「能否解压」。
+        const st = await extApi.ext.invoke(`${PKG_CHANNEL}:pkgStatus`) as { zipAvailable: boolean }
+        pkgReady.value = true
         zipAvailable.value = st.zipAvailable
-        if (!st.available || !info.value?.externalDir) {
+        if (!info.value?.externalDir) {
             packages.value = []
             return
         }

@@ -1,15 +1,14 @@
 /**
- * `xeonsky.extm` 内部 7-Zip 模块的**能力契约**：主进程实现与渲染层界面共用的形状。
+ * 内核 **7-Zip 归档模块**的契约：实现（`core.ts` / `archive.ts`）与界面共用的形状。
  *
- * 放在扩展自己的目录里（而不是 `src/shared/`）的原因：这些类型只服务于本扩展，
- * 不是内核契约。内核的 `src/shared/api.ts` 是**内置端点**的唯一事实来源，
- * 而扩展对外提供的能力按约定走 `ext:<id>` 命名空间，不占内核契约 ——
- * 所以它的形状也应该由扩展自己持有，与 `manifest.ts` / `main.ts` 同目录。
+ * 它是内核模块而不是扩展：7-Zip 在本程序里的用途是**解压扩展包**，属加载器的装配职责。
+ * 因此类型放在 `src/main/zip/` 下、与实现同目录，而不是 `src/shared/` ——
+ * `src/shared/api.ts` 是**内置 IPC 端点**的唯一事实来源，这里既不是端点也不是跨端契约。
  *
  * 三类东西：
  *  - 归档**格式知识库**（{@link ARCHIVE_FORMATS} 等）——7-Zip 到底支持什么，纯数据；
- *  - 能力**入参出参**（{@link ExtractOptions} / {@link CompressOptions} …）—— 能力面契约；
- *  - 状态快照（{@link SevenZipStatus}）—— 界面展示用。
+ *  - 入参出参（{@link ExtractOptions} / {@link CompressOptions} …）—— 模块调用契约；
+ *  - 状态快照（{@link SevenZipStatus}）—— 定位结果，供自检 / 诊断用。
  */
 
 // ---------------------------------------------------------------------------
@@ -30,7 +29,7 @@ export interface SevenZipTarget {
     label: string
 }
 
-/** 7-Zip 核心的当前状态（界面展示用）。 */
+/** 7-Zip 核心的当前状态（自检 / 诊断用）。 */
 export interface SevenZipStatus {
     /** 实际使用的可执行文件绝对路径（用户指定优先，否则是内置的）。 */
     binaryPath: string
@@ -44,7 +43,7 @@ export interface SevenZipStatus {
     supported: boolean
     /** 当前平台对应的内置目标（不支持时为 null）。 */
     target: SevenZipTarget | null
-    /** 内置二进制目录（`<应用>/src/extensions/xeonsky.extm/sevenzip/bin`）。 */
+    /** 内置二进制目录（`<应用>/src/main/zip/bin`）。 */
     binDir: string
     /** 内置二进制所在平台子目录（如 `win32-x64`；不支持时为空串）。 */
     binPlatformDir: string

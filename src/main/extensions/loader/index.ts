@@ -39,6 +39,7 @@ import { discoverExternal, externalRoot, currentChannel, staticExts, ensureExtDa
 import { loadState, saveState } from './state'
 import { logger } from '../../kernel/logger'
 import { removeTree } from '../../kernel/treeops'
+import { extractPackage, pkgStatus } from '../../zip/core'
 
 const log = logger('[ext]')
 
@@ -382,17 +383,12 @@ function recordDrops(drops: Array<{ id: string; dir: string; kind: ExtKind; reas
 // ---------------------------------------------------------------------------
 
 /**
- * 包扩展解压能力的**约定能力名**。
+ * 包扩展解压由**内核的 7-Zip 模块**直接完成（`main/zip/core.ts` 的 `extractPackage`）。
  *
- * 由内置扩展 `xeonsky.extm`（扩展管理）提供 —— 本扩展内含 7-Zip 归档核心
- * （`sevenzip/`，原独立扩展 `xeonsky.zip`），解压不再跨扩展转发。
- * 加载器不 import 具体扩展（分层约束），只按这个名字查能力槽。
- *
- * **兜底策略**：`xeonsky.extm` 被用户**停用**或激活失败时它本身就不在能力槽里，
- * 这里必然查不到，于是全部压缩包记为 skipped、**不做任何读取**
- * （不触碰包文件内容，只登记原因）。
+ * 这里不再经能力槽查 `ext:xeonsky.extm` —— 那是「7-Zip 曾是一个可被用户停用的扩展」
+ * 时代的写法。下沉内核后，「用哪个压缩后端的实现」不再是运行时可变的装配关系，
+ * 而是编译期确定的依赖，直接 import 就对了。
  */
-const PKGS_CAPABILITY = 'ext:xeonsky.extm'
 
 /** 解压产物里定位扩展目录：manifest 在包根，或在唯一的子目录里。 */
 function locateManifestDir(root: string): string | null {
@@ -429,10 +425,7 @@ function putPkgSkipped(pkg: { stem: string; file: string }, message: string, sta
 
 /**
  * 加载压缩包形态的外部扩展。**必须在全部普通扩展加载结束之后调用**：
- *
- *  - 解压要经内置扩展 `xeonsky.extm`（它内含 7-Zip 归档核心）—— 所以这里的
- *    时序是「普通扩展加载完」才轮到包扩展；
- *  - 包扩展的 id / 依赖冲突要拿第一轮的结果来判。
+ * 包扩展的 id / 依赖冲突要拿第一轮的结果来判。
  *
  * 冲突规则（用户约定：**包名冲突则不加载**）：
  *  1. 包名（去扩展名的文件名）与 `extensions/` 下已安装的**文件夹扩展**同名 → 文件夹优先，包跳过；
@@ -449,32 +442,17 @@ async function loadPkgExtensions(available: Set<string>): Promise<boolean> {
     const pkgs = discoverPkgs()
     if (pkgs.length === 0) return false
 
-    const table = capability.actionsOf(PKGS_CAPABILITY)
-    const extm = table && typeof table.extract === 'function'
-        ? (table as unknown as {
-            extract: (o: { file: string; destDir: string }) => Promise<{ ok: boolean; disabled?: boolean; message?: string }>
-            status: () => { zipAvailable: boolean; formats: string[] }
-        })
-        : null
-    if (!extm) {
-        // extm 自己没激活（被停用 / 激活失败）。这是用户可感知的配置状态而非故障，
-        // 不计入 anyFailure（不保留崩溃计数）。
-        for (const pkg of pkgs) {
-            putPkgSkipped(pkg, '扩展包管理器 xeonsky.extm 未激活，压缩包不加载', 'skipped')
-        }
-        return false
-    }
-    // **7-Zip 核心不可用 → 压缩包扩展加载整体禁用**（用户约定）：extm 的 status
-    // 实时探测它内置的 7-Zip 二进制能否跑出版本。此时只登记原因，不读取任何包文件。
+    // **7-Zip 核心不可用 → 压缩包扩展加载整体禁用**（用户约定）：内核模块会实时探测
+    // 它内置的 7-Zip 二进制能否跑出版本。此时只登记原因，不读取任何包文件。
     let zipOk = true
     try {
-        zipOk = extm.status().zipAvailable
+        zipOk = (await pkgStatus()).zipAvailable
     } catch (err) {
         log.warn({ err }, 'failed to query pkg manager status')
     }
     if (!zipOk) {
         for (const pkg of pkgs) {
-            putPkgSkipped(pkg, '7-Zip 扩展不可用，压缩包扩展加载已禁用', 'skipped')
+            putPkgSkipped(pkg, '7-Zip 核心不可用，压缩包扩展加载已禁用', 'skipped')
         }
         return false
     }
@@ -505,7 +483,7 @@ async function loadPkgExtensions(available: Set<string>): Promise<boolean> {
         }
         let r: { ok: boolean; disabled?: boolean; message?: string }
         try {
-            r = await extm.extract({ file: pkg.file, destDir: dest })
+            r = await extractPackage(pkg.file, dest)
         } catch (err) {
             r = { ok: false, message: err instanceof Error ? err.message : String(err) }
         }
@@ -640,8 +618,7 @@ export async function startLoader(): Promise<ExtensionsInfo> {
     recordDrops(drops)
 
     // 第二阶段：压缩包形态的外部扩展（*.zip / *.xeonsky-ext）。
-    // 必须在全部普通扩展加载结束之后 —— 解压经内置扩展 xeonsky.extm（它内含
-    // 7-Zip 归档核心），且包扩展的 id / 依赖冲突要拿第一轮结果来判。
+    // 必须在全部普通扩展加载结束之后 —— 包扩展的 id / 依赖冲突要拿第一轮结果来判。
     // 安全模式下与其它内置 / 外部扩展一样不加载。
     if (!state.safeMode) {
         const pkgFailure = await loadPkgExtensions(available)

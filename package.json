@@ -91,12 +91,11 @@
             "resources/**",
             "!**/.vscode/*",
             "!src/**",
-            "src/extensions/xeonsky.zip/bin/**",
             "!electron.vite.config.{js,ts,mjs,cjs}",
             "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
         ],
         "asarUnpack": [
-            "src/extensions/xeonsky.extm/sevenzip/bin/**"
+            "src/main/zip/bin/**"
         ],
         "publish": {
             "provider": "github",

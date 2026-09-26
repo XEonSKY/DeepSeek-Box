@@ -45,6 +45,7 @@ import type {
     UpdateResult
 } from './types'
 import type { ExtensionsInfo } from './extensions'
+import type { CreateDownloadOptions, DownloadConfig, DownloadStatus, DownloadTaskView } from './download'
 
 // ---------------------------------------------------------------------------
 // 传输层：通道与信封
@@ -213,6 +214,26 @@ export interface ApiRoutes {
     /** 打开外部扩展安装目录（在文件管理器里定位）。 */
     'POST /extensions/open-dir': { result: void }
 
+    // ---- 下载 ----
+    // 下载是内核模块（`main/download/`）：装 Node 运行时 / npm / pnpm 都指着它，
+    // 因此它有内核端点而不是走扩展的 DIY 通道。任务列表 / 操作与「下载」设置面板共用。
+    /** 状态快照：配置 + 全部任务（含实时进度）。 */
+    'GET /download': { result: DownloadStatus }
+    /** 新建一个下载任务。 */
+    'POST /download/tasks': { body: CreateDownloadOptions; result: DownloadTaskView }
+    /** 开始一个任务（不改变排队语义）。 */
+    'POST /download/tasks/:id/start': { result: DownloadTaskView | null }
+    /** 暂停（保留已下载部分，可继续）。 */
+    'POST /download/tasks/:id/pause': { result: DownloadTaskView | null }
+    /** 继续 / 重试。 */
+    'POST /download/tasks/:id/resume': { result: DownloadTaskView | null }
+    /** 取消（保留已下载部分）。 */
+    'POST /download/tasks/:id/cancel': { result: DownloadTaskView | null }
+    /** 删除任务；`deleteFile` 为真时一并删掉落盘文件。 */
+    'DELETE /download/tasks/:id': { query: { deleteFile?: boolean }; result: boolean }
+    /** 更新下载配置（并发数 / 限速 / 默认目录 / 默认连接数）。 */
+    'PUT /download/config': { body: Partial<DownloadConfig>; result: DownloadConfig }
+
     // ---- 原生对话框 ----
     'POST /dialog/directory': { result: string | null }
     'POST /dialog/file': { result: string | null }
@@ -274,6 +295,8 @@ export interface AppEvents {
     'settings:locale': LocaleCode
     'appicon:changed': AppIconState
     'hotkey:state': HotkeyState
+    // 下载任务快照（节流推送；状态突变时立即推一次）。
+    'download:progress': DownloadStatus
     'win:maximized': boolean
     'shell:core': boolean
     'tab-drag-hover': boolean

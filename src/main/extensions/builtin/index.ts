@@ -1,8 +1,6 @@
 import type { StaticExt } from '../loader/sources'
 import * as xeonskyExtm from '@ext/xeonsky.extm/main'
 import { manifest as xeonskyExtmManifest } from '@ext/xeonsky.extm/manifest'
-import * as xeonskyDownload from '@ext/xeonsky.download/main'
-import { manifest as xeonskyDownloadManifest } from '@ext/xeonsky.download/manifest'
 import * as xeonskyBrowser from '@ext/xeonsky.browser/main'
 import { manifest as xeonskyBrowserManifest } from '@ext/xeonsky.browser/manifest'
 
@@ -27,24 +25,13 @@ import { manifest as xeonskyBrowserManifest } from '@ext/xeonsky.browser/manifes
  */
 export const builtinExtensions: StaticExt[] = [
     {
-        // 扩展管理：设置面板（「扩展」页 + 归档页）+ 扩展包能力。
-        // 它是**自足**的：7-Zip 归档核心已并入为内部模块（`sevenzip/`），
-        // 不再有跨扩展的软依赖。对外仍提供 ext:xeonsky.extm（status / extract /
-        // listPackages），供加载器第二阶段与其它扩展协作。
+        // 扩展管理：设置面板（「扩展管理」页）+ 扩展包清单。
+        // 7-Zip 归档核心已下沉为内核模块（`main/zip/`），加载器直接使用它；
+        // 本扩展不含归档能力、也不申请系统能力，只把「有哪些扩展包」转给渲染层。
         kind: 'builtin',
         sourceDir: 'src/extensions/xeonsky.extm',
         manifest: xeonskyExtmManifest,
         module: xeonskyExtm
-    },
-    {
-        // 下载：申请 fs / net 两项系统能力，对外提供 ext:xeonsky.download。
-        // 内核侧的调用（Node 发行包、内置 npm / pnpm）经能力槽按名字取用它
-        // （见 dsh/download.ts），不 import 本扩展 —— 于是它被停用时内核回落自带下载器，
-        // 而不是启动失败。
-        kind: 'builtin',
-        sourceDir: 'src/extensions/xeonsky.download',
-        manifest: xeonskyDownloadManifest,
-        module: xeonskyDownload
     },
     {
         // 内嵌浏览器：webview 功能（UA / 代理 / 权限策略）已从内核迁到本扩展。

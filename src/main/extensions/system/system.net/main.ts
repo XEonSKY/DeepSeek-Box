@@ -14,13 +14,14 @@ import type { ExtContext } from '../../loader/ctx'
  *
  * ## 关于 `download`
  *
- * 历史上这里有一个 `download` 动作（转发内核的 `dsh/downloader.ts`）。它已经**移除**：
- * 下载能力整体迁到了内置扩展 `xeonsky.download`（分段、断点续传、限速、队列持久化、
- * 任务可见都只在扩展里才有）。需要下载的扩展请申请能力 `ext:xeonsky.download`，
- * 用 `ctx.capabilities.call('ext:xeonsky.download', 'download', { ... })`。
+ * 这里曾有一个 `download` 动作（转发内核的 `dsh/downloader.ts`），随后又改指内置扩展
+ * `xeonsky.download`。两条路都已**移除**：下载能力（分段、断点续传、限速、队列持久化、
+ * 任务可见）现已下沉为**内核模块** `src/main/download/`，内核调用方经 `dsh/download.ts`
+ * 门面取用，不再经过能力槽。
  *
- * 不保留转发的原因是分层：系统能力是「内核的门面」，内置扩展是「门面之上的实现」。
- * 让 `system.net` 反过来依赖一个内置扩展，会把这条方向弄反。
+ * 不在这里保留转发动作的原因是分层：系统能力是「内核的门面」，下载是「内核的实现」。
+ * 把内核实现包一层能力面再让内核自己调回去，只是多一层间接。扩展若需要下载，
+ * 应经 `net.stream` 自己读写，或等内核另行开放。
  */
 
 /** 流式请求允许自选的代理档位（'registry' 只服务注册表查询，不下发）。 */
