@@ -22,13 +22,22 @@ import { ARCHIVE_FORMATS, COMPRESSION_METHODS, type ArchiveEntry, type ArchiveLi
  * 内置的 7-Zip 命令行核心（7-Zip 26.03，LGPL）。
  *
  * 二进制**随扩展内置**（`src/extensions/xeonsky.zip/bin/<平台>/`），不再运行时下载：
- *  - **Windows**：取官方 `-extra.7z` 里的命令行核心 —— `7za.exe` + 它的两个 DLL
- *    （`7za.dll` / `7zxa.dll`，同一个目录里缺一不可），x64 与 arm64 各一套原生版；
- *  - **Linux**：官方 `linux-x64` / `linux-arm64` 包里的 `7zz`（统一命令行二进制）；
+ *  - **Windows**：`7z.exe` + `7z.dll`（**完整版**，同目录缺一不可），x64 与 arm64 各一套原生版；
+ *  - **Linux**：官方 `linux-x64` / `linux-arm64` 包里的 `7zz`（完整版命令行二进制）；
  *  - **macOS**：官方 `mac` 包里的 `7zz`（通用二进制，x64 与 arm64 共用一份）。
  *
  * 由官方 `https://www.7-zip.org/download.html` 指向的分发包取得（镜像仓库
  * ip7z/7zip 的 26.03 release），许可证见同目录 `7zip-LICENSE.txt`。
+ *
+ * ## Windows 为什么不能用 `-extra` 包里的 `7za.exe`
+ *
+ * 「独立精简版」`7za.exe`（横幅 `7-Zip (a)`）**只认 12 种格式**
+ * （7z / Cab / Split / bzip2 / gzip / lzma / lzma86 / tar / xz / zip / zstd / Hash），
+ * 而类 Unix 端的 `7zz` 与 Windows 完整版 `7z.exe` 都是 60+ 种
+ * （含 Rar5 / Iso / Udf / Wim / SquashFS / DMG / APFS / Xar / Cpio / Rpm / Deb / Nsis / Msi …）。
+ * 曾经内置过 `7za.exe`，结果是 Windows 端「界面说支持、点下去打不开」。
+ * 官方 26.03 的 Windows 侧**只发 exe / msi 安装包**，没有散装 zip；安装包是 7z 自解包（SFX），
+ * 用任意 7-Zip 直接 `l` / `e` 它就能取出 `7z.exe` 与 `7z.dll`，不需要真的安装。
  *
  * 布局由 `dir`（bin 下的子目录）与 `binary`（可执行文件名）共同描述；
  * 「bin 目录在磁盘上的绝对路径」由 main.ts 解析（打包后相对应用根）。
@@ -36,8 +45,8 @@ import { ARCHIVE_FORMATS, COMPRESSION_METHODS, type ArchiveEntry, type ArchiveLi
 export const BUNDLED_VERSION = '26.03'
 
 export const TARGETS: readonly SevenZipTarget[] = [
-    { os: 'win32', arch: 'x64', dir: 'win32-x64', binary: '7za.exe', label: 'Windows x64' },
-    { os: 'win32', arch: 'arm64', dir: 'win32-arm64', binary: '7za.exe', label: 'Windows ARM64' },
+    { os: 'win32', arch: 'x64', dir: 'win32-x64', binary: '7z.exe', label: 'Windows x64' },
+    { os: 'win32', arch: 'arm64', dir: 'win32-arm64', binary: '7z.exe', label: 'Windows ARM64' },
     { os: 'linux', arch: 'x64', dir: 'linux-x64', binary: '7zz', label: 'Linux x64' },
     { os: 'linux', arch: 'arm64', dir: 'linux-arm64', binary: '7zz', label: 'Linux ARM64' },
     { os: 'darwin', arch: 'x64', dir: 'darwin', binary: '7zz', label: 'macOS（通用二进制）' },

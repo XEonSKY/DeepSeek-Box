@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, markRaw, onMounted, ref } from 'vue'
 import type { Component } from 'vue'
-import { SettingOutlined, DashboardOutlined, BulbOutlined, ApiOutlined, DeploymentUnitOutlined, ClusterOutlined, AppstoreOutlined, CodeFilled, ControlOutlined, InfoCircleFilled, RobotFilled, ApiFilled, FileZipOutlined } from '@antdv-next/icons'
+import { SettingOutlined, DashboardOutlined, BulbOutlined, ApiOutlined, DeploymentUnitOutlined, ClusterOutlined, AppstoreOutlined, CodeFilled, ControlOutlined, InfoCircleFilled, RobotFilled, ApiFilled, FileZipOutlined, DownloadOutlined } from '@antdv-next/icons'
 import { useRoute, useRouter } from 'vue-router'
 import { useSettingsStore } from './settings/useSettingsStore'
 import { extMenus } from '../extensions/panels'
@@ -49,6 +49,7 @@ const EXT_ICONS: Record<string, Component> = {
     archive: markRaw(FileZipOutlined),
     cluster: markRaw(ClusterOutlined),
     dashboard: markRaw(DashboardOutlined),
+    download: markRaw(DownloadOutlined),
     setting: markRaw(SettingOutlined)
 }
 

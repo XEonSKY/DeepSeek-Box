@@ -38,7 +38,7 @@ import {
  * ## 二进制内置（不再运行时下载）
  *
  * 7-Zip 命令行核心**随扩展内置**：`src/extensions/xeonsky.zip/bin/<平台>/`
- * （Windows 取官方 `-extra` 包里的 `7za.exe` + 它的两个 DLL；Linux / macOS 取 `7zz`）。
+ * （Windows 取官方安装包里的完整版 `7z.exe` + `7z.dll`；Linux / macOS 取 `7zz`）。
  * 打包时用 `asarUnpack` 把这些可执行文件解开（asar 内的可执行文件**不能被执行**），
  * 因此定位路径里要把 `app.asar` 换回 `app.asar.unpacked`。
  *

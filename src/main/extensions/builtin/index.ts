@@ -5,6 +5,8 @@ import * as xeonskyZip from '@ext/xeonsky.zip/main'
 import { manifest as xeonskyZipManifest } from '@ext/xeonsky.zip/manifest'
 import * as xeonskyExtm from '@ext/xeonsky.extm/main'
 import { manifest as xeonskyExtmManifest } from '@ext/xeonsky.extm/manifest'
+import * as xeonskyDownload from '@ext/xeonsky.download/main'
+import { manifest as xeonskyDownloadManifest } from '@ext/xeonsky.download/manifest'
 
 /**
  * 内置扩展登记表：源码在本目录，随构建产物发布。
@@ -49,5 +51,15 @@ export const builtinExtensions: StaticExt[] = [
         sourceDir: 'src/extensions/xeonsky.extm',
         manifest: xeonskyExtmManifest,
         module: xeonskyExtm
+    },
+    {
+        // 下载：申请 fs / net 两项系统能力，对外提供 ext:xeonsky.download。
+        // 内核侧的调用（Node 发行包、内置 npm / pnpm）经能力槽按名字取用它
+        // （见 dsh/download.ts），不 import 本扩展 —— 于是它被停用时内核回落自带下载器，
+        // 而不是启动失败。
+        kind: 'builtin',
+        sourceDir: 'src/extensions/xeonsky.download',
+        manifest: xeonskyDownloadManifest,
+        module: xeonskyDownload
     }
 ]

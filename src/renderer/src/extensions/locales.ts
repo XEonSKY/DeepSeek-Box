@@ -3,6 +3,7 @@ import { logger } from '../lib/logger'
 import { mergeLocaleMessages } from '../lib/locales'
 import { extLocales as xeonskyExtuiLocales } from '@ext/xeonsky.extui/locales'
 import { extLocales as xeonskyZipLocales } from '@ext/xeonsky.zip/locales'
+import { extLocales as xeonskyDownloadLocales } from '@ext/xeonsky.download/locales'
 
 /**
  * 扩展自有文案的**装配点**（「扩展自管语言文件」的外壳一半）。
@@ -29,7 +30,8 @@ const log = logger('[ext]')
 /** 内置扩展的语言文件表：扩展 id → zh/en 字典。新带界面的内置扩展在这里加一行。 */
 const EXT_LOCALES: Record<string, ExtensionLocaleTable> = {
     'xeonsky.extui': xeonskyExtuiLocales,
-    'xeonsky.zip': xeonskyZipLocales
+    'xeonsky.zip': xeonskyZipLocales,
+    'xeonsky.download': xeonskyDownloadLocales
 }
 
 /** 取一个扩展字典在 `ext.` 下的顶层命名空间名（用于冲突告警）。 */

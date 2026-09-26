@@ -11,7 +11,20 @@ import { httpFetch } from './http'
 import type { HttpScope } from './http'
 
 /**
- * 统一文件下载器：默认多线程（HTTP Range 分段并发）。
+ * 内核文件下载器 —— **降级用的兜底实现**，不再是默认路径。
+ *
+ * ## 现状：默认走扩展，本模块只做兜底
+ *
+ * 下载能力已经迁到内置扩展 `xeonsky.download`（分段 / 断点续传 / 限速 / 队列持久化 /
+ * 任务可见）。内核侧的调用方（Node 发行包、内置 npm / pnpm）一律经
+ * `dsh/download.ts` 的 `downloadFile()` 门面，它优先调 `ext:xeonsky.download`，
+ * **只在扩展不可用（被停用 / 加载失败 / 安全模式）时才落回本模块**。
+ *
+ * 保留它的理由：装 Node 运行时是应用的**核心路径**，不该因为一个可被用户停用的扩展
+ * 而整体失效。这与能力槽一贯的「缺失即降级」是同一条策略 ——
+ * 但降级要留痕，故门面回落时会打一条 warn。
+ *
+ * 行为与本模块作为默认实现时完全一致：
  *
  * 先探测服务端是否支持 Range：支持且文件不小于 1MB 时按并发数把文件切成若干段并行
  * 下载（每段直接写目标文件的对应偏移，省掉合并拷贝），否则退回单流下载。无论哪条路径，
@@ -27,7 +40,7 @@ import type { HttpScope } from './http'
  * 不会重复发起下载（见 downloadFile）。
  */
 
-interface DlProgress {
+export interface DlProgress {
     total: number
     downloaded: number
     /** 0-100 */
@@ -36,7 +49,7 @@ interface DlProgress {
     speed: number
 }
 
-interface DownloadFileOpts {
+export interface DownloadFileOpts {
     url: string
     destDir: string
     fileName?: string
@@ -55,7 +68,7 @@ interface DownloadFileOpts {
 }
 
 /** 一次下载的结果。 */
-type DlResult = { ok: boolean; message?: string; canceled?: boolean }
+export type DlResult = { ok: boolean; message?: string; canceled?: boolean }
 
 /** 同一目标文件的在途下载任务（用于去重合并）。 */
 interface InFlight {

@@ -79,7 +79,9 @@ const LOCAL_VIEWS: Record<string, () => Promise<Component>> = {
     // 两端都用 `@ext/<id>/...` 引用 —— 见本文件顶部说明。
     extensions: () => import('@ext/xeonsky.extui/ExtensionsPanel.vue'),
     // 「归档（7-Zip）」页（由内置扩展 xeonsky.zip 贡献）。
-    zip: () => import('@ext/xeonsky.zip/ZipPanel.vue')
+    zip: () => import('@ext/xeonsky.zip/ZipPanel.vue'),
+    // 「下载」页（由内置扩展 xeonsky.download 贡献）。
+    download: () => import('@ext/xeonsky.download/DownloadPanel.vue')
 }
 
 /**

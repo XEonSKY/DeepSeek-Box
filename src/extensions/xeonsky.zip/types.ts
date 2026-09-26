@@ -24,7 +24,7 @@ export interface SevenZipTarget {
     arch: 'x64' | 'arm64'
     /** 内置二进制所在子目录（相对 `bin/`，如 `win32-x64` / `darwin`）。 */
     dir: string
-    /** 可执行文件名（Windows 为 `7za.exe`，类 Unix 为 `7zz`）。 */
+    /** 可执行文件名（Windows 为 `7z.exe`，类 Unix 为 `7zz`）。 */
     binary: string
     /** 平台展示名。 */
     label: string
@@ -87,16 +87,18 @@ export const ARCHIVE_FORMATS: readonly ArchiveFormat[] = [
     { name: 'xz', canCreate: true, canExtract: true, canUpdate: false, note: '高压缩率，常与 tar 组合成 .tar.xz。' },
     { name: 'tar', canCreate: true, canExtract: true, canUpdate: false, note: '仅打包不压缩；可与 gzip/bzip2/xz 组合。' },
     { name: 'wim', canCreate: true, canExtract: true, canUpdate: true, note: 'Windows 映像格式（增量）。' },
-    { name: 'iso', canCreate: true, canExtract: true, canUpdate: true, note: '光盘映像。' },
-    { name: 'udf', canCreate: true, canExtract: true, canUpdate: true, note: '通用光盘格式。' },
-    { name: 'cpio', canCreate: true, canExtract: true, canUpdate: false, note: 'Unix 归档。' },
+    { name: 'iso', canCreate: false, canExtract: true, canUpdate: false, note: '光盘映像（仅解压：7-Zip 不能创建 ISO）。' },
+    { name: 'udf', canCreate: false, canExtract: true, canUpdate: false, note: '通用光盘格式（仅解压）。' },
+    { name: 'cpio', canCreate: false, canExtract: true, canUpdate: false, note: 'Unix 归档（仅解压）。' },
     { name: 'rpm', canCreate: false, canExtract: true, canUpdate: false, note: 'Linux 包格式（仅解压）。' },
     { name: 'deb', canCreate: false, canExtract: true, canUpdate: false, note: 'Debian 包格式（仅解压）。' },
-    { name: 'vhd', canCreate: true, canExtract: true, canUpdate: true, note: '虚拟硬盘映像。' },
-    { name: 'fat', canCreate: true, canExtract: true, canUpdate: true, note: 'FAT 文件系统映像。' },
+    { name: 'vhd', canCreate: false, canExtract: true, canUpdate: false, note: '虚拟硬盘映像（含 vhdx / vdi / vmdk，仅解压）。' },
+    { name: 'fat', canCreate: false, canExtract: true, canUpdate: false, note: 'FAT 文件系统映像（仅解压）。' },
+    { name: 'exe', canCreate: false, canExtract: true, canUpdate: false, note: 'PE 可执行文件（exe / dll / sys，可当归档解包）。' },
+    { name: 'ar', canCreate: false, canExtract: true, canUpdate: false, note: 'Unix ar 归档（deb / .a 也走这个处理器）。' },
     { name: 'ntfs', canCreate: false, canExtract: true, canUpdate: false, note: 'NTFS 文件系统映像（仅解压）。' },
     { name: 'squashfs', canCreate: false, canExtract: true, canUpdate: false, note: '只读压缩文件系统（仅解压）。' },
-    { name: 'lzma', canCreate: true, canExtract: true, canUpdate: false, note: '裸 LZMA 流。' },
+    { name: 'lzma', canCreate: false, canExtract: true, canUpdate: false, note: '裸 LZMA 流（26.03 起不能创建，仅解压）。' },
     { name: 'z', canCreate: false, canExtract: true, canUpdate: false, note: 'Unix compress 格式（仅解压）。' },
     { name: 'lzh', canCreate: false, canExtract: true, canUpdate: false, note: 'LHA 格式（仅解压）。' },
     { name: 'cab', canCreate: false, canExtract: true, canUpdate: false, note: 'Windows 安装包格式（仅解压）。' },
@@ -108,8 +110,7 @@ export const ARCHIVE_FORMATS: readonly ArchiveFormat[] = [
     { name: 'hfs', canCreate: false, canExtract: true, canUpdate: false, note: 'macOS HFS+ 映像（仅解压）。' },
     { name: 'msi', canCreate: false, canExtract: true, canUpdate: false, note: 'Windows 安装包（仅解压）。' },
     { name: 'chm', canCreate: false, canExtract: true, canUpdate: false, note: 'Windows 帮助文件（仅解压）。' },
-    { name: 'xar', canCreate: false, canExtract: true, canUpdate: false, note: 'macOS 打包格式（仅解压）。' },
-    { name: 'lz4', canCreate: false, canExtract: true, canUpdate: false, note: 'LZ4（较新版本支持解压）。' }
+    { name: 'xar', canCreate: false, canExtract: true, canUpdate: false, note: 'macOS 打包格式（仅解压）。' }
 ]
 
 /** 一个压缩方法（算法）条目。 */

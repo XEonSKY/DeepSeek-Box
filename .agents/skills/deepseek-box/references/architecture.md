@@ -85,8 +85,10 @@ manifest id 与已发现扩展重复，三者任一命中即记 skipped。**7-Zi
 **整体禁用压缩包加载**（只登记原因，不读取任何包文件，也不算崩溃失败）。
 
 **7-Zip 核心内置于扩展**（`xeonsky.zip`）：全平台命令行二进制放在
-`src/extensions/xeonsky.zip/bin/<平台>/`（Windows 取官方 `-extra` 包的 `7za.exe` +
-`7za.dll`，注意 **x64 子目录里才是 64 位**、包根是 32 位；Linux / macOS 取 `7zz`），
+`src/extensions/xeonsky.zip/bin/<平台>/`（Windows 取**完整版** `7z.exe` + `7z.dll` ——
+**不要用 `-extra` 包里的 `7za.exe`**，它只有 12 种格式，而 Linux / macOS 的 `7zz` 有 60 多种，
+跨端行为会不一致；官方 Windows 安装包本身是 7z 自解压包，可直接
+`7z e <installer>.exe 7z.exe 7z.dll -o<dir>` 取出。Linux / macOS 取 `7zz`），
 **不运行时下载**（不申请 `net` 能力）。运行时路径 = `__dirname/../../src/…/bin`，
 且必须把 `app.asar` 换回 `app.asar.unpacked` —— **asar 内的可执行文件不能执行**，
 因此 `build.files` 要在 `!src/**` **之后**追加 `src/extensions/xeonsky.zip/bin/**`
@@ -105,8 +107,19 @@ manifest id 与已发现扩展重复，三者任一命中即记 skipped。**7-Zi
 **系统扩展 id 用 `system.` 前缀**（`system.fs` / `system.net` / `system.proc` / `system.app` / `system.ui`），
 与外部扩展能力名 `ext:<extId>` 对仗。注意**能力名是裸名**（`fs` / `net` / ...，见
 `@shared/extensions` 的 `SysCapability`），与系统扩展 id 是两层 —— 改 id 不影响扩展申请能力的写法。
-`system.net` 现有三动作：`fetch` / `fetchJson`（只回文本）+ `download`（包装内核
-`dsh/downloader.ts` 的多线程下载，二进制落盘用这个）。
+`system.net` 现有三动作：`fetch` / `fetchJson`（只回文本）+ **`stream`**（返回 Node
+`Readable`，`fetch → Readable.fromWeb`，可带 `Range` 与 `AbortSignal`，代理档位只开放
+`app` / `npm` / `node`）。**`download` 动作已移除** —— 下载能力整体迁到内置扩展
+`xeonsky.download`，需要下载的扩展请申请 `ext:xeonsky.download` 并调它的 `download`。
+
+**下载能力在内置扩展 `xeonsky.download`**（`src/extensions/xeonsky.download/`）：
+`engine.ts`（分段 / 跨会话断点续传 / 令牌桶限速 / 重试 / 大小校验）+ `main.ts`
+（任务队列、状态机、`tasks.json` 持久化、IPC 与能力面）。网络栈**仍在内核** ——
+引擎只经注入的 `OpenStream`（= `net.stream`）发请求，所以「设置 → 网络 → 代理」照常生效。
+断点续传靠 `.part` 旁的 `.part.json` 侧车（记录 total / etag / lastModified / 各段偏移），
+三者任一变化就整份重下（避免拼出「前半旧后半新」）。内核调用方（Node 发行包、内置
+npm / pnpm）走**门面** `dsh/download.ts`：它按约定名查能力槽，查不到才回落
+`dsh/downloader.ts`（扩展被停用 / 安全模式时核心功能不能整体失效）。
 
 ## 启动顺序（`src/main/index.ts`）
 
